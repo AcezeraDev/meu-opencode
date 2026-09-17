@@ -1,129 +1,68 @@
-<p align="center">
-  <a href="https://opencode.ai">
-    <picture>
-      <source srcset="packages/console/app/src/asset/logo-ornate-dark.svg" media="(prefers-color-scheme: dark)">
-      <source srcset="packages/console/app/src/asset/logo-ornate-light.svg" media="(prefers-color-scheme: light)">
-      <img src="packages/console/app/src/asset/logo-ornate-light.svg" alt="OpenCode logo">
-    </picture>
-  </a>
-</p>
-<p align="center">The open source AI coding agent.</p>
-<p align="center">
-  <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
-  <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>
-  <a href="https://github.com/anomalyco/opencode/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/opencode/publish.yml?style=flat-square&branch=dev" /></a>
-</p>
+<h1 align="center">Meu OpenCode</h1>
 
-<p align="center">
-  <a href="README.md">English</a> |
-  <a href="README.zh.md">简体中文</a> |
-  <a href="README.zht.md">繁體中文</a> |
-  <a href="README.ko.md">한국어</a> |
-  <a href="README.de.md">Deutsch</a> |
-  <a href="README.es.md">Español</a> |
-  <a href="README.fr.md">Français</a> |
-  <a href="README.it.md">Italiano</a> |
-  <a href="README.da.md">Dansk</a> |
-  <a href="README.ja.md">日本語</a> |
-  <a href="README.pl.md">Polski</a> |
-  <a href="README.ru.md">Русский</a> |
-  <a href="README.bs.md">Bosanski</a> |
-  <a href="README.ar.md">العربية</a> |
-  <a href="README.no.md">Norsk</a> |
-  <a href="README.br.md">Português (Brasil)</a> |
-  <a href="README.th.md">ไทย</a> |
-  <a href="README.tr.md">Türkçe</a> |
-  <a href="README.uk.md">Українська</a> |
-  <a href="README.bn.md">বাংলা</a> |
-  <a href="README.gr.md">Ελληνικά</a> |
-  <a href="README.vi.md">Tiếng Việt</a>
-</p>
+<p align="center">Minha versão do <a href="https://github.com/anomalyco/opencode">OpenCode</a>: visual de osciloscópio, medições ao vivo enquanto a IA responde e um app de desktop que se atualiza sozinho a partir deste código.</p>
 
-[![OpenCode Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://opencode.ai)
+![O chat com a tela do osciloscópio, a faixa de medição ao vivo e o resumo de cada resposta](packages/app/.impeccable/review/desktop.png)
 
----
+> [!NOTE]
+> Projeto pessoal, para meu próprio uso. **Não é feito pela equipe do OpenCode e não tem ligação com ela.** O OpenCode original está em [anomalyco/opencode](https://github.com/anomalyco/opencode).
 
-### Installation
+## O que mudei
+
+### O visual: osciloscópio de bancada
+
+Cada resposta da IA é tratada como um sinal ao vivo, medido numa tela de instrumento. O chat fica sobre um fundo escuro com uma grade fina, e a moldura ao redor é opaca. As regras completas do visual estão em [packages/app/DESIGN.md](packages/app/DESIGN.md), e a ideia do produto em [packages/app/PRODUCT.md](packages/app/PRODUCT.md).
+
+- **Cor RGB sempre mudando**, mas só no que está ao vivo: a luz em volta do chat enquanto a IA responde, o botão de enviar/parar, a aba ativa. Erros, avisos e edições têm cores fixas.
+- **Enquanto a IA responde:** uma luz corre em volta do painel do chat e, quando ela está pensando, aparece uma onda correndo.
+- A velocidade da troca de cor, o brilho da resposta e o limite de gasto ficam em **Configurações → Geral**. Com as animações reduzidas no sistema, tudo isso para.
+
+### Funções que adicionei
+
+- **Faixa de medição ao vivo**, acima da caixa de mensagem: tempo, velocidade em tokens/s, etapa atual, número de passos e custo.
+- **Resumo de cada resposta**, no fim do turno: duração, ferramentas, arquivos, tokens, velocidade e custo.
+- **Minimapa da conversa**, na borda direita: marcas das minhas mensagens, das edições e dos erros; clicar pula para o trecho.
+- **Anel de contexto**, na caixa de mensagem: quanto da memória do modelo a conversa já usa, com "Compactar agora" a um clique.
+- **Gasto do dia** na barra de título, somando todas as sessões, com limite diário e aviso.
+- **Cola de atalhos:** segurar `Ctrl` mostra todos os atalhos disponíveis.
+- **Gerador de vídeos na web:** uma ferramenta que a IA pode usar para gerar vídeos, com painel próprio nas configurações.
+
+### App de desktop pessoal
+
+O **OpenCode Personal** é um app instalado ao lado do OpenCode oficial, compilado a partir desta pasta. Um vigia observa o código, recompila sozinho depois que eu paro de editar e instala quando o app fecha; também dá para clicar em **Atualizar** e depois em **Reiniciar** na barra de título.
 
 ```bash
-# YOLO
-curl -fsSL https://opencode.ai/install | bash
-
-# Package managers
-npm i -g opencode-ai@latest        # or bun/pnpm/yarn
-scoop install opencode             # Windows
-choco install opencode             # Windows
-brew install anomalyco/tap/opencode # macOS and Linux (recommended, always up to date)
-brew install opencode              # macOS and Linux (official brew formula, updated less)
-sudo pacman -S opencode            # Arch Linux (Stable)
-paru -S opencode-bin               # Arch Linux (Latest from AUR)
-mise use -g opencode               # Any OS
-nix run nixpkgs#opencode           # or github:anomalyco/opencode for latest dev branch
+bun script/personal-desktop/update.ts    # compila agora
+bun script/personal-desktop/watch.ts     # vigia o código e recompila
+bun script/personal-desktop/startup.ts   # liga o vigia junto com o Windows
 ```
 
-> [!TIP]
-> Remove versions older than 0.1.x before installing.
+O app pessoal nunca divide pasta, nome de pacote ou cache com o oficial.
 
-### Desktop App (BETA)
-
-OpenCode is also available as a desktop application. Download directly from the [releases page](https://github.com/anomalyco/opencode/releases) or [opencode.ai/download](https://opencode.ai/download).
-
-| Platform              | Download                           |
-| --------------------- | ---------------------------------- |
-| macOS (Apple Silicon) | `opencode-desktop-mac-arm64.dmg`   |
-| macOS (Intel)         | `opencode-desktop-mac-x64.dmg`     |
-| Windows               | `opencode-desktop-windows-x64.exe` |
-| Linux                 | `.deb`, `.rpm`, or `.AppImage`     |
+## Como rodar
 
 ```bash
-# macOS (Homebrew)
-brew install --cask opencode-desktop
-# Windows (Scoop)
-scoop bucket add extras; scoop install extras/opencode-desktop
+bun install
+bun dev            # o agente no terminal
+bun dev:web        # o app no navegador
+bun dev:desktop    # o app de desktop
 ```
 
-#### Installation Directory
+## Acompanhando o OpenCode oficial
 
-The install script respects the following priority order for the installation path:
-
-1. `$OPENCODE_INSTALL_DIR` - Custom installation directory
-2. `$XDG_BIN_DIR` - XDG Base Directory Specification compliant path
-3. `$HOME/bin` - Standard user binary directory (if it exists or can be created)
-4. `$HOME/.opencode/bin` - Default fallback
+A branch `dev` aqui do meu computador guarda o histórico completo do projeto original e é por ela que eu puxo as novidades:
 
 ```bash
-# Examples
-OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://opencode.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://opencode.ai/install | bash
+git pull origin dev
 ```
 
-### Agents
+Este repositório recebe só uma foto do código, sem os commits do projeto original:
 
-OpenCode includes two built-in agents you can switch between with the `Tab` key.
+```bash
+git branch -f pessoal $(git commit-tree "dev^{tree}" -p pessoal -m "o que mudou")
+git push meu pessoal:dev
+```
 
-- **build** - Default, full-access agent for development work
-- **plan** - Read-only agent for analysis and code exploration
-  - Denies file edits by default
-  - Asks permission before running bash commands
-  - Ideal for exploring unfamiliar codebases or planning changes
+## Licença
 
-Also included is a **general** subagent for complex searches and multistep tasks.
-This is used internally and can be invoked using `@general` in messages.
-
-Learn more about [agents](https://opencode.ai/docs/agents).
-
-### Documentation
-
-For more info on how to configure OpenCode, [**head over to our docs**](https://opencode.ai/docs).
-
-### Contributing
-
-If you're interested in contributing to OpenCode, please read our [contributing docs](./CONTRIBUTING.md) before submitting a pull request.
-
-### Building on OpenCode
-
-If you are working on a project that's related to OpenCode and is using "opencode" as part of its name, for example "opencode-dashboard" or "opencode-mobile", please add a note to your README to clarify that it is not built by the OpenCode team and is not affiliated with us in any way.
-
----
-
-**Join our community** [Discord](https://discord.gg/opencode) | [X.com](https://x.com/opencode)
+MIT, igual ao projeto original — veja [LICENSE](LICENSE). O OpenCode é feito pela [Anomaly](https://github.com/anomalyco); o que está aqui são as minhas mudanças em cima dele.
