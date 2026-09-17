@@ -1,0 +1,157 @@
+[data-component="session-new-design"] {
+  isolation: isolate;
+}
+
+/* A slow-breathing glow behind the composer: the focal point of an empty session. */
+.new-session-glow {
+  position: absolute;
+  top: 44%;
+  left: 50%;
+  z-index: 0;
+  width: 640px;
+  height: 640px;
+  border-radius: 50%;
+  pointer-events: none;
+  translate: -50% -50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--v2-blue-600) 24%, transparent), transparent);
+  animation: new-session-glow 9s var(--ease-soft, ease-in-out) infinite alternate;
+}
+
+@keyframes new-session-glow {
+  from {
+    opacity: 0.7;
+    scale: 0.92;
+  }
+  to {
+    opacity: 1;
+    scale: 1.06;
+  }
+}
+
+.new-session-stack {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.new-session-title {
+  margin: 0;
+  color: var(--v2-text-text-contrast);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  text-align: center;
+  text-wrap: balance;
+  animation: new-session-rise var(--duration-slow, 380ms) var(--ease-out-expo, ease-out) both;
+}
+
+.new-session-composer {
+  animation: new-session-rise var(--duration-panel, 420ms) var(--ease-spring, ease-out) 60ms both;
+}
+
+.new-session-examples {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.new-session-example {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 13px;
+  background: var(--v2-overlay-simple-overlay-hover);
+  box-shadow: inset 0 0 0 1px var(--glass-border, var(--v2-border-border-muted));
+  color: var(--v2-text-text-muted);
+  font-size: 12.5px;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast, 160ms) var(--ease-soft, ease-in-out),
+    color var(--duration-fast, 160ms) var(--ease-soft, ease-in-out),
+    transform var(--duration-base, 240ms) var(--ease-spring, ease-out);
+  animation: new-session-rise var(--duration-base, 240ms) var(--ease-out-expo, ease-out) both;
+}
+
+.new-session-example:nth-child(1) {
+  animation-delay: 120ms;
+}
+.new-session-example:nth-child(2) {
+  animation-delay: 160ms;
+}
+.new-session-example:nth-child(3) {
+  animation-delay: 200ms;
+}
+.new-session-example:nth-child(4) {
+  animation-delay: 240ms;
+}
+
+.new-session-example svg {
+  flex-shrink: 0;
+  color: var(--v2-icon-icon-muted);
+  transition: color var(--duration-fast, 160ms) var(--ease-soft, ease-in-out);
+}
+
+.new-session-example:hover {
+  background: var(--v2-overlay-simple-overlay-pressed);
+  color: var(--v2-text-text-base);
+  transform: translateY(-2px);
+}
+
+.new-session-example:hover svg {
+  color: var(--v2-text-text-accent);
+}
+
+.new-session-example:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.new-session-example:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-glow, 0 0 0 2px var(--v2-border-border-focus));
+}
+
+.new-session-hints {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 18px;
+  color: var(--v2-text-text-faint);
+  font-size: 11.5px;
+  user-select: none;
+}
+
+.new-session-hints > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@keyframes new-session-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@container (max-width: 520px) {
+  .new-session-examples {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .new-session-glow,
+  .new-session-title,
+  .new-session-composer,
+  .new-session-example {
+    animation: none;
+  }
+}

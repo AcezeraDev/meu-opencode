@@ -1,0 +1,83 @@
+.personal-update-button {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 22px;
+  margin-right: 8px;
+  padding: 0 4px;
+  gap: 0;
+  border-radius: 9999px;
+  color: var(--v2-icon-icon-base);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 530;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease-out,
+    color 150ms ease-out;
+}
+
+.personal-update-button:hover:not(:disabled),
+.personal-update-button:focus-visible {
+  color: var(--v2-text-text-base);
+  background: color-mix(in srgb, var(--v2-text-text-base) 8%, transparent);
+  outline: none;
+}
+
+.personal-update-button:disabled {
+  cursor: default;
+}
+
+.personal-update-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+/* Collapsed to the icon while idle; the label shows on hover and whenever there's news. */
+.personal-update-label {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    max-width 150ms ease-out,
+    opacity 150ms ease-out;
+}
+
+.personal-update-button:hover .personal-update-label,
+.personal-update-button:focus-visible .personal-update-label,
+.personal-update-button[data-expanded] .personal-update-label {
+  max-width: 120px;
+  padding: 0 4px 0 3px;
+  opacity: 1;
+}
+
+.personal-update-button[data-status="downloading"],
+.personal-update-button[data-status="checking"],
+.personal-update-button[data-status="installing"] {
+  color: var(--v2-text-text-muted);
+}
+
+.personal-update-button[data-status="ready"] {
+  color: var(--v2-text-text-accent);
+  background: color-mix(in srgb, var(--v2-icon-icon-accent) 18%, transparent);
+}
+
+.personal-update-button[data-status="ready"]:hover {
+  color: var(--v2-text-text-accent-hover);
+  background: color-mix(in srgb, var(--v2-icon-icon-accent) 28%, transparent);
+}
+
+.personal-update-button[data-status="error"] .personal-update-icon {
+  color: var(--v2-state-fg-danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .personal-update-button,
+  .personal-update-label {
+    transition: none;
+  }
+}

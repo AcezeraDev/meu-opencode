@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-17T06:30:00.000Z",
+  "title": "Design System: OpenCode Personal",
+  "extensions": {
+    "colorMeta": {
+      "trace": {
+        "role": "primary",
+        "displayName": "RGB Trace",
+        "canonical": "oklch(0.8 0.16 var(--chroma-hue))",
+        "tonalRamp": ["oklch(0.25 0.08 190)", "oklch(0.35 0.1 190)", "oklch(0.45 0.12 190)", "oklch(0.55 0.14 190)", "oklch(0.65 0.15 190)", "oklch(0.75 0.16 190)", "oklch(0.85 0.12 190)", "oklch(0.95 0.05 190)"]
+      },
+      "channel-edit": { "role": "secondary", "displayName": "Edit Channel" },
+      "channel-warn": { "role": "tertiary", "displayName": "Warn Channel" },
+      "channel-error": { "role": "tertiary", "displayName": "Error Channel" },
+      "channel-user": { "role": "neutral", "displayName": "User Channel" },
+      "screen": { "role": "neutral", "displayName": "Phosphor Screen" },
+      "canvas-deep": { "role": "neutral", "displayName": "Canvas Deep" },
+      "bezel-01": { "role": "neutral", "displayName": "Bezel 01" },
+      "bezel-02": { "role": "neutral", "displayName": "Bezel 02" },
+      "bezel-03": { "role": "neutral", "displayName": "Bezel 03" },
+      "bezel-04": { "role": "neutral", "displayName": "Bezel 04" },
+      "readout": { "role": "neutral", "displayName": "Readout" }
+    },
+    "typographyMeta": {
+      "ui": { "displayName": "UI", "purpose": "Messages, rows and settings." },
+      "title": { "displayName": "Title", "purpose": "Session titles in context views." },
+      "readout": { "displayName": "Readout", "purpose": "Measured values in fixed slots." },
+      "label": { "displayName": "Label", "purpose": "Measurement names beside their readouts." }
+    },
+    "shadows": [
+      { "name": "floating-panel", "value": "0 16px 40px rgb(0 0 0 / 0.3)", "purpose": "Context ring and spend panels." },
+      { "name": "strip", "value": "0 8px 24px rgb(0 0 0 / 0.18)", "purpose": "Measurement strip above the composer." },
+      { "name": "trace-glow", "value": "0 0 8px var(--chroma)", "purpose": "Only live elements glow, in the trace color." }
+    ],
+    "motion": [
+      { "name": "chroma-cycle", "value": "hue 0deg to 360deg, linear, 6s / 14s / 28s", "purpose": "The trace hue; one phase shared by every live element." },
+      { "name": "ease-out-expo", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Entrances: strip sweep, summary settle, panel pop." },
+      { "name": "trace-spin", "value": "rotate 1turn, 9s (wheel) / 2.4s (comet), linear", "purpose": "The response trace around the chat edge; compositor-only." },
+      { "name": "strip-dissolve", "value": "440ms opacity + translateY(6px) + blur(4px)", "purpose": "Live readouts handing over to the response summary." }
+    ],
+    "breakpoints": [{ "name": "overview-hidden", "value": "640px" }]
+  },
+  "components": [
+    {
+      "name": "Measurement Strip",
+      "kind": "custom",
+      "refersTo": "measurement-strip",
+      "description": "Live readouts docked above the composer while the agent works.",
+      "html": "<div class=\"ds-strip\"><span class=\"ds-chip\"><span class=\"ds-led\"></span>CH1</span><span class=\"ds-cell\"><span class=\"ds-label\">TIME</span><span class=\"ds-readout\"><span class=\"ds-ghost\">0</span>0:42</span></span><span class=\"ds-cell\"><span class=\"ds-label\">RATE</span><span class=\"ds-readout\"><span class=\"ds-ghost\">0</span>38</span><span class=\"ds-unit\">tok/s</span></span><span class=\"ds-cell ds-step\"><span class=\"ds-label\">STEP</span><span>editing app.tsx</span></span><span class=\"ds-cell\"><span class=\"ds-label\">COST</span><span class=\"ds-readout\">$0.0123</span></span></div>",
+      "css": ".ds-strip{display:flex;align-items:center;gap:14px;height:34px;padding:0 12px 0 8px;border:1px solid rgb(170 200 225 / .1);border-radius:10px;background:#11161a;color:#e6edf3;font-family:Inter,system-ui,sans-serif;font-size:12px}.ds-chip{display:inline-flex;align-items:center;gap:6px;height:20px;padding:0 7px 0 6px;border-radius:6px;font:600 10px ui-monospace,monospace;letter-spacing:.06em;color:oklch(.8 .16 190);background:oklch(.8 .16 190 / .12);box-shadow:inset 0 0 0 1px oklch(.8 .16 190 / .4)}.ds-led{width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor}.ds-cell{display:inline-flex;align-items:baseline;gap:6px}.ds-step{flex:1;min-width:0}.ds-label{font:500 10px ui-monospace,monospace;letter-spacing:.06em;text-transform:uppercase;color:#5b6875}.ds-readout{font:12px ui-monospace,monospace;font-variant-numeric:tabular-nums}.ds-ghost{color:rgb(180 210 235 / .16)}.ds-unit{font:10px ui-monospace,monospace;color:#5b6875}"
+    },
+    {
+      "name": "Panel Action",
+      "kind": "button",
+      "refersTo": "panel-action",
+      "description": "Actions inside instrument panels; the primary one takes the trace tint.",
+      "html": "<div class=\"ds-actions\"><button class=\"ds-action ds-action-primary\">Compact now</button><button class=\"ds-action\">Details</button></div>",
+      "css": ".ds-actions{display:flex;gap:6px;width:260px}.ds-action{flex:1;height:28px;border:0;border-radius:7px;font:500 12px Inter,system-ui,sans-serif;color:#e6edf3;background:#1f272d;transition:background-color .15s ease-out,transform .12s ease-out}.ds-action:hover{background:#283238}.ds-action:active{transform:scale(.97)}.ds-action:focus-visible{outline:2px solid #3fd0e0;outline-offset:1px}.ds-action-primary{background:color-mix(in srgb,oklch(.8 .16 190) 20%,#171e23);box-shadow:inset 0 0 0 1px oklch(.8 .16 190 / .45)}"
+    },
+    {
+      "name": "Response Summary",
+      "kind": "custom",
+      "refersTo": "instrument-panel",
+      "description": "Dashed-rule measurement footer under each finished response.",
+      "html": "<div class=\"ds-stats\"><span><span class=\"ds-l\">DURATION</span><span class=\"ds-v\"><span class=\"ds-g\">0</span>2:22</span></span><span><span class=\"ds-l\">TOOLS</span><span class=\"ds-v\"><span class=\"ds-g\">0</span>14</span></span><span><span class=\"ds-l\">COST</span><span class=\"ds-v\">$0.0189</span></span></div>",
+      "css": ".ds-stats{display:flex;flex-wrap:wrap;gap:4px 16px;padding:8px 0 2px;border-top:1px dashed rgb(170 200 225 / .1);width:420px}.ds-stats>span{display:inline-flex;align-items:baseline;gap:6px}.ds-l{font:500 10px ui-monospace,monospace;letter-spacing:.06em;color:#5b6875}.ds-v{font:11.5px ui-monospace,monospace;font-variant-numeric:tabular-nums;color:#8b98a5}.ds-g{color:rgb(180 210 235 / .16)}"
+    },
+    {
+      "name": "Spend Readout",
+      "kind": "chip",
+      "refersTo": "panel-action",
+      "description": "Titlebar readout of today's model spend; amber near the limit, red past it.",
+      "html": "<button class=\"ds-spend\"><span class=\"ds-l\">TODAY</span><span class=\"ds-v\">US$ 0,03</span></button>",
+      "css": ".ds-spend{display:inline-flex;align-items:baseline;gap:6px;height:24px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:#8b98a5;font-size:11px;line-height:24px}.ds-spend:hover{background:rgb(255 255 255 / .06)}.ds-spend:focus-visible{outline:2px solid #3fd0e0;outline-offset:1px}.ds-l{font:500 10px ui-monospace,monospace;letter-spacing:.06em}.ds-v{font:11px ui-monospace,monospace;color:#e6edf3}"
+    },
+    {
+      "name": "Active Tab Trace",
+      "kind": "nav",
+      "refersTo": "measurement-strip",
+      "description": "The active session tab carries a 2px trace line.",
+      "html": "<div class=\"ds-tab\">Session<span class=\"ds-tab-trace\"></span></div>",
+      "css": ".ds-tab{position:relative;display:inline-flex;align-items:center;height:28px;padding:0 14px;border-radius:8px;background:#171e23;color:#e6edf3;font:13px Inter,system-ui,sans-serif}.ds-tab-trace{position:absolute;left:10px;right:10px;bottom:-2px;height:2px;border-radius:2px;background:oklch(.8 .16 190);box-shadow:0 0 10px oklch(.8 .16 190)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Bench Oscilloscope",
+    "overview": "Every AI response is a live signal measured on an instrument screen. The chat sits on a phosphor-black screen under a faint, static graticule; the chrome around it is opaque instrument bezel. While the agent works, the screen comes alive: an RGB trace runs around the chat's edge, a measurement strip reads the signal above the composer, and each finished response leaves its measurements behind as a footer.\n\nThe app stays open all day, so the world is calm at rest and expressive only while something is happening. Color and motion always report a state; nothing moves just to decorate.",
+    "keyCharacteristics": [
+      "Phosphor-black screen with a graticule that never moves.",
+      "One RGB trace color that cycles continuously, reserved for what is live or active.",
+      "Fixed channel colors for everything that is not live (edits, prompts, warnings, errors).",
+      "Monospace readouts in fixed slots, with unused leading zeros drawn as ghosts.",
+      "Live readouts dissolve into a per-response summary when a turn ends."
+    ],
+    "rules": [
+      { "name": "The Trace Law", "body": "Only what is live or active wears the RGB trace: the chat edge while responding, the send/stop button, the active tab, the CH1 chip, the live overview marker, the primary \"compact now\" action. Everything else uses a fixed channel color.", "section": "colors" },
+      { "name": "The Still Screen Rule", "body": "Backgrounds never animate. A moving layer behind panels would make every blur and repaint recompute each frame in an app that stays open all day.", "section": "colors" },
+      { "name": "The Fixed Slot Rule", "body": "Numbers that change while you watch sit in fixed digit slots (`00:42`, `038 tok/s`, `014`), with the unused leading zeros drawn in the ghost color, so values never jitter.", "section": "typography" },
+      { "name": "The Label-Beside Rule", "body": "A measurement label sits beside its value on the same line, never as a small heading above a big number.", "section": "typography" }
+    ],
+    "dos": [
+      "Do give anything live the trace color, and take it away when it stops being live.",
+      "Do put changing numbers in fixed slots with ghost zeros.",
+      "Do dock instruments to the edges of the content they measure.",
+      "Do animate only transform and opacity on small layers, and pause loops when their owner is inactive.",
+      "Do keep reduced motion meaningful: stop cycling and movement, keep state colors."
+    ],
+    "donts": [
+      "Don't animate backgrounds, the graticule, or anything under large surfaces.",
+      "Don't cycle the color of errors, warnings or edits.",
+      "Don't set a small label above a big number (hero-metric); put the label beside the value.",
+      "Don't reintroduce translucent glass or backdrop blur on panels.",
+      "Don't add a trace or glow to static, non-live elements for decoration."
+    ]
+  }
+}

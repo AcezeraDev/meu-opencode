@@ -1,0 +1,191 @@
+/* Hero: the composer is the front door of the app. */
+.home-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 40px 16px 32px;
+}
+
+.home-hero-composer {
+  display: flex;
+  width: min(760px, 100%);
+  min-height: 84px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 14px 14px 20px;
+  border: 0;
+  border-radius: 24px;
+  background: var(--glass-surface, var(--v2-background-bg-layer-01));
+  backdrop-filter: var(--glass-filter, none);
+  -webkit-backdrop-filter: var(--glass-filter, none);
+  box-shadow: var(--shadow-glass-md, var(--v2-elevation-floating));
+  color: var(--v2-text-text-faint);
+  text-align: left;
+  cursor: text;
+  transition:
+    box-shadow var(--duration-base, 240ms) var(--ease-soft, ease-in-out),
+    transform var(--duration-base, 240ms) var(--ease-spring, ease-out);
+  animation: home-hero-rise var(--duration-panel, 420ms) var(--ease-spring, ease-out) both;
+}
+
+.home-hero-composer:hover:not(:disabled) {
+  box-shadow:
+    var(--shadow-glass-md, var(--v2-elevation-floating)),
+    var(--shadow-glow, 0 0 0 2px var(--v2-border-border-focus));
+  transform: translateY(-2px);
+}
+
+.home-hero-composer:focus-visible {
+  outline: none;
+  box-shadow:
+    var(--shadow-glass-md, var(--v2-elevation-floating)),
+    var(--shadow-glow, 0 0 0 2px var(--v2-border-border-focus));
+}
+
+.home-hero-composer:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.home-hero-placeholder {
+  align-self: flex-start;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+}
+
+.home-hero-send {
+  display: flex;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  background: var(--v2-blue-600);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--v2-blue-600) 50%, transparent);
+  color: #fff;
+}
+
+.home-hero-send svg {
+  rotate: 180deg;
+}
+
+.home-hero-examples {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.home-hero-example {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--v2-overlay-simple-overlay-hover);
+  box-shadow: inset 0 0 0 1px var(--glass-border, var(--v2-border-border-muted));
+  color: var(--v2-text-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast, 160ms) var(--ease-soft, ease-in-out),
+    color var(--duration-fast, 160ms) var(--ease-soft, ease-in-out),
+    transform var(--duration-fast, 160ms) var(--ease-spring, ease-out);
+  animation: home-hero-rise var(--duration-slow, 380ms) var(--ease-out-expo, ease-out) 80ms both;
+}
+
+.home-hero-example:hover:not(:disabled) {
+  background: var(--v2-overlay-simple-overlay-pressed);
+  color: var(--v2-text-text-base);
+  transform: translateY(-1px);
+}
+
+.home-hero-example:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-glow, 0 0 0 2px var(--v2-border-border-focus));
+}
+
+.home-hero-example:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.home-hero-board {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--v2-text-text-accent);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--duration-fast, 160ms) var(--ease-soft, ease-in-out);
+}
+
+.home-hero-board:hover {
+  background: color-mix(in srgb, var(--v2-blue-600) 12%, transparent);
+  color: var(--v2-text-text-accent-hover);
+}
+
+.home-hero-board:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-glow, 0 0 0 2px var(--v2-border-border-focus));
+}
+
+/* Projects become stacked cards; the list keeps its drag-to-reorder. */
+div:has(> [data-component="home-project-row"]) {
+  height: 44px;
+  margin-block: 2px;
+  border-radius: 13px;
+  transition:
+    background-color var(--duration-fast, 160ms) var(--ease-soft, ease-in-out),
+    box-shadow var(--duration-fast, 160ms) var(--ease-soft, ease-in-out),
+    transform var(--duration-base, 240ms) var(--ease-spring, ease-out);
+}
+
+div:has(> [data-component="home-project-row"]):hover {
+  background: var(--v2-overlay-simple-overlay-hover);
+  transform: translateX(2px);
+}
+
+div:has(> [data-component="home-project-row"][data-selected]) {
+  background: var(--glass-surface, var(--v2-background-bg-layer-01));
+  box-shadow: var(--shadow-glass-sm, var(--v2-elevation-raised));
+}
+
+[data-component="home-project-row"] {
+  height: 100%;
+  border-radius: 13px;
+}
+
+/* Session rows: roomier, with a soft lift on hover. */
+[data-component="home-session-row"] {
+  border-radius: 12px;
+  transition:
+    background-color var(--duration-fast, 160ms) var(--ease-soft, ease-in-out),
+    transform var(--duration-base, 240ms) var(--ease-spring, ease-out);
+}
+
+[data-component="home-session-row"]:hover {
+  transform: translateX(2px);
+}
+
+@keyframes home-hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-hero-composer,
+  .home-hero-example {
+    animation: none;
+  }
+}

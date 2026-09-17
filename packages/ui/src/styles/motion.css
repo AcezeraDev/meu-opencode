@@ -1,0 +1,181 @@
+/*
+ * Motion system
+ * ----------------------------------------------------------------------------
+ * A shared vocabulary for entrances, exits and emphasis. Components should
+ * reach for these keyframes and the --duration-* / --ease-* tokens in
+ * glass.css rather than inventing one-off timings.
+ *
+ * Upstream keyframes in animations.css (pulse-opacity, pulse-scale, fadeUp)
+ * are still in use by spinner.tsx and app shell code — they are left intact.
+ */
+
+/* Panels & overlays ------------------------------------------------------ */
+@keyframes glass-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+    backdrop-filter: blur(0) saturate(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    backdrop-filter: var(--glass-filter);
+  }
+}
+
+@keyframes glass-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+  }
+}
+
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(var(--glass-blur-sm));
+  }
+}
+
+@keyframes scrim-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Directional entrances -------------------------------------------------- */
+@keyframes slide-up-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-down-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Emphasis --------------------------------------------------------------- */
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--border-interactive-base, #034cff) 35%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--border-interactive-base, #034cff) 0%, transparent);
+  }
+}
+
+/* Utilities -------------------------------------------------------------- */
+.motion-glass-in {
+  animation: glass-in var(--duration-panel) var(--ease-spring) both;
+}
+
+.motion-slide-up {
+  animation: slide-up-in var(--duration-base) var(--ease-out-expo) both;
+}
+
+.motion-pop {
+  animation: pop-in var(--duration-fast) var(--ease-out-back) both;
+}
+
+.motion-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--text-base) 8%, transparent) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/*
+ * Stagger children: set --motion-index on each child (or rely on the
+ * nth-child fallback below) to cascade an entrance.
+ */
+.motion-stagger > * {
+  animation: slide-up-in var(--duration-base) var(--ease-out-expo) both;
+  animation-delay: calc(var(--motion-index, 0) * 40ms);
+}
+
+.motion-stagger > *:nth-child(1) {
+  --motion-index: 0;
+}
+.motion-stagger > *:nth-child(2) {
+  --motion-index: 1;
+}
+.motion-stagger > *:nth-child(3) {
+  --motion-index: 2;
+}
+.motion-stagger > *:nth-child(4) {
+  --motion-index: 3;
+}
+.motion-stagger > *:nth-child(5) {
+  --motion-index: 4;
+}
+.motion-stagger > *:nth-child(6) {
+  --motion-index: 5;
+}
+.motion-stagger > *:nth-child(7) {
+  --motion-index: 6;
+}
+.motion-stagger > *:nth-child(8) {
+  --motion-index: 7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-glass-in,
+  .motion-slide-up,
+  .motion-pop,
+  .motion-stagger > * {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
+  }
+
+  .motion-shimmer {
+    animation: none;
+  }
+}

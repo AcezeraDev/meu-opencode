@@ -1,0 +1,24 @@
+Generate short cinematic videos optimized for websites, hero sections, landing pages, animated backgrounds, product sections and scroll-driven experiences using the NanoGPT video API.
+
+Videos are made from a photo (image-to-video): the user attaches a photo (a product shot, a person, a place) and the tool animates it while keeping the subject exactly as photographed, including labels and logos. The latest image the user attached in this conversation is used automatically. If the user has not attached a photo, do not call the tool; ask them to attach the photo to animate first. If the tool reports that no photo was attached, relay that and ask for the photo.
+
+Use this tool when the user asks for a video to use in a web interface: hero backgrounds, looping ambient backgrounds, product hero shots, abstract motion backgrounds, full-screen section videos, or videos that will be scrubbed by scroll (GSAP ScrollTrigger, Framer Motion, video.currentTime). It is not meant for talking avatars, social clips or narrative films.
+
+Styles (`preset`): the user can turn on a saved style in Settings → Video, and the tool applies it when `preset` is omitted. Set `preset` yourself only when the user asks for a style by name ("hero 3D", "360", "turntable") or asks for none ("none").
+- "hero-3d": premium 3D product hero for a site. The product floats in a clean studio, turns a full 360 degrees, shows one reveal moment and loops back to the photo pose. With this style, `prompt` must only describe the product's own reveal moment, based on what you see in the photo: e.g. a bottle "the steel cap unscrews, lifts off and hovers, then screws back on"; headphones "the earcups swivel open and fold back"; a mouse "the top shell lifts slightly revealing the glowing sensor, then settles". Keep it to one short clause; the tool writes the rest of the scene.
+- "turntable": clean 360-degree turn only. `prompt` can stay empty or add one detail about the product.
+- Style settings (duration, motion, camera) apply unless the user asks for something else.
+
+How to call it:
+- `prompt`: describe what should happen to the photo in the user's own terms: the motion or action (e.g. "the cap slowly opens revealing the capsules, then closes again"), the mood, background and lighting. Do not re-describe what is already visible in the photo and do not add technical boilerplate such as "no text", "keep the label", "seamless loop" or camera jargon; the tool adds those production traits automatically from the other options.
+- `purpose`: pick the closest use: "hero", "background", "scroll", "product", "abstract" or "section".
+- Map what the user said onto options instead of the prompt: duration, aspectRatio, quality, motion ("subtle" | "medium" | "dynamic"), cameraMovement, loopFriendly, scrollFriendly, fps, resolution.
+- Leave options out when the user did not ask for them; saved defaults are used and unsupported options are ignored per model.
+- Set `scrollFriendly: true` when the video will be controlled by scroll, and `loopFriendly: true` for looping backgrounds.
+- No new text, captions or watermarks are added by default, while labels and logos already in the photo are preserved. Only set `includeText: true` when the user explicitly asks for new text in the video.
+- Audio is off by default. Only set `generateAudio: true` when the user asks for sound.
+- Leave `referenceImage` out to use the attached photo. Pass a public https image URL only when the user gives one instead of attaching a file.
+- Leave `aspectRatio` out so the video follows the photo's proportions, unless the user asks for a specific format.
+- Only set `model` when the user names one.
+
+Each call costs money on the user's NanoGPT account. Call it once per request; do not retry or generate variations unless the user asks. The user sees a live card in the chat and the finished video player, so after it finishes just summarize the result and share the URL; if the user wants to use it in their site, suggest downloading the file into the project and embedding it with <video autoplay muted loop playsinline>.

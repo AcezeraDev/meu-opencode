@@ -1,0 +1,207 @@
+/*
+ * Bench oscilloscope — the app's visual world (replaces the glass world).
+ * ----------------------------------------------------------------------------
+ * Surfaces are opaque instrument bezels around a phosphor screen with a faint
+ * graticule. One color law holds everywhere:
+ *   - the RGB trace (--chroma) marks what is live or active and keeps cycling;
+ *   - errors, warnings and success keep fixed colors and never cycle.
+ *
+ * Specificity: themes inject `html[data-theme="<id>"] { ... }` at runtime (see
+ * ui/src/theme/loader.ts); the doubled attribute selector outranks it.
+ */
+
+/* The trace hue. Registered so it can be animated; not inherited, so only the
+ * elements that actually show the trace recompute each frame. */
+@property --chroma-hue {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 190deg;
+}
+
+@keyframes chroma-cycle {
+  from {
+    --chroma-hue: 0deg;
+  }
+  to {
+    --chroma-hue: 360deg;
+  }
+}
+
+html[data-theme][data-theme],
+:root {
+  --chroma-period: 14s;
+  --chroma-l: 0.62;
+  --chroma-c: 0.19;
+  /* Fixed channel colors for things that are not live (edits, markers). */
+  --scope-ch-edit: #0a8fa3;
+  --scope-ch-user: #3b4550;
+  --scope-ch-error: #d92d20;
+  --scope-ch-warn: #b7791f;
+
+  --scope-screen: #fbfcfc;
+  --scope-grid: rgb(18 40 60 / 0.055);
+  --scope-grid-dot: rgb(18 40 60 / 0.16);
+  --scope-ghost: rgb(18 40 60 / 0.2);
+  --scope-readout: #0d1117;
+  --scope-bezel-line: rgb(18 40 60 / 0.12);
+
+  --v2-background-bg-deep: #e7ebee;
+  --v2-background-bg-base: #fbfcfc;
+  --v2-background-bg-layer-01: #f2f4f6;
+  --v2-background-bg-layer-02: #e8ecef;
+  --v2-background-bg-layer-03: #dce2e7;
+  --v2-background-bg-layer-04: #cfd7dd;
+  --v2-border-border-muted: rgb(18 40 60 / 0.08);
+  --v2-border-border-base: rgb(18 40 60 / 0.13);
+  --v2-border-border-strong: rgb(18 40 60 / 0.24);
+
+  /* Glass tokens still read by older components now describe opaque bezels. */
+  --glass-canvas: #e7ebee;
+  --glass-surface-weak: #f2f4f6;
+  --glass-surface: #f7f8f9;
+  --glass-surface-strong: #fbfcfc;
+  --glass-float: #fbfcfc;
+  --glass-float-solid: #fbfcfc;
+  --glass-border: rgb(18 40 60 / 0.12);
+  --glass-border-strong: rgb(18 40 60 / 0.2);
+  --glass-highlight: rgb(255 255 255 / 0.8);
+  --glass-scrim: rgb(10 14 18 / 0.32);
+  --glass-filter: none;
+  --glass-filter-sm: none;
+  --glass-filter-lg: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-theme][data-theme],
+  :root {
+    --chroma-l: 0.8;
+    --chroma-c: 0.16;
+    --scope-ch-edit: #3fd0e0;
+    --scope-ch-user: #c9d3dc;
+    --scope-ch-error: #ff5a4e;
+    --scope-ch-warn: #f5b33c;
+
+    --scope-screen: #0b0f12;
+    --scope-grid: rgb(140 180 210 / 0.045);
+    --scope-grid-dot: rgb(160 200 230 / 0.13);
+    --scope-ghost: rgb(180 210 235 / 0.16);
+    --scope-readout: #e6edf3;
+    --scope-bezel-line: rgb(170 200 225 / 0.1);
+
+    --v2-background-bg-deep: #050709;
+    --v2-background-bg-base: #0b0f12;
+    --v2-background-bg-layer-01: #11161a;
+    --v2-background-bg-layer-02: #171e23;
+    --v2-background-bg-layer-03: #1f272d;
+    --v2-background-bg-layer-04: #283238;
+    --v2-border-border-muted: rgb(170 200 225 / 0.07);
+    --v2-border-border-base: rgb(170 200 225 / 0.11);
+    --v2-border-border-strong: rgb(170 200 225 / 0.2);
+
+    --glass-canvas: #050709;
+    --glass-surface-weak: #11161a;
+    --glass-surface: #12181c;
+    --glass-surface-strong: #141a1f;
+    --glass-float: #12181c;
+    --glass-float-solid: #12181c;
+    --glass-border: rgb(170 200 225 / 0.12);
+    --glass-border-strong: rgb(170 200 225 / 0.2);
+    --glass-highlight: rgb(255 255 255 / 0.05);
+    --glass-scrim: rgb(0 0 0 / 0.55);
+  }
+}
+
+html[data-theme][data-theme],
+html {
+  background-color: var(--v2-background-bg-deep);
+}
+
+/* Anything that shows the live trace color opts in with data-chroma. */
+[data-chroma] {
+  --chroma: oklch(var(--chroma-l) var(--chroma-c) var(--chroma-hue));
+  --chroma-soft: oklch(var(--chroma-l) var(--chroma-c) var(--chroma-hue) / 0.18);
+  animation: chroma-cycle var(--chroma-period) linear infinite;
+}
+
+html[data-chroma-speed="slow"] {
+  --chroma-period: 28s;
+}
+
+html[data-chroma-speed="fast"] {
+  --chroma-period: 6s;
+}
+
+/* RGB off (or reduced motion): the trace holds one hue instead of cycling. */
+html[data-chroma-off] [data-chroma] {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-chroma] {
+    animation: none;
+  }
+}
+
+/*
+ * The phosphor screen: the chat surface sits on a static graticule. The grid is
+ * painted once; content scrolls over it like a signal over the screen glass.
+ */
+.scope-screen {
+  background-color: var(--scope-screen);
+  background-image:
+    radial-gradient(circle, var(--scope-grid-dot) 0.9px, transparent 1.2px),
+    linear-gradient(to right, var(--scope-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--scope-grid) 1px, transparent 1px);
+  background-size:
+    48px 48px,
+    48px 48px,
+    48px 48px;
+  background-position:
+    -0.5px -0.5px,
+    0 0,
+    0 0;
+}
+
+/* Readouts: measurement digits in fixed slots, leading zeros drawn as ghosts. */
+.scope-readout {
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  color: var(--scope-readout);
+  white-space: nowrap;
+}
+
+.scope-readout-ghost {
+  color: var(--scope-ghost);
+}
+
+.scope-label {
+  font-family: var(--font-family-mono);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--v2-text-text-faint);
+}
+
+/* Send and stop: the composer's main action is lit with the trace. The component
+ * paints its background inline, so the override needs !important. */
+[data-action="prompt-submit"][data-chroma]:not(:disabled) {
+  color: #04070a !important;
+  background-image: none !important;
+  background-color: var(--chroma) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--chroma) 70%, transparent),
+    0 0 18px -4px var(--chroma) !important;
+  transition: transform 120ms ease-out;
+}
+
+[data-action="prompt-submit"][data-chroma]:not(:disabled):active {
+  transform: scale(0.94);
+}
+
+[data-action="prompt-submit"][data-chroma][data-stopping] {
+  color: var(--chroma) !important;
+  background-color: color-mix(in srgb, var(--chroma) 16%, var(--v2-background-bg-layer-02)) !important;
+}

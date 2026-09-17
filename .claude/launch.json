@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "app-web",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["--cwd", "packages/app", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "app-web-4097",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["--cwd", "packages/app", "dev"],
+      "env": { "VITE_OPENCODE_SERVER_PORT": "4097" },
+      "port": 3000
+    }
+  ]
+}

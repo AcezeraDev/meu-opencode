@@ -1,0 +1,1329 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "lightricks-ltx-2-fast",
+      "object": "model",
+      "created": 1761264000,
+      "owned_by": "lightricks",
+      "name": "Lightricks LTX-2 Fast",
+      "description": "High-speed LTX-2 pipeline tuned for rapid iterations. Convert text or a single image into cinematic clips with synchronized audio in seconds.",
+      "architecture": {
+        "modality": "text+image->video",
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "video"
+        ]
+      },
+      "pricing": {
+        "currency": "USD",
+        "per_second": 0.04,
+        "supported_durations": [
+          6,
+          8,
+          10,
+          12,
+          14,
+          16,
+          18,
+          20
+        ]
+      },
+      "capabilities": {
+        "video_generation": true,
+        "text_to_video": true,
+        "image_to_video": true,
+        "video_to_video": false,
+        "audio_input": false,
+        "audio_generation": true,
+        "nsfw": false
+      },
+      "supported_parameters": {
+        "parameters": {
+          "generateAudio": {
+            "type": "switch",
+            "label": "Generate Audio",
+            "description": "Enable synchronized soundtrack generation",
+            "default": true
+          },
+          "duration": {
+            "type": "select",
+            "label": "Duration",
+            "default": "6",
+            "options": [
+              {
+                "value": "6",
+                "label": "6 seconds"
+              },
+              {
+                "value": "8",
+                "label": "8 seconds"
+              },
+              {
+                "value": "10",
+                "label": "10 seconds"
+              },
+              {
+                "value": "12",
+                "label": "12 seconds"
+              },
+              {
+                "value": "14",
+                "label": "14 seconds"
+              },
+              {
+                "value": "16",
+                "label": "16 seconds"
+              },
+              {
+                "value": "18",
+                "label": "18 seconds"
+              },
+              {
+                "value": "20",
+                "label": "20 seconds"
+              }
+            ],
+            "description": "Clip length"
+          }
+        },
+        "defaults": {
+          "generateAudio": true,
+          "duration": "6"
+        }
+      },
+      "icon_url": "/icons/Lightricks.png",
+      "tags": [
+        "lightricks",
+        "audio-sync",
+        "fast"
+      ],
+      "category": "More"
+    },
+    {
+      "id": "wan-video-image-to-video",
+      "object": "model",
+      "created": 1745193600,
+      "owned_by": "wan",
+      "name": "Wan 2.1",
+      "description": "Generate a video from an image and prompt.",
+      "architecture": {
+        "modality": "image->video",
+        "input_modalities": [
+          "image"
+        ],
+        "output_modalities": [
+          "video"
+        ]
+      },
+      "pricing": {
+        "currency": "USD",
+        "per_resolution": {
+          "480p": 0.2,
+          "720p": 0.4
+        },
+        "frame_multiplier": 1.25,
+        "frame_threshold": 81
+      },
+      "capabilities": {
+        "video_generation": true,
+        "text_to_video": false,
+        "image_to_video": true,
+        "video_to_video": false,
+        "audio_input": false,
+        "audio_generation": false,
+        "nsfw": true
+      },
+      "supported_parameters": {
+        "parameters": {
+          "resolution": {
+            "type": "select",
+            "label": "Resolution",
+            "default": "720p",
+            "options": [
+              {
+                "value": "480p",
+                "label": "480p"
+              },
+              {
+                "value": "720p",
+                "label": "720p"
+              }
+            ],
+            "description": "Resolution of video"
+          },
+          "num_frames": {
+            "type": "number",
+            "label": "Number of Frames",
+            "default": 81,
+            "options": [
+              {
+                "value": "81",
+                "label": "81 frames"
+              },
+              {
+                "value": "100",
+                "label": "100 frames (+25% cost)"
+              }
+            ],
+            "description": "Number of frames to generate (81-100)"
+          },
+          "negative_prompt": {
+            "label": "Negative Prompt",
+            "description": "What to avoid in the video",
+            "type": "string",
+            "default": ""
+          },
+          "frames_per_second": {
+            "label": "Frames per Second",
+            "description": "Frames per second (5-24)",
+            "type": "number",
+            "default": 16
+          },
+          "enable_safety_checker": {
+            "label": "Safety Checker",
+            "description": "Enable content safety filtering (disabled by default)",
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "defaults": {
+          "resolution": "720p",
+          "num_frames": 81,
+          "negative_prompt": "",
+          "frames_per_second": 16,
+          "enable_safety_checker": false
+        }
+      },
+      "icon_url": "/icons/Wan.svg",
+      "category": "More"
+    },
+    {
+      "id": "bytedance/seedance-2.5",
+      "object": "model",
+      "created": 1786060800,
+      "owned_by": "bytedance",
+      "name": "Seedance 2.5",
+      "description": "One model id that selects text, image, multimodal-reference, video-edit, or video-extend generation from the supplied inputs.",
+      "architecture": {
+        "modality": "text+image+video+audio->video",
+        "input_modalities": [
+          "text",
+          "image",
+          "video",
+          "audio"
+        ],
+        "output_modalities": [
+          "video"
+        ]
+      },
+      "pricing": {
+        "currency": "USD",
+        "variant": "standard",
+        "per_second_by_resolution": {
+          "480p": 0.18,
+          "720p": 0.36,
+          "1080p": 0.9,
+          "4k": 1.8
+        },
+        "video_reference_per_second_by_resolution": {
+          "480p": 0.11,
+          "720p": 0.22,
+          "1080p": 0.55,
+          "4k": 1.1
+        },
+        "video_reference_billing": "input plus output seconds",
+        "video_edit_per_second_by_resolution": {
+          "480p": 0.11,
+          "720p": 0.22,
+          "1080p": 0.55,
+          "4k": 1.1
+        },
+        "video_edit_billing": "input plus output seconds",
+        "default_duration": 5,
+        "min_duration": 4,
+        "max_duration": 30,
+        "default_resolution": "720p"
+      },
+      "capabilities": {
+        "video_generation": true,
+        "text_to_video": true,
+        "image_to_video": true,
+        "video_to_video": true,
+        "audio_input": true,
+        "audio_generation": false,
+        "nsfw": false
+      },
+      "supported_parameters": {
+        "parameters": {
+          "mode": {
+            "type": "select",
+            "label": "Operation",
+            "description": "Automatically infer the operation from inputs, or explicitly select video extension.",
+            "default": "auto",
+            "options": [
+              {
+                "value": "auto",
+                "label": "Automatic (from inputs)"
+              },
+              {
+                "value": "text-to-video",
+                "label": "Text / references to video"
+              },
+              {
+                "value": "image-to-video",
+                "label": "Image to video"
+              },
+              {
+                "value": "video-edit",
+                "label": "Video edit"
+              },
+              {
+                "value": "video-extend",
+                "label": "Video extend"
+              }
+            ]
+          },
+          "resolution": {
+            "type": "select",
+            "label": "Resolution",
+            "default": "720p",
+            "options": [
+              {
+                "value": "480p",
+                "label": "480p"
+              },
+              {
+                "value": "720p",
+                "label": "720p"
+              },
+              {
+                "value": "1080p",
+                "label": "1080p"
+              },
+              {
+                "value": "4k",
+                "label": "4K"
+              }
+            ],
+            "description": "Output resolution"
+          },
+          "duration": {
+            "type": "select",
+            "label": "Duration",
+            "default": "5",
+            "options": [
+              {
+                "value": "4",
+                "label": "4 seconds"
+              },
+              {
+                "value": "5",
+                "label": "5 seconds"
+              },
+              {
+                "value": "6",
+                "label": "6 seconds"
+              },
+              {
+                "value": "7",
+                "label": "7 seconds"
+              },
+              {
+                "value": "8",
+                "label": "8 seconds"
+              },
+              {
+                "value": "9",
+                "label": "9 seconds"
+              },
+              {
+                "value": "10",
+                "label": "10 seconds"
+              },
+              {
+                "value": "11",
+                "label": "11 seconds"
+              },
+              {
+                "value": "12",
+                "label": "12 seconds"
+              },
+              {
+                "value": "13",
+                "label": "13 seconds"
+              },
+              {
+                "value": "14",
+                "label": "14 seconds"
+              },
+              {
+                "value": "15",
+                "label": "15 seconds"
+              },
+              {
+                "value": "16",
+                "label": "16 seconds"
+              },
+              {
+                "value": "17",
+                "label": "17 seconds"
+              },
+              {
+                "value": "18",
+                "label": "18 seconds"
+              },
+              {
+                "value": "19",
+                "label": "19 seconds"
+              },
+              {
+                "value": "20",
+                "label": "20 seconds"
+              },
+              {
+                "value": "21",
+                "label": "21 seconds"
+              },
+              {
+                "value": "22",
+                "label": "22 seconds"
+              },
+              {
+                "value": "23",
+                "label": "23 seconds"
+              },
+              {
+                "value": "24",
+                "label": "24 seconds"
+              },
+              {
+                "value": "25",
+                "label": "25 seconds"
+              },
+              {
+                "value": "26",
+                "label": "26 seconds"
+              },
+              {
+                "value": "27",
+                "label": "27 seconds"
+              },
+              {
+                "value": "28",
+                "label": "28 seconds"
+              },
+              {
+                "value": "29",
+                "label": "29 seconds"
+              },
+              {
+                "value": "30",
+                "label": "30 seconds"
+              }
+            ],
+            "description": "Output duration from 4 to 30 seconds"
+          },
+          "aspect_ratio": {
+            "type": "select",
+            "label": "Aspect Ratio",
+            "description": "Used for text and multimodal-reference generation; image and video inputs determine framing.",
+            "default": "16:9",
+            "options": [
+              {
+                "value": "21:9",
+                "label": "Ultra-wide (21:9)"
+              },
+              {
+                "value": "16:9",
+                "label": "Landscape (16:9)"
+              },
+              {
+                "value": "4:3",
+                "label": "Classic (4:3)"
+              },
+              {
+                "value": "1:1",
+                "label": "Square (1:1)"
+              },
+              {
+                "value": "3:4",
+                "label": "Portrait classic (3:4)"
+              },
+              {
+                "value": "9:16",
+                "label": "Portrait (9:16)"
+              }
+            ]
+          },
+          "generate_audio": {
+            "type": "switch",
+            "label": "Generate Audio",
+            "description": "Generate synchronized sound effects, ambience, and speech.",
+            "default": true
+          }
+        },
+        "defaults": {
+          "mode": "auto",
+          "resolution": "720p",
+          "duration": "5",
+          "aspect_ratio": "16:9",
+          "generate_audio": true
+        }
+      },
+      "icon_url": "/icons/ByteDance.png",
+      "label": "NEW",
+      "category": "video"
+    },
+    {
+      "id": "kling-v26-pro",
+      "object": "model",
+      "created": 1764720000,
+      "owned_by": "kling",
+      "name": "Kling 2.6 Pro",
+      "description": "Latest Kling model with text-to-video and image-to-video capabilities. Supports native audio/voiceover generation. 5s and 10s durations with multiple aspect ratios.",
+      "architecture": {
+        "modality": "text+image->video",
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "video"
+        ]
+      },
+      "pricing": {
+        "currency": "USD",
+        "per_duration": {
+          "5": 0.35,
+          "10": 0.7
+        },
+        "unit": "per_video",
+        "audio_multiplier": 2
+      },
+      "capabilities": {
+        "video_generation": true,
+        "text_to_video": true,
+        "image_to_video": true,
+        "video_to_video": false,
+        "audio_input": false,
+        "audio_generation": true,
+        "nsfw": false
+      },
+      "supported_parameters": {
+        "parameters": {
+          "duration": {
+            "type": "select",
+            "label": "Duration",
+            "default": "5",
+            "options": [
+              {
+                "value": "5",
+                "label": "5 seconds"
+              },
+              {
+                "value": "10",
+                "label": "10 seconds"
+              }
+            ],
+            "description": "5 or 10 seconds"
+          },
+          "aspect_ratio": {
+            "type": "select",
+            "label": "Aspect Ratio (T2V)",
+            "default": "16:9",
+            "options": [
+              {
+                "value": "16:9",
+                "label": "Landscape (16:9)"
+              },
+              {
+                "value": "9:16",
+                "label": "Portrait (9:16)"
+              },
+              {
+                "value": "1:1",
+                "label": "Square (1:1)"
+              }
+            ],
+            "description": "Applies to text-to-video"
+          },
+          "sound": {
+            "type": "switch",
+            "label": "Audio",
+            "description": "Generate audio/voiceover for the video",
+            "default": true
+          }
+        },
+        "defaults": {
+          "duration": "5",
+          "aspect_ratio": "16:9",
+          "sound": true
+        }
+      },
+      "icon_url": "/icons/Kling.svg",
+      "label": "NEW",
+      "tags": [
+        "kling",
+        "audio"
+      ],
+      "category": "video"
+    },
+    {
+      "id": "veo3-video",
+      "object": "model",
+      "created": 1749081600,
+      "owned_by": "gemini",
+      "name": "Veo 3",
+      "description": "Google's latest Veo 3 model. Creates high-quality 8-second videos from text or images. Supports audio generation ($4.80 with audio, $3.20 without). For best results, prompts should be descriptive and clear. Include the subject, context, action, style, camera motion, composition, and ambiance details. Note: This model has strict content filters and may reject NSFW or sensitive content — we issue refunds for content policy rejections.",
+      "architecture": {
+        "modality": "text+image->video",
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "video"
+        ]
+      },
+      "pricing": {
+        "currency": "USD",
+        "with_audio": 4.8,
+        "without_audio": 3.2,
+        "fixed_duration_seconds": 8
+      },
+      "capabilities": {
+        "video_generation": true,
+        "text_to_video": true,
+        "image_to_video": true,
+        "video_to_video": false,
+        "audio_input": false,
+        "audio_generation": true,
+        "nsfw": false
+      },
+      "supported_parameters": {
+        "parameters": {
+          "generateAudio": {
+            "type": "boolean",
+            "label": "Generate Audio",
+            "description": "Generate audio for the video (costs extra)",
+            "default": true
+          },
+          "aspect_ratio": {
+            "type": "select",
+            "label": "Aspect Ratio",
+            "default": "16:9",
+            "options": [
+              {
+                "value": "16:9",
+                "label": "Landscape (16:9)"
+              }
+            ],
+            "description": "Video aspect ratio"
+          },
+          "enhancePrompt": {
+            "label": "Enhance Prompt",
+            "description": "Automatically enhance the prompt for better results",
+            "type": "boolean",
+            "default": true
+          },
+          "resolution": {
+            "label": "Resolution",
+            "description": "Video resolution quality",
+            "type": "select",
+            "default": "1080p",
+            "options": [
+              {
+                "value": "1080p",
+                "label": "1080p (1920x1080)"
+              },
+              {
+                "value": "720p",
+                "label": "720p (1280x720)"
+              }
+            ]
+          }
+        },
+        "defaults": {
+          "generateAudio": true,
+          "aspect_ratio": "16:9",
+          "enhancePrompt": true,
+          "resolution": "1080p"
+        }
+      },
+      "icon_url": "/icons/Gemini.svg",
+      "category": "More"
+    },
+    {
+      "id": "minimax/h3-max/multi-angle/image-to-video",
+      "object": "model",
+      "created": 1788912000,
+      "owned_by": "fal",
+      "name": "MiniMax H3 Max Multi Angle",
+      "description": "Animate a starting image with precise camera control: orbit around the subject, move closer, pull back, or rise above the scene. Choose a camera movement or supply custom keyframes. Supports 5–15 seconds at 480p, 768p, or refined 1080p.",
+      "architecture": {
+        "modality": "image->video",
+        "input_modalities": [
+          "image"
+        ],
+        "output_modalities": [
+          "video"
+        ]
+      },
+      "pricing": {
+        "currency": "USD",
+        "minimum": 0.25,
+        "note": "Output duration and resolution determine pricing. Reference media may add charges. See model settings and the generation quote."
+      },
+      "capabilities": {
+        "video_generation": true,
+        "text_to_video": false,
+        "image_to_video": true,
+        "video_to_video": false,
+        "audio_input": false,
+        "audio_generation": true,
+        "nsfw": false
+      },
+      "supported_parameters": {
+        "parameters": {
+          "resolution": {
+            "type": "select",
+            "label": "Resolution",
+            "description": "1080p uses refinement from a native 768p video.",
+            "default": "480p",
+            "options": [
+              {
+                "value": "480p",
+                "label": "480p"
+              },
+              {
+                "value": "768p",
+                "label": "768p"
+              },
+              {
+                "value": "1080p",
+                "label": "1080p"
+              }
+            ]
+          },
+          "duration": {
+            "type": "select",
+            "label": "Duration (seconds)",
+            "description": "Duration (seconds)",
+            "default": "5",
+            "options": [
+              {
+                "value": "5",
+                "label": "5"
+              },
+              {
+                "value": "6",
+                "label": "6"
+              },
+              {
+                "value": "7",
+                "label": "7"
+              },
+              {
+                "value": "8",
+                "label": "8"
+              },
+              {
+                "value": "9",
+                "label": "9"
+              },
+              {
+                "value": "10",
+                "label": "10"
+              },
+              {
+                "value": "11",
+                "label": "11"
+              },
+              {
+                "value": "12",
+                "label": "12"
+              },
+              {
+                "value": "13",
+                "label": "13"
+              },
+              {
+                "value": "14",
+                "label": "14"
+              },
+              {
+                "value": "15",
+                "label": "15"
+              }
+            ]
+          },
+          "camera_motion": {
+            "type": "select",
+            "label": "Camera movement",
+            "description": "Camera movement",
+            "default": "orbit-right",
+            "options": [
+              {
+                "value": "orbit-right",
+                "label": "Orbit right 90°"
+              },
+              {
+                "value": "orbit-left",
+                "label": "Orbit left 90°"
+              },
+              {
+                "value": "push-in",
+                "label": "Push in"
+              },
+              {
+                "value": "pull-back",
+                "label": "Pull back"
+              },
+              {
+                "value": "rise",
+                "label": "Rise 45°"
+              }
+            ]
+          },
+          "camera_trajectory": {
+            "type": "string",
+            "label": "Custom camera keyframes (JSON)",
+            "description": "Optional: overrides the camera movement preset. Use 2–12 keyframes with time (0–1), azimuth, elevation (-90–90), and positive distance.",
+            "placeholder": "[{\"time\":0,\"azimuth\":0,\"elevation\":0,\"distance\":1},{\"time\":1,\"azimuth\":90,\"elevation\":0,\"distance\":1}]",
+            "default": ""
+          },
+          "prompt_expansion_mode": {
+            "type": "select",
+            "label": "Prompt expansion",
+            "description": "Prompt expansion",
+            "default": "balanced",
+            "options": [
+              {
+                "value": "balanced",
+                "label": "Balanced"
+              },
+              {
+                "value": "quality",
+                "label": "Quality"
+              }
+            ]
+          }
+        },
+        "defaults": {
+          "resolution": "480p",
+          "duration": "5",
+          "camera_motion": "orbit-right",
+          "camera_trajectory": "",
+          "prompt_expansion_mode": "balanced"
+        }
+      },
+      "icon_url": "/icons/Fal.svg",
+      "tags": [
+        "minimax",
+        "h3",
+        "camera-control",
+        "image-to-video",
+        "multi-angle"
+      ],
+      "category": "video"
+    },
+    {
+      "id": "google/gemini-omni-flash/v1.1",
+      "object": "model",
+      "created": 1787788800,
+      "owned_by": "gemini",
+      "name": "Gemini Omni Flash 1.1",
+      "description": "Google’s multimodal video model for text-to-video, image animation with optional end frames, multimodal reference generation, and instruction-based video editing. Generates synchronized native audio at resolutions from 360p through 4K.",
+      "architecture": {
+        "modality": "text+image+video->video",
+        "input_modalities": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output_modalities": [
+          "video"
+        ]
+      },
+      "pricing": {
+        "currency": "USD",
+        "per_second_by_mode_and_resolution": {
+          "text_to_video": {
+            "360p": 0.039,
+            "720p": 0.13,
+            "1080p": 0.195,
+            "4k": 0.39
+          },
+          "image_to_video": {
+            "360p": 0.042,
+            "720p": 0.14,
+            "1080p": 0.21,
+            "4k": 0.42
+          },
+          "reference_to_video": {
+            "360p": 0.048,
+            "720p": 0.16,
+            "1080p": 0.24,
+            "4k": 0.48
+          },
+          "video_edit": {
+            "360p": 0.048,
+            "720p": 0.16,
+            "1080p": 0.24,
+            "4k": 0.48
+          }
+        },
+        "default_resolution": "720p",
+        "default_duration": 8,
+        "supported_durations": [
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ]
+      },
+      "capabilities": {
+        "video_generation": true,
+        "text_to_video": true,
+        "image_to_video": true,
+        "video_to_video": true,
+        "audio_input": false,
+        "audio_generation": false,
+        "nsfw": false
+      },
+      "supported_parameters": {
+        "parameters": {
+          "duration": {
+            "label": "Duration",
+            "description": "Video duration in seconds",
+            "type": "select",
+            "options": [
+              {
+                "value": "3",
+                "label": "3 seconds"
+              },
+              {
+                "value": "4",
+                "label": "4 seconds"
+              },
+              {
+                "value": "5",
+                "label": "5 seconds"
+              },
+              {
+                "value": "6",
+                "label": "6 seconds"
+              },
+              {
+                "value": "7",
+                "label": "7 seconds"
+              },
+              {
+                "value": "8",
+                "label": "8 seconds"
+              },
+              {
+                "value": "9",
+                "label": "9 seconds"
+              },
+              {
+                "value": "10",
+                "label": "10 seconds"
+              }
+            ],
+            "default": "8"
+          },
+          "resolution": {
+            "label": "Resolution",
+            "description": "Output video resolution",
+            "type": "select",
+            "options": [
+              {
+                "value": "360p",
+                "label": "360p"
+              },
+              {
+                "value": "720p",
+                "label": "720p"
+              },
+              {
+                "value": "1080p",
+                "label": "1080p"
+              },
+              {
+                "value": "4k",
+                "label": "4K"
+              }
+            ],
+            "default": "720p"
+          },
+          "aspect_ratio": {
+            "label": "Aspect Ratio",
+            "description": "Output aspect ratio",
+            "type": "select",
+            "options": [
+              {
+                "value": "16:9",
+                "label": "Landscape (16:9)"
+              },
+              {
+                "value": "9:16",
+                "label": "Portrait (9:16)"
+              }
+            ],
+            "default": "16:9"
+          }
+        },
+        "defaults": {
+          "duration": "8",
+          "resolution": "720p",
+          "aspect_ratio": "16:9"
+        }
+      },
+      "icon_url": "/icons/Gemini.svg",
+      "label": "NEW",
+      "tags": [
+        "text-to-video",
+        "image-to-video",
+        "reference-to-video",
+        "video-edit",
+        "first-last-frame",
+        "gemini",
+        "google",
+        "omni",
+        "4k"
+      ],
+      "category": "video"
+    },
+    {
+      "id": "minimax-h3",
+      "object": "model",
+      "created": 1785456000,
+      "owned_by": "minimax",
+      "name": "MiniMax H3",
+      "description": "Generate from text, images, or references with optional custom LoRAs. Editing and extension require no LoRA weights.",
+      "architecture": {
+        "modality": "text+image+video+audio->video",
+        "input_modalities": [
+          "text",
+          "image",
+          "video",
+          "audio"
+        ],
+        "output_modalities": [
+          "video"
+        ]
+      },
+      "pricing": {
+        "currency": "USD",
+        "output_per_second": 0.13,
+        "reference_video_input_per_second": 0.13,
+        "extra_reference_image": 0.04,
+        "included_reference_images": 5,
+        "default_duration": 5,
+        "min_duration": 5,
+        "max_duration": 15,
+        "supported_durations": [
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "lora": {
+          "text_or_image_per_second": {
+            "480p": 0.05,
+            "540p": 0.075,
+            "768p": 0.1,
+            "1080p": 0.2
+          },
+          "reference_per_second": {
+            "480p": 0.06,
+            "540p": 0.09,
+            "768p": 0.135,
+            "1080p": 0.27
+          },
+          "reference_video_input": "Same per-second rate as output; rounded up, capped at 15 seconds.",
+          "reference_image_or_audio": 0.02,
+          "min_duration": 3,
+          "max_duration": 15
+        }
+      },
+      "capabilities": {
+        "video_generation": true,
+        "text_to_video": true,
+        "image_to_video": true,
+        "video_to_video": true,
+        "audio_input": true,
+        "audio_generation": true,
+        "nsfw": false
+      },
+      "supported_parameters": {
+        "parameters": {
+          "mode": {
+            "type": "select",
+            "label": "Mode",
+            "default": "auto",
+            "options": [
+              {
+                "value": "auto",
+                "label": "Auto-detect"
+              },
+              {
+                "value": "reference-to-video",
+                "label": "Reference to Video"
+              },
+              {
+                "value": "video-edit",
+                "label": "Edit Video"
+              },
+              {
+                "value": "video-extend",
+                "label": "Extend Video"
+              }
+            ]
+          },
+          "duration": {
+            "type": "select",
+            "label": "Duration (seconds)",
+            "default": "5",
+            "options": [
+              {
+                "value": "3",
+                "label": "3"
+              },
+              {
+                "value": "4",
+                "label": "4"
+              },
+              {
+                "value": "5",
+                "label": "5"
+              },
+              {
+                "value": "6",
+                "label": "6"
+              },
+              {
+                "value": "7",
+                "label": "7"
+              },
+              {
+                "value": "8",
+                "label": "8"
+              },
+              {
+                "value": "9",
+                "label": "9"
+              },
+              {
+                "value": "10",
+                "label": "10"
+              },
+              {
+                "value": "11",
+                "label": "11"
+              },
+              {
+                "value": "12",
+                "label": "12"
+              },
+              {
+                "value": "13",
+                "label": "13"
+              },
+              {
+                "value": "14",
+                "label": "14"
+              },
+              {
+                "value": "15",
+                "label": "15"
+              }
+            ]
+          },
+          "aspect_ratio": {
+            "type": "select",
+            "label": "Aspect Ratio",
+            "description": "Auto uses 16:9 for LoRA generation.",
+            "default": "auto",
+            "options": [
+              {
+                "value": "auto",
+                "label": "auto"
+              },
+              {
+                "value": "21:9",
+                "label": "21:9"
+              },
+              {
+                "value": "16:9",
+                "label": "16:9"
+              },
+              {
+                "value": "4:3",
+                "label": "4:3"
+              },
+              {
+                "value": "1:1",
+                "label": "1:1"
+              },
+              {
+                "value": "3:4",
+                "label": "3:4"
+              },
+              {
+                "value": "9:16",
+                "label": "9:16"
+              },
+              {
+                "value": "9:21",
+                "label": "9:21"
+              }
+            ]
+          },
+          "resolution": {
+            "type": "select",
+            "label": "LoRA / Edit / Extend Resolution",
+            "description": "LoRA generation supports all listed resolutions; edit/extend support 480p and 768p. Generation without LoRAs remains 2K.",
+            "default": "480p",
+            "options": [
+              {
+                "value": "480p",
+                "label": "480p"
+              },
+              {
+                "value": "540p",
+                "label": "540p"
+              },
+              {
+                "value": "768p",
+                "label": "768p"
+              },
+              {
+                "value": "1080p",
+                "label": "1080p"
+              }
+            ]
+          },
+          "reference_images": {
+            "type": "text",
+            "label": "Reference image URLs",
+            "description": "Optional URL, one URL per line, or a JSON array of URLs.",
+            "default": ""
+          },
+          "reference_videos": {
+            "type": "text",
+            "label": "Reference video URLs",
+            "description": "Optional URL, one URL per line, or a JSON array of URLs.",
+            "default": ""
+          },
+          "reference_audios": {
+            "type": "text",
+            "label": "Reference audio URLs",
+            "description": "Optional URL, one URL per line, or a JSON array of URLs.",
+            "default": ""
+          },
+          "lora_url_1": {
+            "type": "text",
+            "label": "LoRA 1 URL",
+            "description": "HTTPS URL of a compatible LoRA weights file.",
+            "default": ""
+          },
+          "lora_scale_1": {
+            "type": "number",
+            "label": "LoRA 1 strength",
+            "default": 1,
+            "step": 0.1
+          },
+          "lora_url_2": {
+            "type": "text",
+            "label": "LoRA 2 URL",
+            "description": "HTTPS URL of a compatible LoRA weights file.",
+            "default": ""
+          },
+          "lora_scale_2": {
+            "type": "number",
+            "label": "LoRA 2 strength",
+            "default": 1,
+            "step": 0.1
+          },
+          "lora_url_3": {
+            "type": "text",
+            "label": "LoRA 3 URL",
+            "description": "HTTPS URL of a compatible LoRA weights file.",
+            "default": ""
+          },
+          "lora_scale_3": {
+            "type": "number",
+            "label": "LoRA 3 strength",
+            "default": 1,
+            "step": 0.1
+          },
+          "generate_audio": {
+            "type": "switch",
+            "label": "Generate Edit Audio",
+            "default": true
+          },
+          "seed": {
+            "type": "number",
+            "label": "Seed",
+            "default": -1,
+            "min": -1,
+            "step": 1
+          }
+        },
+        "defaults": {
+          "mode": "auto",
+          "duration": "5",
+          "aspect_ratio": "auto",
+          "resolution": "480p",
+          "reference_images": "",
+          "reference_videos": "",
+          "reference_audios": "",
+          "lora_url_1": "",
+          "lora_scale_1": 1,
+          "lora_url_2": "",
+          "lora_scale_2": 1,
+          "lora_url_3": "",
+          "lora_scale_3": 1,
+          "generate_audio": true,
+          "seed": -1
+        }
+      },
+      "icon_url": "/icons/Minimax.svg",
+      "label": "NEW",
+      "tags": [
+        "minimax",
+        "hailuo",
+        "h3",
+        "text-to-video",
+        "image-to-video",
+        "reference-to-video",
+        "video-edit",
+        "video-extend",
+        "audio",
+        "2k"
+      ],
+      "category": "video"
+    }
+  ],
+  "meta": {
+    "count": 6,
+    "note": "Subset of GET https://nano-gpt.com/api/v1/video-models?detailed=true captured 2026-09-16"
+  }
+}

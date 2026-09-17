@@ -1,0 +1,126 @@
+/*
+ * Glass treatment for surfaces
+ * ----------------------------------------------------------------------------
+ * Imported LAST in the `components` layer so these rules land on top of the
+ * upstream component styles without editing them. Deleting the single import
+ * in styles/index.css reverts every surface to stock.
+ *
+ * Tokens come from styles/glass.css; keyframes from styles/motion.css.
+ */
+
+/* Floating panels --------------------------------------------------------- */
+[data-component="dropdown-menu-content"],
+[data-component="dropdown-menu-sub-content"],
+[data-component="context-menu-content"],
+[data-component="context-menu-sub-content"],
+[data-component="popover-content"],
+[data-component="hover-card-content"],
+[data-component="select-content"],
+[data-component="toast"] {
+  background-color: var(--glass-surface);
+  backdrop-filter: var(--glass-filter);
+  -webkit-backdrop-filter: var(--glass-filter);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-glass-md);
+  animation: glass-in var(--duration-base) var(--ease-out-expo) both;
+}
+
+/* Tooltips stay lighter and quicker than full panels. --------------------- */
+[data-component="tooltip"] {
+  background-color: var(--glass-surface-strong);
+  backdrop-filter: var(--glass-filter-sm);
+  -webkit-backdrop-filter: var(--glass-filter-sm);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-glass-sm);
+  animation: pop-in var(--duration-fast) var(--ease-out-back) both;
+}
+
+/* Dialog ------------------------------------------------------------------ */
+[data-component="dialog-overlay"] {
+  background-color: var(--glass-scrim);
+  backdrop-filter: blur(var(--glass-blur-sm));
+  -webkit-backdrop-filter: blur(var(--glass-blur-sm));
+  animation: scrim-in var(--duration-base) var(--ease-soft) both;
+}
+
+[data-component="dialog"] [data-slot="dialog-content"] {
+  background-color: var(--glass-surface-strong);
+  backdrop-filter: var(--glass-filter-lg);
+  -webkit-backdrop-filter: var(--glass-filter-lg);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-glass-lg);
+}
+
+/* Replace the stock 150ms/scale(.98) transition with the spring entrance. */
+[data-component="dialog"][data-transition] [data-slot="dialog-content"] {
+  animation: glass-out var(--duration-fast) var(--ease-soft) forwards;
+
+  &[data-expanded] {
+    animation: glass-in var(--duration-panel) var(--ease-spring);
+  }
+}
+
+/* Cards ------------------------------------------------------------------- */
+[data-component="card"] {
+  border-radius: var(--radius-lg);
+  transition: var(--transition-surface), transform var(--duration-base) var(--ease-spring);
+
+  &:hover {
+    box-shadow: var(--shadow-glass-md);
+    transform: translateY(-2px);
+  }
+}
+
+/* Dock ------------------------------------------------------------------- */
+[data-component="dock-surface"] {
+  background-color: var(--glass-surface);
+  backdrop-filter: var(--glass-filter);
+  -webkit-backdrop-filter: var(--glass-filter);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-glass-md);
+}
+
+/* Interactive feedback ---------------------------------------------------- */
+[data-component="button"],
+[data-component="icon-button"] {
+  transition:
+    var(--transition-surface),
+    transform var(--duration-instant) var(--ease-spring);
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0) scale(0.97);
+    transition-duration: var(--duration-instant);
+  }
+
+  &:focus-visible {
+    box-shadow: var(--shadow-glow);
+    outline: none;
+  }
+}
+
+/* Inputs get a focus glow instead of a hard ring. ------------------------- */
+[data-component="text-field"],
+[data-component="inline-input"] {
+  border-radius: var(--radius-md);
+  transition: var(--transition-surface);
+
+  &:focus-within {
+    box-shadow: var(--shadow-glow);
+  }
+}
+
+/* Lists ------------------------------------------------------------------- */
+[data-component="list"] [data-slot="list-item"] {
+  border-radius: var(--radius-md);
+  transition:
+    background-color var(--duration-fast) var(--ease-soft),
+    transform var(--duration-fast) var(--ease-spring);
+
+  &:hover {
+    transform: translateX(2px);
+  }
+}

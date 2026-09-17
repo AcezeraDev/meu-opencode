@@ -1,0 +1,256 @@
+/* App shell instruments: today's spend readout and the softkey shortcut sheet. */
+
+.day-spend {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  margin-right: 6px;
+}
+
+.day-spend-button {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 24px;
+  color: var(--v2-text-text-muted);
+  transition: background-color 150ms ease-out;
+}
+
+.day-spend-button .scope-readout {
+  color: var(--v2-text-text-base);
+}
+
+.day-spend-button:hover,
+.day-spend-button[aria-expanded="true"] {
+  background: var(--v2-overlay-simple-overlay-hover);
+}
+
+.day-spend-button:focus-visible {
+  outline: 2px solid var(--scope-ch-edit);
+  outline-offset: 1px;
+}
+
+.day-spend[data-level="near"] .scope-readout {
+  color: var(--scope-ch-warn);
+}
+
+.day-spend[data-level="over"] .scope-readout {
+  color: var(--scope-ch-error);
+}
+
+.day-spend-panel {
+  position: fixed;
+  z-index: 1000;
+  width: 250px;
+  padding: 12px;
+  border: 1px solid var(--scope-bezel-line);
+  border-radius: 12px;
+  background: var(--v2-background-bg-layer-01);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.3);
+  transform-origin: calc(100% - 20px) 0;
+  animation: day-spend-pop 220ms var(--ease-out-expo, ease-out) both;
+}
+
+.day-spend-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+  line-height: 20px;
+  color: var(--v2-text-text-base);
+}
+
+.day-spend-row + .day-spend-row {
+  margin-top: 2px;
+}
+
+.day-spend-row-muted {
+  color: var(--v2-text-text-muted);
+}
+
+.day-spend-value {
+  font-size: 14px;
+}
+
+.day-spend-meter {
+  height: 6px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--v2-background-bg-layer-03);
+}
+
+.day-spend-meter > span {
+  display: block;
+  height: 100%;
+  background: var(--scope-ch-edit);
+  transform-origin: 0 50%;
+  transition: transform 500ms var(--ease-out-expo, ease-out);
+}
+
+.day-spend-panel[data-level="near"] .day-spend-meter > span {
+  background: var(--scope-ch-warn);
+}
+
+.day-spend-panel[data-level="over"] .day-spend-meter > span {
+  background: var(--scope-ch-error);
+}
+
+.day-spend-limit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--v2-text-text-base);
+}
+
+.day-spend-limit input {
+  width: 84px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--v2-border-border-base);
+  border-radius: 7px;
+  background: var(--v2-background-bg-layer-02);
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--v2-text-text-base);
+  text-align: right;
+}
+
+.day-spend-limit input:focus-visible {
+  outline: 2px solid var(--scope-ch-edit);
+  outline-offset: 1px;
+}
+
+.day-spend-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--v2-text-text-faint);
+}
+
+@keyframes day-spend-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+}
+
+/* Softkeys --------------------------------------------------------------- */
+
+.softkeys {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--v2-background-bg-deep) 55%, transparent);
+  pointer-events: none;
+  animation: softkeys-fade 160ms ease-out both;
+}
+
+.softkeys-panel {
+  width: min(980px, 100%);
+  max-height: min(70vh, 640px);
+  overflow: auto;
+  padding: 14px 18px 18px;
+  border: 1px solid var(--scope-bezel-line);
+  border-radius: 16px;
+  background: var(--v2-background-bg-layer-01);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.4);
+  animation: softkeys-rise 320ms var(--ease-out-expo, ease-out) both;
+}
+
+.softkeys-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--scope-bezel-line);
+}
+
+.softkeys-led {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--chroma);
+  box-shadow: 0 0 10px var(--chroma);
+}
+
+.softkeys-hint {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--v2-text-text-faint);
+}
+
+.softkeys-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px 28px;
+  padding-top: 12px;
+}
+
+.softkeys-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: softkeys-group 360ms var(--ease-out-expo, ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 8) * 30ms);
+}
+
+.softkeys-group h3 {
+  margin: 0 0 4px;
+}
+
+.softkeys-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 24px;
+  font-size: 12.5px;
+  color: var(--v2-text-text-base);
+}
+
+.softkeys-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes softkeys-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes softkeys-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+}
+
+@keyframes softkeys-group {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .softkeys-panel,
+  .softkeys-group,
+  .day-spend-panel {
+    animation: softkeys-fade 140ms ease-out both;
+  }
+}

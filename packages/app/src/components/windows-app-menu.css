@@ -1,0 +1,333 @@
+/*
+ * Windows app menu: a category column and its items open side by side as one
+ * glass panel. One highlight glides between rows; the item column opens out of
+ * the seam between the two.
+ */
+
+[data-component="dropdown-menu-content"].desktop-app-menu,
+[data-component="dropdown-menu-sub-content"].desktop-app-menu {
+  --menu-accent: var(--v2-blue-600, var(--border-interactive-base));
+  --menu-text: var(--v2-text-text-base, var(--text-strong));
+  --menu-muted: var(--v2-text-text-muted, var(--text-weak));
+  --menu-faint: var(--v2-text-text-faint, var(--text-weaker));
+  --menu-line: var(--glass-border, var(--border-weak-base));
+  --menu-ease: var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1));
+  /* Slight overshoot: the highlight lands like it has weight. */
+  --menu-glide-ease: cubic-bezier(0.34, 1.32, 0.64, 1);
+
+  position: relative;
+  min-width: 0;
+  padding: var(--panel-padding, 6px);
+  overflow: hidden;
+  border: 1px solid var(--menu-line);
+  border-radius: 14px;
+  background: var(--glass-surface-strong, var(--surface-raised-stronger-non-alpha));
+  backdrop-filter: var(--glass-filter-lg, none);
+  -webkit-backdrop-filter: var(--glass-filter-lg, none);
+  box-shadow:
+    0 18px 48px rgb(0 0 0 / 0.28),
+    0 4px 14px rgb(0 0 0 / 0.12),
+    inset 0 1px 0 var(--glass-highlight, transparent);
+  font-family: var(--font-family-sans);
+}
+
+/* Category column ------------------------------------------------------------ */
+
+[data-component="dropdown-menu-content"].desktop-app-menu {
+  width: 212px;
+  transform-origin: var(--kb-menu-content-transform-origin);
+  animation: desktop-app-menu-in 300ms var(--menu-ease) both;
+  transition:
+    border-top-right-radius 160ms ease-out,
+    border-bottom-right-radius 160ms ease-out;
+}
+
+[data-component="dropdown-menu-content"].desktop-app-menu[data-closed] {
+  animation: desktop-app-menu-out 140ms ease-in both;
+}
+
+[data-component="dropdown-menu-content"].desktop-app-menu[data-attached] {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.desktop-app-menu [data-slot="dropdown-menu-group-label"].desktop-app-menu-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  height: 34px;
+  padding: 10px 8px 0;
+}
+
+.desktop-app-menu-wordmark {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: -0.011em;
+  color: var(--menu-text);
+}
+
+.desktop-app-menu-version {
+  font-size: 11px;
+  font-weight: 450;
+  line-height: 16px;
+  color: var(--menu-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Item column --------------------------------------------------------------- */
+
+[data-component="dropdown-menu-sub-content"].desktop-app-menu {
+  width: max-content;
+  min-width: 252px;
+  max-width: min(340px, calc(100vw - 24px));
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  /* Cast to the right and down only, so no shadow falls back onto the attached category column. */
+  box-shadow:
+    22px 18px 46px -18px rgb(0 0 0 / 0.3),
+    6px 4px 14px -6px rgb(0 0 0 / 0.12),
+    inset 0 1px 0 var(--glass-highlight, transparent);
+  animation: desktop-app-menu-sub-in 360ms var(--menu-ease) both;
+}
+
+[data-component="dropdown-menu-sub-content"].desktop-app-menu[data-overhang-top] {
+  border-top-left-radius: 14px;
+}
+
+[data-component="dropdown-menu-sub-content"].desktop-app-menu[data-overhang-bottom] {
+  border-bottom-left-radius: 14px;
+}
+
+/* Moving between categories swaps the column instead of re-opening it. */
+[data-component="dropdown-menu-sub-content"].desktop-app-menu[data-switch] {
+  animation: desktop-app-menu-sub-swap 220ms var(--menu-ease) both;
+}
+
+[data-component="dropdown-menu-sub-content"].desktop-app-menu[data-closed] {
+  animation: desktop-app-menu-sub-out 120ms ease-in both;
+}
+
+/* Rows ---------------------------------------------------------------------- */
+
+.desktop-app-menu [data-slot="dropdown-menu-sub-trigger"],
+.desktop-app-menu [data-slot="dropdown-menu-item"] {
+  position: relative;
+  z-index: 1;
+  gap: 10px;
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 9px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 450;
+  line-height: 16px;
+  color: var(--menu-text);
+  transition: color 160ms ease-out;
+}
+
+.desktop-app-menu [data-slot="dropdown-menu-sub-trigger"] {
+  min-height: 34px;
+  animation: desktop-app-menu-row-drop 260ms var(--menu-ease) both;
+  animation-delay: calc(50ms + var(--i, 0) * 24ms);
+}
+
+.desktop-app-menu-items [data-slot="dropdown-menu-item"] {
+  animation: desktop-app-menu-row-out-of-seam 300ms var(--menu-ease) both;
+  animation-delay: calc(40ms + min(var(--i, 0), 10) * 20ms);
+}
+
+.desktop-app-menu-items[data-switch] [data-slot="dropdown-menu-item"] {
+  animation: none;
+}
+
+/* The glide carries the highlight, so rows stay clear underneath it. */
+.desktop-app-menu [data-slot="dropdown-menu-sub-trigger"][data-highlighted],
+.desktop-app-menu [data-slot="dropdown-menu-sub-trigger"][data-expanded],
+.desktop-app-menu [data-slot="dropdown-menu-item"][data-highlighted] {
+  background: transparent;
+}
+
+.desktop-app-menu [data-slot="dropdown-menu-item"][data-disabled] {
+  color: var(--menu-faint);
+}
+
+.desktop-app-menu [data-slot="dropdown-menu-item-label"] {
+  white-space: nowrap;
+}
+
+.desktop-app-menu-glide {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  left: var(--panel-padding, 6px);
+  right: var(--panel-padding, 6px);
+  height: var(--glide-h, 32px);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--menu-accent) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--menu-accent) 34%, transparent);
+  opacity: 0;
+  transform: translateY(var(--glide-y, 0px));
+  transition:
+    transform 320ms var(--menu-glide-ease),
+    height 200ms var(--menu-ease),
+    opacity 160ms ease-out;
+  pointer-events: none;
+}
+
+.desktop-app-menu[data-glide] > .desktop-app-menu-glide {
+  opacity: 1;
+}
+
+.desktop-app-menu[data-glide-instant] > .desktop-app-menu-glide {
+  transition: opacity 160ms ease-out;
+}
+
+.desktop-app-menu-tile {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  color: var(--menu-muted);
+  background: color-mix(in srgb, var(--menu-text) 7%, transparent);
+  transition:
+    background-color 200ms ease-out,
+    color 200ms ease-out,
+    transform 300ms var(--menu-glide-ease);
+}
+
+.desktop-app-menu [data-highlighted] .desktop-app-menu-tile,
+.desktop-app-menu [data-expanded] .desktop-app-menu-tile {
+  color: var(--v2-text-text-contrast, var(--menu-text));
+  background: color-mix(in srgb, var(--menu-accent) 32%, transparent);
+  transform: scale(1.06);
+}
+
+.desktop-app-menu [data-slot="desktop-app-menu-chevron"] {
+  display: flex;
+  margin-left: auto;
+  color: var(--menu-faint);
+  transition:
+    transform 260ms var(--menu-glide-ease),
+    color 160ms ease-out;
+}
+
+.desktop-app-menu [data-expanded] [data-slot="desktop-app-menu-chevron"] {
+  color: var(--menu-text);
+  transform: translateX(2px);
+}
+
+.desktop-app-menu-keys {
+  margin-left: auto;
+  padding-left: 18px;
+  color: var(--menu-muted);
+  opacity: 0.85;
+  transition: opacity 160ms ease-out;
+}
+
+.desktop-app-menu [data-highlighted] .desktop-app-menu-keys {
+  opacity: 1;
+}
+
+.desktop-app-menu [data-disabled] .desktop-app-menu-keys {
+  opacity: 0.45;
+}
+
+.desktop-app-menu [data-slot="dropdown-menu-separator"] {
+  height: 1px;
+  margin: 5px 8px;
+  border: 0;
+  background: var(--menu-line);
+}
+
+.desktop-app-menu :focus-visible {
+  outline: none;
+}
+
+/* Motion ------------------------------------------------------------------- */
+
+@keyframes desktop-app-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+}
+
+@keyframes desktop-app-menu-out {
+  to {
+    opacity: 0;
+    transform: translateY(-3px) scale(0.985);
+  }
+}
+
+/* Opens out of the seam: the column is wiped in from its attached edge. */
+@keyframes desktop-app-menu-sub-in {
+  from {
+    clip-path: inset(-64px 100% -64px 0);
+  }
+  to {
+    clip-path: inset(-64px -64px -64px 0);
+  }
+}
+
+@keyframes desktop-app-menu-sub-swap {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes desktop-app-menu-sub-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes desktop-app-menu-row-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes desktop-app-menu-row-out-of-seam {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-component="dropdown-menu-content"].desktop-app-menu,
+  [data-component="dropdown-menu-sub-content"].desktop-app-menu,
+  [data-component="dropdown-menu-sub-content"].desktop-app-menu[data-switch] {
+    animation: desktop-app-menu-fade 120ms ease-out both;
+  }
+
+  [data-component="dropdown-menu-content"].desktop-app-menu[data-closed],
+  [data-component="dropdown-menu-sub-content"].desktop-app-menu[data-closed] {
+    animation: desktop-app-menu-sub-out 100ms ease-in both;
+  }
+
+  .desktop-app-menu [data-slot="dropdown-menu-sub-trigger"],
+  .desktop-app-menu-items [data-slot="dropdown-menu-item"] {
+    animation: none;
+  }
+
+  .desktop-app-menu-glide {
+    transition: opacity 120ms ease-out;
+  }
+
+  .desktop-app-menu-tile,
+  .desktop-app-menu [data-slot="desktop-app-menu-chevron"] {
+    transform: none !important;
+  }
+}
+
+@keyframes desktop-app-menu-fade {
+  from {
+    opacity: 0;
+  }
+}

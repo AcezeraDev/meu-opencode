@@ -1,0 +1,135 @@
+/*
+ * Glass & Depth
+ * ----------------------------------------------------------------------------
+ * Visual direction: translucent layered surfaces, real depth, spring motion.
+ * Loaded in the `theme` layer AFTER theme.css, so redefinitions here win
+ * without touching the upstream token file.
+ */
+
+:root {
+  /* Blur -------------------------------------------------------------- */
+  --glass-blur-sm: 10px;
+  --glass-blur-md: 20px;
+  --glass-blur-lg: 40px;
+  --glass-saturate: 180%;
+  --glass-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate));
+  --glass-filter-sm: blur(var(--glass-blur-sm)) saturate(var(--glass-saturate));
+  --glass-filter-lg: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
+
+  /* Glass surfaces ---------------------------------------------------- */
+  --glass-surface-weak: rgba(255, 255, 255, 0.55);
+  --glass-surface: rgba(255, 255, 255, 0.72);
+  --glass-surface-strong: rgba(255, 255, 255, 0.86);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-border-strong: rgba(0, 0, 0, 0.14);
+  --glass-highlight: rgba(255, 255, 255, 0.9);
+  --glass-scrim: rgba(20, 20, 24, 0.28);
+
+  /* Depth -------------------------------------------------------------- */
+  --shadow-glass-sm:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    0 0 0 1px var(--glass-border);
+  --shadow-glass-md:
+    0 4px 12px rgba(0, 0, 0, 0.08),
+    0 12px 32px rgba(0, 0, 0, 0.12),
+    0 0 0 1px var(--glass-border),
+    inset 0 1px 0 var(--glass-highlight);
+  --shadow-glass-lg:
+    0 8px 24px rgba(0, 0, 0, 0.1),
+    0 32px 64px rgba(0, 0, 0, 0.18),
+    0 0 0 1px var(--glass-border),
+    inset 0 1px 0 var(--glass-highlight);
+  --shadow-glow: 0 0 0 3px color-mix(in srgb, var(--border-interactive-base, #034cff) 22%, transparent);
+  --shadow-lift: 0 16px 40px rgba(0, 0, 0, 0.16);
+
+  /* Radii — more generous than upstream (was 2/4/6/8/10px) -------------- */
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.75rem;
+  --radius-full: 9999px;
+
+  /* Motion -------------------------------------------------------------- */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-spring: cubic-bezier(0.22, 1.2, 0.36, 1);
+  --ease-soft: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-snap: cubic-bezier(0.2, 0, 0, 1);
+
+  --duration-instant: 90ms;
+  --duration-fast: 160ms;
+  --duration-base: 240ms;
+  --duration-slow: 380ms;
+  --duration-panel: 420ms;
+
+  --transition-surface: background-color var(--duration-base) var(--ease-soft),
+    box-shadow var(--duration-base) var(--ease-soft), border-color var(--duration-base) var(--ease-soft);
+  --transition-transform: transform var(--duration-fast) var(--ease-spring);
+
+  /* Typography ---------------------------------------------------------- */
+  --font-family-sans:
+    "Inter Variable", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --letter-spacing-tight: -0.011em;
+  --letter-spacing-tightest: -0.022em;
+
+  @media (prefers-color-scheme: dark) {
+    --glass-surface-weak: rgba(30, 30, 36, 0.52);
+    --glass-surface: rgba(30, 30, 36, 0.68);
+    --glass-surface-strong: rgba(34, 34, 40, 0.82);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-border-strong: rgba(255, 255, 255, 0.18);
+    --glass-highlight: rgba(255, 255, 255, 0.12);
+    --glass-scrim: rgba(0, 0, 0, 0.5);
+
+    --shadow-glass-sm:
+      0 1px 2px rgba(0, 0, 0, 0.3),
+      0 2px 8px rgba(0, 0, 0, 0.35),
+      0 0 0 1px var(--glass-border);
+    --shadow-glass-md:
+      0 4px 12px rgba(0, 0, 0, 0.35),
+      0 12px 32px rgba(0, 0, 0, 0.45),
+      0 0 0 1px var(--glass-border),
+      inset 0 1px 0 var(--glass-highlight);
+    --shadow-glass-lg:
+      0 8px 24px rgba(0, 0, 0, 0.4),
+      0 32px 64px rgba(0, 0, 0, 0.55),
+      0 0 0 1px var(--glass-border),
+      inset 0 1px 0 var(--glass-highlight);
+    --shadow-lift: 0 16px 40px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* Reusable glass recipe ------------------------------------------------- */
+.glass,
+[data-glass] {
+  background-color: var(--glass-surface);
+  backdrop-filter: var(--glass-filter);
+  -webkit-backdrop-filter: var(--glass-filter);
+  box-shadow: var(--shadow-glass-md);
+  border-radius: var(--radius-lg);
+}
+
+/* Browsers without backdrop-filter get an opaque, still-correct surface.  */
+@supports not (backdrop-filter: blur(1px)) {
+  :root {
+    --glass-surface-weak: var(--surface-raised-base);
+    --glass-surface: var(--surface-raised-stronger-non-alpha);
+    --glass-surface-strong: var(--surface-raised-stronger-non-alpha);
+  }
+}
+
+/* Honour reduced-motion: keep the look, drop the movement. -------------- */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 1ms;
+    --duration-fast: 1ms;
+    --duration-base: 1ms;
+    --duration-slow: 1ms;
+    --duration-panel: 1ms;
+  }
+}
