@@ -1,0 +1,13 @@
+Inspect the runtime of the current page of the built-in browser.
+
+- console: console output and uncaught page errors since the tab opened. Use this
+  to debug an app running on localhost.
+- network: requests the page made, with status codes and failures. Use it to find
+  failing API calls, 404s and slow endpoints.
+- evaluate: run a JavaScript expression in the page and return its result. The
+  expression is evaluated in page context, so `document` and `window` are
+  available, and top-level await works. Returns JSON when the result is
+  serializable.
+
+`filter` narrows console text or request URLs to matching entries, and `limit`
+caps how many entries are returned, newest last.

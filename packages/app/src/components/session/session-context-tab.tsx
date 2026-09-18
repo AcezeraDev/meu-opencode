@@ -238,7 +238,7 @@ export function SessionContextTab() {
   const model = createMemo(() => {
     const c = ctx()
     if (c) return { model: c.modelLabel, provider: c.providerLabel }
-    const last = findLast(messages(), (m): m is AssistantMessage => m.role === "assistant")
+    const last = messages().findLast((m): m is AssistantMessage => m.role === "assistant")
     if (!last) return
     const provider = providers.all().get(last.providerID)
     return {

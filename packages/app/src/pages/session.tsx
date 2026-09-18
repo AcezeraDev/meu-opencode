@@ -104,6 +104,9 @@ import { SessionRail } from "./session/session-rail"
 import { SessionTrail } from "./session/session-trail"
 import { ContextRing } from "./session/scope/context-ring"
 import { MeasurementStrip } from "./session/scope/measurement-strip"
+import { BrowserPanel } from "./session/browser/browser-panel"
+import { BrowserPane } from "./session/browser/browser-pane"
+import { browserPane } from "./session/browser/pane-state"
 import { ScopeTrace } from "./session/scope/scope-trace"
 import { COMPOSER_FILL_EVENT, type ComposerFillDetail } from "@opencode-ai/session-ui/web-video-tool"
 import { extractPromptFromParts } from "@/utils/prompt"
@@ -496,8 +499,12 @@ export default function Page() {
         opened: layout.fileTree.opened(),
       }),
   )
+  // The browser pane lives in the new layout's right column, beside review and terminal.
+  const desktopBrowserOpen = createMemo(() => newSessionDesign() && isDesktop() && !!params.id && browserPane.opened())
   const desktopSessionResizeOpen = createMemo(() =>
-    newSessionDesign() ? desktopV2ReviewOpen() || desktopTerminalOpen() : desktopReviewOpen(),
+    newSessionDesign()
+      ? desktopV2ReviewOpen() || desktopTerminalOpen() || desktopBrowserOpen()
+      : desktopReviewOpen(),
   )
   const desktopSidePanelOpen = createMemo(() => desktopSessionResizeOpen() || desktopFileTreeOpen())
   let panelRow: HTMLDivElement | undefined
@@ -542,6 +549,7 @@ export default function Page() {
       review: desktopV2ReviewOpen(),
       terminal: desktopTerminalOpen(),
       files: desktopFileTreeOpen(),
+      browser: desktopBrowserOpen(),
     }),
   )
 
@@ -2247,6 +2255,7 @@ export default function Page() {
               controller={controller}
               measurement={
                 <Show when={newSessionDesign()}>
+                  <BrowserPanel directory={() => sdk().directory} docked={desktopBrowserOpen} canDock={isDesktop} />
                   <MeasurementStrip sessionID={params.id} active={!!params.id && busy(params.id)} />
                 </Show>
               }
@@ -2411,6 +2420,11 @@ export default function Page() {
           <Show when={newSessionDesign()}>
             <Show when={isDesktop() ? desktopV2PanelLayout().visible : terminalOpen()}>
               <div class="min-w-0 h-full flex flex-1 flex-col">
+                <Show when={desktopBrowserOpen()}>
+                  <div id="browser-pane" class="min-h-0 flex-1">
+                    <BrowserPane directory={() => sdk().directory} onClose={() => browserPane.close()} />
+                  </div>
+                </Show>
                 <Show when={isDesktop() && (desktopV2ReviewOpen() || desktopFileTreeOpen())}>
                   <div class="min-h-0 flex-1">
                     <Suspense>

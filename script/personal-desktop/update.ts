@@ -68,6 +68,11 @@ async function build() {
   const env = {
     ...process.env,
     OPENCODE_CHANNEL: "dev",
+    // The OpenCode version this checkout is built from. Without it a dev build reports
+    // 0.0.0-dev-<date>, and OpenCode Zen refuses its free models to versions that old.
+    OPENCODE_VERSION: await Bun.file(path.join(ROOT, "packages", "opencode", "package.json"))
+      .json()
+      .then((pkg: { version: string }) => pkg.version),
     OPENCODE_PERSONAL: "1",
     // Baked into the app so its update button can rebuild from this checkout.
     OPENCODE_PERSONAL_ROOT: ROOT,

@@ -155,7 +155,7 @@ export const WebFetchTool = Tool.define(
   }),
 )
 
-function extractTextFromHTML(html: string) {
+export function extractTextFromHTML(html: string) {
   let text = ""
   let skipDepth = 0
 
@@ -179,7 +179,7 @@ function extractTextFromHTML(html: string) {
   return text.trim()
 }
 
-function convertHTMLToMarkdown(html: string): string {
+export function convertHTMLToMarkdown(html: string): string {
   const turndownService = new TurndownService({
     headingStyle: "atx",
     hr: "---",

@@ -1,0 +1,10 @@
+Take a screenshot of the current page of the built-in browser and attach it as an
+image.
+
+Only useful when you can actually look at images, and when the visual result is
+what matters: layout, styling, charts, or checking that a page renders correctly.
+For reading content or finding elements to click, browser_snapshot is far cheaper
+and more precise.
+
+Pass `ref` or `selector` to capture a single element, or `fullPage` to capture the
+entire scrollable page instead of just the viewport.

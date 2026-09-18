@@ -1,0 +1,262 @@
+/*
+ * The browser pane, in the right-hand column beside review and terminal.
+ *
+ * It is an instrument like the others: an opaque bezel frame around a
+ * phosphor-dark screen the page is drawn on. Only what is live wears the RGB
+ * trace, here the LIVE chip while the stream is up and the agent chip while it
+ * acts; everything else stays still, and the screen behind the page never
+ * animates.
+ */
+
+.browser-pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--scope-bezel-line);
+  border-radius: 12px;
+  background: var(--v2-background-bg-layer-01);
+}
+
+/* Tabs */
+
+.browser-pane-tabs {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  height: 38px;
+  padding: 0 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--scope-bezel-line);
+}
+
+.browser-pane-tab {
+  display: flex;
+  flex: 0 1 180px;
+  align-items: center;
+  min-width: 72px;
+  height: 28px;
+  padding-left: 10px;
+  border-radius: 7px;
+  color: var(--v2-text-text-muted);
+}
+
+.browser-pane-tab[data-active] {
+  color: var(--v2-text-text-base);
+  background: var(--v2-background-bg-layer-03);
+}
+
+.browser-pane-tab-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.browser-pane-tab-close {
+  opacity: 0;
+}
+
+.browser-pane-tab:hover .browser-pane-tab-close,
+.browser-pane-tab[data-active] .browser-pane-tab-close,
+.browser-pane-tab-close:focus-visible {
+  opacity: 1;
+}
+
+.browser-pane-spacer {
+  flex: 1;
+}
+
+/* Buttons shared by the tab row and the toolbar */
+
+.browser-pane-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--v2-text-text-muted);
+  cursor: pointer;
+}
+
+.browser-pane-icon:hover:not(:disabled) {
+  color: var(--v2-text-text-base);
+  background: var(--v2-background-bg-layer-04);
+}
+
+.browser-pane-icon:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.browser-pane-icon:focus-visible,
+.browser-pane-tab-label:focus-visible {
+  outline: 2px solid var(--scope-ch-edit);
+  outline-offset: 1px;
+}
+
+/* Live chips, drawn like the measurement strip's channel chip */
+
+.browser-pane-live,
+.browser-pane-agent {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  padding: 0 7px 0 6px;
+  border-radius: 6px;
+  font-family: var(--font-family-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--chroma);
+  background: color-mix(in srgb, var(--chroma) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--chroma) 40%, transparent);
+}
+
+.browser-pane-led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+
+/* Toolbar */
+
+.browser-pane-toolbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--scope-bezel-line);
+}
+
+.browser-pane-address {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  margin-left: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--v2-border-border-base);
+  border-radius: 7px;
+  background: var(--v2-background-bg-deep);
+  color: var(--v2-text-text-base);
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+}
+
+.browser-pane-address::placeholder {
+  color: var(--v2-text-text-faint);
+}
+
+.browser-pane-address:focus {
+  outline: none;
+  border-color: var(--scope-ch-edit);
+}
+
+/* Screen */
+
+.browser-pane-screen {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--v2-background-bg-deep);
+}
+
+/*
+ * Sized by its own aspect ratio inside the screen, so its box is exactly the
+ * page and pointer positions map straight onto the viewport.
+ */
+.browser-pane-canvas {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  visibility: hidden;
+  outline: none;
+  cursor: default;
+}
+
+.browser-pane-canvas[data-ready] {
+  visibility: visible;
+}
+
+.browser-pane-canvas:focus-visible {
+  box-shadow: 0 0 0 2px var(--scope-ch-edit);
+}
+
+.browser-pane-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.browser-pane-empty-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--v2-text-text-base);
+}
+
+.browser-pane-empty-hint {
+  max-width: 300px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--v2-text-text-faint);
+}
+
+/* Caption */
+
+.browser-pane-caption {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  min-width: 0;
+  padding: 0 10px;
+  border-top: 1px solid var(--scope-bezel-line);
+  font-size: 12px;
+  color: var(--v2-text-text-base);
+}
+
+.browser-pane-caption-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

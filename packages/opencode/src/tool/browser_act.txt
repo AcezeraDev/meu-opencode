@@ -1,0 +1,21 @@
+Interact with the current page of the built-in browser.
+
+Target an element with `ref` (from the most recent browser_snapshot or
+browser_navigate output) whenever possible. Use `selector` only for elements the
+snapshot did not surface; it takes a CSS selector.
+
+Actions:
+- click / double_click / right_click: press an element
+- hover: move the pointer onto an element
+- fill: replace the value of a field with `text`
+- type: type `text` into an element key by key, which triggers autocomplete
+- press: send a key such as "Enter", "Escape" or "Control+A" to the page or element
+- select: choose the option matching `text` in a dropdown
+- check / uncheck: set a checkbox or radio
+- scroll: scroll the page or an element in `direction` by `amount` pixels
+- wait_for: wait until an element appears, or until `text` shows up on the page
+
+Set `submit` to press Enter after filling or typing, which submits most forms.
+
+The page outline is returned after the action, so you can see what changed. Set
+`snapshot` to false when acting several times in a row and you do not need it.

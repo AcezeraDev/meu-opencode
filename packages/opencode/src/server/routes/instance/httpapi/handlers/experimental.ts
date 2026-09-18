@@ -2,6 +2,7 @@ import { Account } from "@/account/account"
 import { Auth } from "@/auth"
 import { Agent } from "@/agent/agent"
 import { BackgroundJob } from "@/background/job"
+import { Browser, type BrowserEvent } from "@/browser/session"
 import { Config } from "@/config/config"
 import { InstanceState } from "@/effect/instance-state"
 import { RuntimeFlags } from "@/effect/runtime-flags"
@@ -17,11 +18,15 @@ import { WebVideoSettings } from "@/web-video/settings"
 import { Database } from "@opencode-ai/core/database/database"
 import { MessageTable } from "@opencode-ai/core/session/sql"
 import { and, gte, sql } from "drizzle-orm"
-import { Effect, Option } from "effect"
+import { Effect, Option, Queue } from "effect"
+import * as Stream from "effect/Stream"
+import * as Sse from "effect/unstable/encoding/Sse"
 import * as HttpServerResponse from "effect/unstable/http/HttpServerResponse"
 import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
 import {
+  BrowserCommand,
+  BrowserInput,
   ConsoleSwitchPayload,
   SessionListQuery,
   ToolListQuery,
@@ -81,6 +86,91 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       payload: typeof WebVideoDefaults.Type
     }) {
       return toJson(yield* Effect.promise(() => WebVideoSettings.save(ctx.payload)))
+    })
+
+    const browserStatus = Effect.fn("ExperimentalHttpApi.browserStatus")(function* () {
+      return yield* (yield* Browser.Service).status()
+    })
+
+    const browserFrame = Effect.fn("ExperimentalHttpApi.browserFrame")(function* () {
+      const browser = yield* Browser.Service
+      // Deliberately `current()`, not `tab()`: looking at the panel must never
+      // be what starts a browser.
+      const tab = yield* browser.current()
+      if (!tab) return { running: false }
+      const [url, title, image] = yield* Effect.promise(async () => {
+        const shot = await tab.screenshot().catch(() => undefined)
+        return [
+          await tab.url(),
+          await tab.title(),
+          shot ? `data:image/png;base64,${shot.toString("base64")}` : undefined,
+        ] as const
+      })
+      return { running: true, url, title, image }
+    })
+
+    const browserStream = Effect.fn("ExperimentalHttpApi.browserStream")(function* () {
+      const browser = yield* Browser.Service
+      // Frames can arrive faster than a client reads them, so only the newest
+      // one waits to be sent; status and activity are small and all delivered.
+      let latest: BrowserEvent | undefined
+      const queue = yield* Queue.unbounded<BrowserEvent | "frame">()
+      // Subscribed eagerly, like the event route, so nothing published while
+      // the response is starting is lost.
+      const unsubscribe = yield* browser.subscribe((event) => {
+        if (event.type !== "frame") {
+          Queue.offerUnsafe(queue, event)
+          return
+        }
+        const waiting = latest !== undefined
+        latest = event
+        if (!waiting) Queue.offerUnsafe(queue, "frame")
+      })
+      yield* Effect.addFinalizer(() => Effect.sync(unsubscribe))
+
+      const events = Stream.fromQueue(queue).pipe(
+        Stream.map((item): BrowserEvent | { type: "heartbeat" } => {
+          if (item !== "frame") return item
+          const frame = latest ?? { type: "heartbeat" as const }
+          latest = undefined
+          return frame
+        }),
+      )
+      const heartbeat = Stream.tick("10 seconds").pipe(
+        Stream.drop(1),
+        Stream.map(() => ({ type: "heartbeat" as const })),
+      )
+      return HttpServerResponse.stream(
+        events.pipe(
+          Stream.merge(heartbeat, { haltStrategy: "left" }),
+          Stream.map(
+            (data): Sse.Event => ({ _tag: "Event", event: "message", id: undefined, data: JSON.stringify(data) }),
+          ),
+          Stream.pipeThroughChannel(Sse.encode()),
+          Stream.encodeText,
+        ),
+        {
+          contentType: "text/event-stream",
+          headers: {
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "X-Content-Type-Options": "nosniff",
+          },
+        },
+      )
+    })
+
+    const browserInput = Effect.fn("ExperimentalHttpApi.browserInput")(function* (ctx: {
+      payload: typeof BrowserInput.Type
+    }) {
+      yield* (yield* Browser.Service).input(ctx.payload)
+      return true
+    })
+
+    const browserControl = Effect.fn("ExperimentalHttpApi.browserControl")(function* (ctx: {
+      payload: typeof BrowserCommand.Type
+    }) {
+      return yield* (yield* Browser.Service).control(ctx.payload)
     })
 
     const usageSpend = Effect.fn("ExperimentalHttpApi.usageSpend")(function* (ctx: {
@@ -261,5 +351,10 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       .handle("webVideoModels", webVideoModels)
       .handle("webVideoSettings", webVideoSettings)
       .handle("webVideoSettingsUpdate", webVideoSettingsUpdate)
+      .handle("browserStatus", browserStatus)
+      .handle("browserFrame", browserFrame)
+      .handleRaw("browserStream", browserStream)
+      .handle("browserInput", browserInput)
+      .handle("browserControl", browserControl)
   }),
 )

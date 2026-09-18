@@ -46,6 +46,7 @@ import { Discovery } from "@/skill/discovery"
 import { Snapshot } from "@/snapshot"
 import { Storage } from "@/storage/storage"
 import { ToolRegistry } from "@/tool/registry"
+import { Browser } from "@/browser/session"
 import { Truncate } from "@/tool/truncate"
 import { Worktree } from "@/worktree"
 import { RuntimeFlags } from "@/effect/runtime-flags"
@@ -252,6 +253,7 @@ const app = LayerNode.group([
   Command.node,
   Truncate.node,
   ToolRegistry.node,
+  Browser.node,
   Format.node,
   Project.node,
   Vcs.node,

@@ -1,0 +1,22 @@
+Open a page in the built-in browser, or move between pages and tabs.
+
+This is a real Chromium browser: JavaScript runs, single page apps render, and
+logins persist between sessions in a dedicated profile. Prefer it over webfetch
+whenever a page needs scripting to show its content, requires being signed in,
+or has to be interacted with.
+
+By default the tool returns the page outline after navigating, so you usually do
+not need a separate browser_snapshot call. Every actionable element in that
+outline carries a ref like `ref_12`, which browser_act uses to click or type.
+
+Actions:
+- goto: open `url` in the current tab (default)
+- back / forward / reload: history navigation
+- new_tab: open `url` in a new tab and make it active
+- select_tab: switch to the tab given by `tab`
+- close_tab: close the tab given by `tab`, or the active one
+- list_tabs: list open tabs without navigating
+- close_browser: shut the browser down and release its memory
+
+Refs are renumbered on every navigation and every snapshot. Always act on refs
+from the most recent output.

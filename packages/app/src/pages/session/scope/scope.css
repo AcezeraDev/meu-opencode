@@ -12,95 +12,94 @@
   z-index: 40;
   border-radius: inherit;
   pointer-events: none;
-  container-type: size;
   opacity: 0;
   visibility: hidden;
+  /* Its own layer: the frame and beam repaint for the hue without touching the chat. */
+  will-change: opacity;
   transition:
-    opacity 700ms var(--ease-out-expo, ease-out),
-    visibility 0s linear 700ms;
+    opacity 520ms var(--ease-out-expo, ease-out),
+    visibility 0s linear 520ms;
 }
 
 .scope-trace[data-active] {
   opacity: 1;
   visibility: visible;
   transition:
-    opacity 320ms var(--ease-out-expo, ease-out),
+    opacity 240ms var(--ease-out-expo, ease-out),
     visibility 0s;
 }
 
-.scope-trace-ring,
-.scope-trace-halo {
+/* The frame the beam writes on its first lap: one crisp line, no blur. */
+.scope-trace-frame {
   position: absolute;
   inset: 0;
-  overflow: hidden;
-  border-radius: inherit;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#000 0 0) content-box exclude,
-    linear-gradient(#000 0 0);
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 
-.scope-trace-ring {
-  padding: 1.5px;
+.scope-trace-frame path {
+  fill: none;
+  stroke: var(--chroma);
+  stroke-width: 1;
+  stroke-linejoin: round;
+  opacity: 0.42;
 }
 
-.scope-trace-halo {
-  padding: 22px;
-  opacity: 0.3;
-}
-
-/* A disc as wide as the panel's diagonal, so rotating it always covers the edge. */
+/* Beam parts sit on the lap's start point and are carried along it by transform. */
 .scope-trace-beam {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: hypot(100cqw, 100cqh);
-  height: hypot(100cqw, 100cqh);
-  margin: calc(hypot(100cqw, 100cqh) / -2) 0 0 calc(hypot(100cqw, 100cqh) / -2);
-  border-radius: 50%;
-  background: conic-gradient(
-    oklch(0.78 0.17 20),
-    oklch(0.8 0.17 80),
-    oklch(0.84 0.17 140),
-    oklch(0.8 0.15 200),
-    oklch(0.72 0.17 260),
-    oklch(0.72 0.19 320),
-    oklch(0.78 0.17 380)
-  );
-  opacity: 0.55;
-  animation: scope-trace-spin 9s linear infinite;
+  left: 0;
+  top: 0;
+  will-change: transform;
 }
 
-/* The bright head of the trace, running ahead of the color wheel. */
-.scope-trace-comet {
-  background: conic-gradient(transparent 0turn 0.7turn, rgb(255 255 255 / 0.9) 0.985turn, transparent 1turn);
-  opacity: 1;
+/* Width and horizontal offset come from the component (twice the tail spacing). */
+.scope-trace-tail {
+  height: 2px;
+  margin-top: -1px;
+  background: linear-gradient(90deg, transparent, var(--chroma), transparent);
   mix-blend-mode: plus-lighter;
-  animation-duration: 2.4s;
 }
 
-/* Blurred before it rotates: the blur is rasterized once, then only turned. */
-.scope-trace-halo .scope-trace-beam {
-  filter: blur(22px);
+.scope-trace-head {
+  width: 16px;
+  height: 3px;
+  margin: -1.5px 0 0 -8px;
+  border-radius: 2px;
+  background: color-mix(in oklch, var(--chroma) 45%, white);
+  box-shadow:
+    0 0 6px 1px var(--chroma),
+    0 0 16px 3px color-mix(in srgb, var(--chroma) 40%, transparent);
 }
 
-.scope-trace:not([data-active]) .scope-trace-beam {
-  animation-play-state: paused;
-}
-
-@keyframes scope-trace-spin {
-  to {
-    transform: rotate(1turn);
-  }
+/* The only halo: a small bloom around the head, never a band over the chat. */
+.scope-trace-bloom {
+  width: 48px;
+  height: 48px;
+  margin: -24px 0 0 -24px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--chroma) 50%, transparent), transparent);
+  opacity: 0.55;
 }
 
 @media (prefers-color-scheme: light) {
-  .scope-trace-comet {
+  .scope-trace-frame path {
+    opacity: 0.6;
+  }
+
+  /* Adding light on a white screen would wash out; plain layering reads better. */
+  .scope-trace-tail {
     mix-blend-mode: normal;
-    background: conic-gradient(transparent 0turn 0.75turn, rgb(10 20 30 / 0.35) 0.985turn, transparent 1turn);
+  }
+
+  .scope-trace-head {
+    background: var(--chroma);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--chroma) 60%, transparent);
+  }
+
+  .scope-trace-bloom {
+    opacity: 0.3;
   }
 }
 
@@ -641,7 +640,10 @@
 
 /* Reduced motion: keep state and color, drop the movement. */
 @media (prefers-reduced-motion: reduce) {
-  .scope-trace-beam,
+  .scope-trace-beam {
+    display: none;
+  }
+
   .scope-signal-wave {
     animation: none;
   }

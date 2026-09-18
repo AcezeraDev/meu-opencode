@@ -121,6 +121,9 @@ const layer = Layer.effect(
           doom_loop: "ask",
           // Each web video generation is billed to the user's NanoGPT account.
           generate_web_video: "ask",
+          // Arbitrary JavaScript in a page loaded under the user's own browser
+          // profile can act as the user on any site they are signed in to.
+          browser_evaluate: "ask",
           external_directory: {
             "*": "ask",
             ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),

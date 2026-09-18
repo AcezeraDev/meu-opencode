@@ -13,6 +13,13 @@ import { TaskTool } from "./task"
 import { Database } from "@opencode-ai/core/database/database"
 import { TodoWriteTool } from "./todo"
 import { WebFetchTool } from "./webfetch"
+import { BrowserNavigateTool } from "./browser_navigate"
+import { BrowserSnapshotTool } from "./browser_snapshot"
+import { BrowserActTool } from "./browser_act"
+import { BrowserScreenshotTool } from "./browser_screenshot"
+import { BrowserInspectTool } from "./browser_inspect"
+import { Browser } from "@/browser/session"
+import { BrowserInstall } from "@/browser/install"
 import { WebVideoTool } from "./web-video"
 import { Auth } from "@/auth"
 import { resolveApiKey } from "@/web-video/provider"
@@ -58,14 +65,27 @@ import { MCP } from "@/mcp"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { McpCatalog } from "@/mcp/catalog"
 
-export function webSearchEnabled(providerID: ProviderV2.ID, flags = { exa: false, parallel: false }) {
+export function webSearchEnabled(
+  providerID: ProviderV2.ID,
+  flags = { exa: false, parallel: false },
+  configEnabled = false,
+) {
   return (
+    configEnabled ||
     providerID === ProviderV2.ID.opencode ||
     providerID === ProviderV2.ID.make("opencode-go") ||
     flags.exa ||
     flags.parallel
   )
 }
+
+const BROWSER_TOOL_IDS = new Set<string>([
+  BrowserNavigateTool.id,
+  BrowserSnapshotTool.id,
+  BrowserActTool.id,
+  BrowserScreenshotTool.id,
+  BrowserInspectTool.id,
+])
 
 type TaskDef = Tool.InferDef<typeof TaskTool>
 type ReadDef = Tool.InferDef<typeof ReadTool>
@@ -110,6 +130,11 @@ const layer = Layer.effect(
     const lsptool = yield* LspTool
     const plan = yield* PlanExitTool
     const webfetch = yield* WebFetchTool
+    const browserNavigate = yield* BrowserNavigateTool
+    const browserSnapshot = yield* BrowserSnapshotTool
+    const browserAct = yield* BrowserActTool
+    const browserScreenshot = yield* BrowserScreenshotTool
+    const browserInspect = yield* BrowserInspectTool
     const webvideo = yield* WebVideoTool
     const websearch = yield* WebSearchTool
     const shell = yield* ShellTool
@@ -221,6 +246,11 @@ const layer = Layer.effect(
           write: Tool.init(writetool),
           task: Tool.init(task),
           fetch: Tool.init(webfetch),
+          browserNavigate: Tool.init(browserNavigate),
+          browserSnapshot: Tool.init(browserSnapshot),
+          browserAct: Tool.init(browserAct),
+          browserScreenshot: Tool.init(browserScreenshot),
+          browserInspect: Tool.init(browserInspect),
           video: Tool.init(webvideo),
           todo: Tool.init(todo),
           search: Tool.init(websearch),
@@ -245,6 +275,11 @@ const layer = Layer.effect(
             tool.write,
             tool.task,
             tool.fetch,
+            tool.browserNavigate,
+            tool.browserSnapshot,
+            tool.browserAct,
+            tool.browserScreenshot,
+            tool.browserInspect,
             tool.video,
             tool.todo,
             tool.search,
@@ -299,10 +334,20 @@ const layer = Layer.effect(
       // Video generation can't run without a NanoGPT key, and its long description
       // would otherwise be sent with every request.
       const webVideoEnabled = !!(yield* resolveApiKey(auth))
+      const cfg = yield* config.get()
+      // Offering browser tools that cannot launch anything just wastes prompt
+      // space and produces failures, so they appear only when a Chromium-based
+      // browser is actually reachable on this machine.
+      const browserEnabled = cfg.browser?.enabled !== false && BrowserInstall.available(cfg.browser ?? {})
       const filtered = (yield* all()).filter((tool) => {
         if (tool.id === WebVideoTool.id) return webVideoEnabled
+        if (BROWSER_TOOL_IDS.has(tool.id)) return browserEnabled
         if (tool.id === WebSearchTool.id) {
-          return webSearchEnabled(input.providerID, { exa: flags.enableExa, parallel: flags.enableParallel })
+          return webSearchEnabled(
+            input.providerID,
+            { exa: flags.enableExa, parallel: flags.enableParallel },
+            cfg.websearch?.enabled === true,
+          )
         }
 
         const usePatch =
@@ -459,6 +504,7 @@ export const node = LayerNode.make({
     Truncate.node,
     RuntimeFlags.node,
     MCP.node,
+    Browser.node,
     Database.node,
     Ripgrep.node,
   ],

@@ -18,6 +18,7 @@ import { ToolJsonSchema } from "@/tool/json-schema"
 import { MessageID, SessionID } from "@/session/schema"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { ProviderV2 } from "@opencode-ai/core/provider"
+import type { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { MCP } from "@/mcp"
 import type { Tool as MCPToolDef } from "@modelcontextprotocol/sdk/types.js"
@@ -55,6 +56,29 @@ const replacements = [
   [Config.node, configLayer],
   [RuntimeFlags.node, RuntimeFlags.layer()],
 ] as const
+
+const BROWSER_TOOLS = [
+  "browser_navigate",
+  "browser_snapshot",
+  "browser_act",
+  "browser_screenshot",
+  "browser_inspect",
+] as const
+
+/** The shared config layer always returns `{}`, so config-driven cases need their own. */
+const withConfig = (value: Partial<ConfigV1.Info>) =>
+  testEffect(
+    LayerNode.compile(root, [
+      [
+        Config.node,
+        TestConfig.layer({
+          directories: () => InstanceState.directory.pipe(Effect.map((dir) => [path.join(dir, ".opencode")])),
+          get: () => Effect.succeed(value),
+        }),
+      ],
+      [RuntimeFlags.node, RuntimeFlags.layer()],
+    ]),
+  )
 
 const it = testEffect(LayerNode.compile(root, replacements))
 const withCodeMode = testEffect(
@@ -593,5 +617,54 @@ describe("tool.registry", () => {
       const ids = yield* registry.ids()
       expect(ids).toContain("cowsay")
     }),
+  )
+})
+
+describe("tool.registry browser and websearch", () => {
+  const list = (providerID: ProviderV2.ID) =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const agents = yield* Agent.Service
+      const tools = yield* registry.tools({
+        providerID,
+        modelID: ModelV2.ID.make("test"),
+        agent: yield* agents.defaultInfo(),
+      })
+      return tools.map((tool) => tool.id)
+    })
+
+  it.instance("registers every browser tool", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const ids = yield* registry.ids()
+      for (const id of BROWSER_TOOLS) expect(ids).toContain(id)
+    }),
+  )
+
+  withConfig({ browser: { enabled: false } }).instance("withholds the browser tools when they are turned off", () =>
+    Effect.gen(function* () {
+      const ids = yield* list(ProviderV2.ID.opencode)
+      for (const id of BROWSER_TOOLS) expect(ids).not.toContain(id)
+    }),
+  )
+
+  it.instance("offers websearch on the built-in provider", () =>
+    Effect.gen(function* () {
+      expect(yield* list(ProviderV2.ID.opencode)).toContain("websearch")
+    }),
+  )
+
+  it.instance("withholds websearch from other providers by default", () =>
+    Effect.gen(function* () {
+      expect(yield* list(ProviderV2.ID.openai)).not.toContain("websearch")
+    }),
+  )
+
+  withConfig({ websearch: { enabled: true } }).instance(
+    "offers websearch on any provider once it is enabled in config",
+    () =>
+      Effect.gen(function* () {
+        expect(yield* list(ProviderV2.ID.openai)).toContain("websearch")
+      }),
   )
 })

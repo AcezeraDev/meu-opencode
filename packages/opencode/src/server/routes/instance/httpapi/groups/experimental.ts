@@ -84,6 +84,67 @@ const WebVideoCatalog = Schema.Struct({
 export const WebVideoDefaults = Schema.Record(Schema.String, Schema.Unknown).annotate({
   identifier: "WebVideoDefaults",
 })
+
+// What the live browser panel needs to draw itself. The frame is a data URL so
+// the panel can render it directly; it is omitted when nothing is open.
+const BrowserTab = Schema.Struct({
+  id: Schema.String,
+  url: Schema.String,
+  title: Schema.String,
+  active: Schema.Boolean,
+}).annotate({ identifier: "BrowserTab" })
+const BrowserStatus = Schema.Struct({
+  running: Schema.Boolean,
+  browser: Schema.optional(Schema.String),
+  headless: Schema.Boolean,
+  url: Schema.optional(Schema.String),
+  title: Schema.optional(Schema.String),
+  tabs: Schema.Array(BrowserTab),
+}).annotate({ identifier: "BrowserStatus" })
+const BrowserFrame = Schema.Struct({
+  running: Schema.Boolean,
+  url: Schema.optional(Schema.String),
+  title: Schema.optional(Schema.String),
+  image: Schema.optional(Schema.String),
+}).annotate({ identifier: "BrowserFrame" })
+// Input from the live view, in viewport CSS pixels, forwarded to the active tab.
+export const BrowserInput = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("mouse"),
+    action: Schema.Literals(["move", "down", "up"]),
+    x: Schema.Number,
+    y: Schema.Number,
+    button: Schema.optional(Schema.Literals(["left", "middle", "right", "none"])),
+    buttons: Schema.optional(Schema.Number),
+    clickCount: Schema.optional(Schema.Number),
+    modifiers: Schema.optional(Schema.Number),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("wheel"),
+    x: Schema.Number,
+    y: Schema.Number,
+    deltaX: Schema.Number,
+    deltaY: Schema.Number,
+    modifiers: Schema.optional(Schema.Number),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("key"),
+    action: Schema.Literals(["down", "up"]),
+    key: Schema.String,
+    code: Schema.String,
+    keyCode: Schema.Number,
+    text: Schema.optional(Schema.String),
+    modifiers: Schema.optional(Schema.Number),
+  }),
+  Schema.Struct({ type: Schema.Literal("text"), text: Schema.String }),
+]).annotate({ identifier: "BrowserInput" })
+export const BrowserCommand = Schema.Union([
+  Schema.Struct({ action: Schema.Literal("navigate"), url: Schema.String }),
+  Schema.Struct({ action: Schema.Literals(["back", "forward", "reload"]) }),
+  Schema.Struct({ action: Schema.Literal("new_tab"), url: Schema.optional(Schema.String) }),
+  Schema.Struct({ action: Schema.Literals(["select_tab", "close_tab"]), tab: Schema.String }),
+  Schema.Struct({ action: Schema.Literal("resize"), width: Schema.Number, height: Schema.Number }),
+]).annotate({ identifier: "BrowserCommand" })
 const WorktreeErrorName = Schema.Union([
   Schema.Literal("WorktreeNotGitError"),
   Schema.Literal("WorktreeNameGenerationFailedError"),
@@ -125,6 +186,11 @@ export const ExperimentalPaths = {
   webVideoModels: "/experimental/web-video/models",
   usageSpend: "/experimental/usage/spend",
   webVideoSettings: "/experimental/web-video/settings",
+  browserStatus: "/experimental/browser/status",
+  browserFrame: "/experimental/browser/frame",
+  browserStream: "/experimental/browser/stream",
+  browserInput: "/experimental/browser/input",
+  browserControl: "/experimental/browser/control",
 } as const
 
 export const ExperimentalApi = HttpApi.make("experimental")
@@ -321,6 +387,61 @@ export const ExperimentalApi = HttpApi.make("experimental")
             identifier: "experimental.webVideo.settings.update",
             summary: "Update web video defaults",
             description: "Update the defaults the generate_web_video tool uses when options are omitted.",
+          }),
+        ),
+        HttpApiEndpoint.get("browserStatus", ExperimentalPaths.browserStatus, {
+          query: WorkspaceRoutingQuery,
+          success: described(BrowserStatus, "State of the built-in browser"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.browser.status",
+            summary: "Get browser status",
+            description: "Report whether the built-in browser is running, and which pages it has open.",
+          }),
+        ),
+        HttpApiEndpoint.get("browserFrame", ExperimentalPaths.browserFrame, {
+          query: WorkspaceRoutingQuery,
+          success: described(BrowserFrame, "Current frame of the built-in browser"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.browser.frame",
+            summary: "Get the current browser frame",
+            description:
+              "Screenshot the active tab of the built-in browser, for the live panel. Never starts the browser.",
+          }),
+        ),
+        HttpApiEndpoint.get("browserStream", ExperimentalPaths.browserStream, {
+          query: WorkspaceRoutingQuery,
+          success: Schema.String.pipe(HttpApiSchema.asText({ contentType: "text/event-stream" })),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.browser.stream",
+            summary: "Stream the built-in browser",
+            description:
+              "Server-sent events with the browser's status, live frames of the active tab and what the agent is doing. The agent acts at a visible pace while this is open.",
+          }),
+        ),
+        HttpApiEndpoint.post("browserInput", ExperimentalPaths.browserInput, {
+          query: WorkspaceRoutingQuery,
+          payload: BrowserInput,
+          success: described(Schema.Boolean, "Input forwarded"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.browser.input",
+            summary: "Send input to the browser",
+            description: "Forward a mouse, wheel, key or text event from the live view to the active tab.",
+          }),
+        ),
+        HttpApiEndpoint.post("browserControl", ExperimentalPaths.browserControl, {
+          query: WorkspaceRoutingQuery,
+          payload: BrowserCommand,
+          success: described(BrowserStatus, "State of the built-in browser after the command"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.browser.control",
+            summary: "Control the browser",
+            description:
+              "Navigate, go back or forward, reload, or open, switch and close tabs, as from a browser toolbar. Starts the browser if needed.",
           }),
         ),
       )

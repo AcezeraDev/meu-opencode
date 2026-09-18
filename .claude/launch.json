@@ -13,6 +13,12 @@
       "runtimeArgs": ["--cwd", "packages/app", "dev"],
       "env": { "VITE_OPENCODE_SERVER_PORT": "4097" },
       "port": 3000
+    },
+    {
+      "name": "server-4097",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["--cwd", "packages/opencode", "dev", "serve", "--port", "4097"],
+      "port": 4097
     }
   ]
 }

@@ -22,6 +22,7 @@ import { useSync } from "@/context/sync"
 import { useTerminal } from "@/context/terminal"
 import { focusTerminalById } from "@/pages/session/helpers"
 import { useSessionLayout } from "@/pages/session/session-layout"
+import { browserPane } from "@/pages/session/browser/pane-state"
 import { messageAgentColor } from "@/utils/agent"
 import { decode64 } from "@/utils/base64"
 import { fileManagerApp } from "@/utils/file-manager"
@@ -242,6 +243,10 @@ export function SessionHeader() {
     reviewVisible: isDesktop(),
     reviewOpened: view().reviewPanel.opened(),
     onReviewToggle: () => view().reviewPanel.toggle(),
+    browserLabel: language.t("ui.browserPane.toggle"),
+    browserVisible: isDesktop(),
+    browserOpened: browserPane.opened(),
+    onBrowserToggle: browserPane.toggle,
   }))
 
   const selectApp = (app: OpenApp) => {
@@ -524,6 +529,10 @@ type SessionHeaderV2ActionsState = {
   reviewVisible: boolean
   reviewOpened: boolean
   onReviewToggle: () => void
+  browserLabel: string
+  browserVisible: boolean
+  browserOpened: boolean
+  onBrowserToggle: () => void
 }
 
 function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
@@ -535,6 +544,22 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
         <Tooltip placement="bottom" value={props.state.statusLabel}>
           <StatusPopoverV2 />
         </Tooltip>
+      </Show>
+      <Show when={props.state.browserVisible}>
+        <TooltipV2 class="shrink-0" placement="bottom" value={props.state.browserLabel}>
+          <IconButtonV2
+            type="button"
+            variant="ghost-muted"
+            size="large"
+            class="!w-9 shrink-0"
+            state={props.state.browserOpened ? "pressed" : undefined}
+            onClick={props.state.onBrowserToggle}
+            aria-label={props.state.browserLabel}
+            aria-expanded={props.state.browserOpened}
+            aria-controls="browser-pane"
+            icon={<IconV2 name="globe" />}
+          />
+        </TooltipV2>
       </Show>
       <Show when={props.state.reviewVisible}>
         <TooltipV2

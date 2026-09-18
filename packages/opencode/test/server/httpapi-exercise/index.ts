@@ -481,6 +481,37 @@ const scenarios: Scenario[] = [
     .at((ctx) => ({ path: route("/pty/{ptyID}/connect", { ptyID: "pty_httpapi_missing" }), headers: ctx.headers() }))
     .status(404, undefined, "none"),
   http.protected.get("/experimental/console", "experimental.console.get").json(),
+  http.protected.get("/experimental/browser/status", "experimental.browser.status").json(),
+  http.protected.get("/experimental/browser/frame", "experimental.browser.frame").json(),
+  http.protected
+    .get("/experimental/browser/stream", "experimental.browser.stream")
+    .stream()
+    .status(
+      200,
+      (_ctx, result) =>
+        Effect.sync(() => {
+          check(result.contentType.includes("text/event-stream"), "browser stream should be an SSE stream")
+          check(result.text.includes('"type":"status"'), "browser stream should open with the browser status")
+        }),
+      "status",
+    ),
+  http.protected
+    .post("/experimental/browser/input", "experimental.browser.input")
+    .at((ctx) => ({
+      path: "/experimental/browser/input",
+      headers: ctx.headers(),
+      body: { type: "mouse", action: "move", x: 10, y: 10 },
+    }))
+    .json(200, boolean, "status"),
+  // Closing a tab that does not exist is the one command that never starts a browser.
+  http.protected
+    .post("/experimental/browser/control", "experimental.browser.control")
+    .at((ctx) => ({
+      path: "/experimental/browser/control",
+      headers: ctx.headers(),
+      body: { action: "close_tab", tab: "tab_missing" },
+    }))
+    .json(),
   http.protected.get("/experimental/console/orgs", "experimental.console.listOrgs").json(),
   http.protected
     .post("/experimental/console/switch", "experimental.console.switchOrg")

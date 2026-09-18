@@ -1,0 +1,13 @@
+Read the current page of the built-in browser, after JavaScript has run.
+
+Formats:
+- outline (default): a compact accessibility tree. Every actionable element gets
+  a ref like `ref_12` for browser_act. This is the cheapest and most reliable way
+  to understand and operate a page.
+- text: the visible text of the page
+- markdown: the page converted to markdown, for reading articles and docs
+- html: the raw serialized DOM. Expensive; only use when the markup itself matters.
+
+Refs are renumbered on every snapshot and every navigation. Act only on refs from
+the most recent output. When a click changes the page, take a new snapshot before
+acting again.

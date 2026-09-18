@@ -1,0 +1,104 @@
+/*
+ * The browser instrument, docked above the composer beside the measurement
+ * strip. It borrows the strip's bezel and channel chip so the two read as parts
+ * of the same bench, and the screen it opens is treated as a screen: inset,
+ * phosphor-dark, with the page drawn on it.
+ */
+
+.browser-panel {
+  display: flex;
+  flex-direction: column;
+  margin: 0 2px 8px;
+}
+
+.browser-panel-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  height: 34px;
+  padding: 0 12px 0 8px;
+  overflow: hidden;
+  border: 1px solid var(--scope-bezel-line);
+  border-radius: 10px;
+  background: var(--v2-background-bg-layer-01);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  cursor: pointer;
+  text-align: left;
+  animation: scope-strip-in 420ms var(--ease-out-expo, ease-out) both;
+}
+
+.browser-panel-bar:hover {
+  background: var(--v2-background-bg-layer-02, var(--v2-background-bg-layer-01));
+}
+
+.browser-panel-bar:focus-visible {
+  outline: 2px solid var(--scope-ch-edit);
+  outline-offset: 2px;
+}
+
+/* The screen sits directly on top of the bar and shares its corner radius. */
+.browser-panel[data-open] .browser-panel-bar {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-top-color: transparent;
+}
+
+.browser-panel-url {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--v2-text-text-base);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-panel-hint {
+  flex-shrink: 0;
+  font-family: var(--font-family-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--v2-text-text-faint);
+  text-transform: uppercase;
+}
+
+.browser-panel-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-height: 46vh;
+  overflow: hidden;
+  border: 1px solid var(--scope-bezel-line);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+  background: var(--v2-background-bg-deep);
+  animation: scope-strip-in 420ms var(--ease-out-expo, ease-out) both;
+}
+
+.browser-panel-screen img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 46vh;
+  object-fit: contain;
+  object-position: top center;
+}
+
+.browser-panel-waiting {
+  padding: 28px 0;
+  font-family: var(--font-family-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--v2-text-text-faint);
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browser-panel-bar,
+  .browser-panel-screen {
+    animation: none;
+  }
+}

@@ -26,6 +26,38 @@ Cada resposta da IA é tratada como um sinal ao vivo, medido numa tela de instru
 - **Gasto do dia** na barra de título, somando todas as sessões, com limite diário e aviso.
 - **Cola de atalhos:** segurar `Ctrl` mostra todos os atalhos disponíveis.
 - **Gerador de vídeos na web:** uma ferramenta que a IA pode usar para gerar vídeos, com painel próprio nas configurações.
+- **Navegador de verdade:** a IA abre páginas num Chromium próprio, lê o que o JavaScript montou, clica, preenche formulários, tira print e lê o console e a rede. Um painel à direita (botão do globo) mostra o navegador ao vivo, com o cursor da IA se mexendo, e eu também posso navegar e clicar nele.
+- **Busca na web para qualquer modelo:** a ferramenta `websearch` deixou de ser exclusiva do provedor oficial e pode ser ligada para qualquer um, inclusive NanoGPT.
+
+### O navegador
+
+A IA tem um navegador próprio. Ele usa o Microsoft Edge (ou o Chrome) que já está instalado, num perfil separado do meu, então não baixa nada e não mexe nas minhas abas. Como o perfil é guardado, dá para entrar num site uma vez e continuar logado nas próximas conversas.
+
+**O painel.** O botão do globo, no topo da sessão, abre o navegador na coluna da direita, como o da revisão e o do terminal. Ele também abre sozinho quando a IA começa a navegar. É um navegador de verdade, não uma imagem:
+
+- tem abas, voltar, avançar, recarregar e barra de endereço (o que não for endereço vira pesquisa);
+- dá para clicar, rolar e digitar na página, e o que eu faço vai para o mesmo navegador da IA. Assim eu entro no site, faço login e deixo com ela;
+- enquanto o painel está aberto, a IA mostra o cursor dela: ele desliza até o elemento, contorna o alvo e faz a onda do clique, e a legenda embaixo diz o que ela está fazendo ("Clicando em “Entrar”");
+- a página se ajusta ao tamanho do painel, e a IA trabalha nesse mesmo tamanho.
+
+Com o painel fechado, a IA age na velocidade máxima, sem cursor nem pausas.
+
+São cinco ferramentas: abrir páginas e abas, ler a página já renderizada, clicar/digitar/preencher, tirar print e ler console e rede. Para clicar, a IA não adivinha coordenadas: a leitura da página numera cada elemento clicável (`ref_12`) e as ações usam esse número.
+
+Fica ligado sozinho quando encontra um navegador na máquina. Para configurar, no `opencode.json`:
+
+```jsonc
+{
+  "browser": {
+    "headless": false,    // abre a janela do navegador para eu assistir
+    "profile": "trabalho", // perfis separados guardam logins separados
+    "channel": "chrome"    // usar o Chrome em vez do Edge
+  },
+  "websearch": { "enabled": true } // liga a busca na web em qualquer modelo
+}
+```
+
+Rodar JavaScript numa página (`browser_inspect` com `evaluate`) sempre pede confirmação, porque o navegador está logado como eu.
 
 ### App de desktop pessoal
 

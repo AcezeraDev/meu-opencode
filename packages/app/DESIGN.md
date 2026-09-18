@@ -141,6 +141,9 @@ Controls 6px, panel actions 7px, strips 10px, panels 12px, full-screen sheets 16
 ### Buttons
 Send / stop is lit with the trace (solid trace fill with a glow when ready to send; a faint trace tint with trace-colored icon while stopping). Panel actions are bezel-03 fills with a 0.97 press scale; the primary action takes a trace-tinted fill.
 
+### Response trace
+While the agent works, a phosphor beam laps the chat panel's edge clockwise, starting under the composer, at a constant 600px/s (corners included) with a short fading tail; its first lap writes a 1px frame in the trace color. The only halo is a small bloom around the beam's head. It fades in 240ms, fades out 520ms, and every loop stops when it is out. Reduced motion keeps only the static frame.
+
 ### Measurement strip
 34px strip above the composer while the agent works: CH1 chip, TIME, RATE with its trace, STEP, STEPS, COST. It sweeps in from the left, holds its last values when the turn ends and dissolves into the response summary.
 
@@ -171,3 +174,4 @@ Holding Ctrl for 650ms raises a sheet of every shortcut available, grouped by ar
 - **Don't** set a small label above a big number (hero-metric); put the label beside the value.
 - **Don't** reintroduce translucent glass or backdrop blur on panels.
 - **Don't** add a trace or glow to static, non-live elements for decoration.
+- **Don't** paint the whole hue wheel at once or blur a wide band along a panel edge; the trace is one crisp line in the current hue (the old rotating rainbow halo read as a clumsy 3D bevel).

@@ -166,6 +166,44 @@ export const Info = Schema.Struct({
       }),
     }),
   ),
+  websearch: Schema.optional(
+    Schema.Struct({
+      enabled: Schema.optional(Schema.Boolean).annotate({
+        description:
+          "Offer the websearch tool on every provider. By default it is only offered on the built-in opencode provider.",
+      }),
+      provider: Schema.optional(Schema.Literals(["exa", "parallel"])).annotate({
+        description: "Which web search backend to use. Defaults to alternating between them per session.",
+      }),
+    }),
+  ).annotate({ description: "Web search tool configuration" }),
+  browser: Schema.optional(
+    Schema.Struct({
+      enabled: Schema.optional(Schema.Boolean).annotate({
+        description: "Enable the built-in browser tools. Requires a one-time Chromium download.",
+      }),
+      headless: Schema.optional(Schema.Boolean).annotate({
+        description: "Run the browser without a visible window (default: true)",
+      }),
+      channel: Schema.optional(Schema.String).annotate({
+        description:
+          "Browser channel to launch, such as \"msedge\", \"chrome\" or \"chromium\". Defaults to reusing a browser already installed on this machine.",
+      }),
+      executablePath: Schema.optional(Schema.String).annotate({
+        description: "Absolute path to a Chromium-based browser executable. Overrides channel detection.",
+      }),
+      profile: Schema.optional(Schema.String).annotate({
+        description:
+          "Name of the persistent browser profile. Logins are kept between sessions per profile. Defaults to \"default\".",
+      }),
+      viewport: Schema.optional(
+        Schema.Struct({ width: Schema.optional(PositiveInt), height: Schema.optional(PositiveInt) }),
+      ).annotate({ description: "Browser viewport size (default: 1280x800)" }),
+      timeout: Schema.optional(PositiveInt).annotate({
+        description: "Default timeout in milliseconds for navigation and actions (default: 30000)",
+      }),
+    }),
+  ).annotate({ description: "Built-in browser configuration, used by the browser_* tools" }),
   experimental: Schema.optional(
     Schema.Struct({
       disable_paste_summary: Schema.optional(Schema.Boolean),

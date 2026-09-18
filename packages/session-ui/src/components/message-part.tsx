@@ -67,6 +67,7 @@ import { attached, inline, kind, typeLabel } from "./message-file"
 import { readPartText } from "./message-part-text"
 import { SessionProgressIndicatorV2 } from "../v2/components/session-progress-indicator-v2"
 import { WebVideoToolCard } from "./web-video-tool"
+import { BrowserToolCard } from "./browser-tool"
 
 async function writeClipboard(text: string): Promise<boolean> {
   const body = typeof document === "undefined" ? undefined : document.body
@@ -2646,3 +2647,13 @@ ToolRegistry.register({
   name: "generate_web_video",
   render: WebVideoToolCard,
 })
+
+for (const name of [
+  "browser_navigate",
+  "browser_snapshot",
+  "browser_act",
+  "browser_screenshot",
+  "browser_inspect",
+]) {
+  ToolRegistry.register({ name, render: BrowserToolCard })
+}

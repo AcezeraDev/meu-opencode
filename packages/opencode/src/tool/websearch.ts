@@ -6,6 +6,7 @@ import DESCRIPTION from "./websearch.txt"
 import { checksum } from "@opencode-ai/core/util/encode"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { RuntimeFlags } from "@/effect/runtime-flags"
+import { Config } from "@/config/config"
 
 export const Parameters = Schema.Struct({
   query: Schema.String.annotate({ description: "Websearch query" }),
@@ -27,9 +28,14 @@ export const Parameters = Schema.Struct({
 const WebSearchProviderSchema = Schema.Literals(["exa", "parallel"])
 export type WebSearchProvider = Schema.Schema.Type<typeof WebSearchProviderSchema>
 
-export function selectWebSearchProvider(sessionID: string, flags = { exa: false, parallel: false }): WebSearchProvider {
+export function selectWebSearchProvider(
+  sessionID: string,
+  flags = { exa: false, parallel: false },
+  configured?: WebSearchProvider,
+): WebSearchProvider {
   const override = process.env.OPENCODE_WEBSEARCH_PROVIDER
   if (override === "exa" || override === "parallel") return override
+  if (configured) return configured
   if (flags.parallel) return "parallel"
   if (flags.exa) return "exa"
 
@@ -101,6 +107,7 @@ export const WebSearchTool = Tool.define(
   Effect.gen(function* () {
     const http = yield* HttpClient.HttpClient
     const flags = yield* RuntimeFlags.Service
+    const config = yield* Config.Service
 
     return {
       get description() {
@@ -109,10 +116,12 @@ export const WebSearchTool = Tool.define(
       parameters: Parameters,
       execute: (params: Schema.Schema.Type<typeof Parameters>, ctx: Tool.Context) =>
         Effect.gen(function* () {
-          const provider = selectWebSearchProvider(ctx.sessionID, {
-            exa: flags.enableExa,
-            parallel: flags.enableParallel,
-          })
+          const cfg = yield* config.get()
+          const provider = selectWebSearchProvider(
+            ctx.sessionID,
+            { exa: flags.enableExa, parallel: flags.enableParallel },
+            cfg.websearch?.provider,
+          )
           const title = webSearchProviderLabel(provider)
           yield* ctx.metadata({ title: `${title} "${params.query}"`, metadata: { provider } })
 
