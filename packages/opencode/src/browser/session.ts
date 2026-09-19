@@ -2,12 +2,14 @@ import { spawn, type ChildProcess } from "child_process"
 import fs from "fs"
 import path from "path"
 import { Context, Effect, Layer } from "effect"
+import open from "open"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Global } from "@opencode-ai/core/global"
 import { Config } from "@/config/config"
 import { InstanceState } from "@/effect/instance-state"
 import { CDPConnection } from "./cdp"
-import { BrowserInstall } from "./install"
+import { BrowserInstall, type LaunchTarget } from "./install"
+import { BrowserBridge, type Bridge, type BridgeTarget, type TargetEvent } from "./bridge"
 import { asRecord, asText, type CreateTargetResult, type TargetInfo, type VersionInfo } from "./protocol"
 import { Tab, type Activity, type Frame, type TabHooks, type UserInput } from "./tab"
 
@@ -22,11 +24,24 @@ export interface TabInfo {
 
 export interface Status {
   running: boolean
+  /** How the agent drives the browser, so the live view can prompt for pairing in extension mode. */
+  mode: "process" | "extension"
   browser?: string
   headless: boolean
   url?: string
   title?: string
   tabs: TabInfo[]
+  /** The person's own browser, where blocked sites are handed over. Absent means the system default. */
+  external?: string
+}
+
+/** How a page went to the person's own browser. Handing over never fails; it reports. */
+export interface Handoff {
+  /** The browser the page went to; `undefined` is the system's default one. */
+  browser?: string
+  /** False when no tab was opened: refused, failed, or handed over moments ago already. */
+  opened: boolean
+  error?: string
 }
 
 /** What the live view receives while it is connected. */
@@ -47,6 +62,7 @@ export type Command =
   | { action: "select_tab"; tab: string }
   | { action: "close_tab"; tab: string }
   | { action: "resize"; width: number; height: number }
+  | { action: "open_external" }
 
 /** Bounds for the viewport the live view asks for, whatever size its pane is. */
 const VIEWPORT_MIN = { width: 320, height: 240 }
@@ -58,6 +74,10 @@ const DEFAULT_VIEWPORT = { width: 1280, height: 800 }
 const STARTUP_TIMEOUT = 30_000
 /** Navigations fire several events in a burst; the address bar needs one update. */
 const STATUS_DEBOUNCE = 120
+/** A site handed over automatically is not handed over again this soon, so a looping agent opens one tab, not ten. */
+const HANDOFF_REPEAT = 10 * 60_000
+/** How long a browser being started for a handoff gets to report a failure. */
+const HANDOFF_START = 3000
 
 interface State {
   process?: ChildProcess
@@ -68,7 +88,18 @@ interface State {
   timeout: number
   viewport: { width: number; height: number }
   profileDir: string
-  options: { channel?: string; executablePath?: string }
+  options: { channel?: string; executablePath?: string; external?: string; mode?: "process" | "extension" }
+  /** "process" launches our own browser; "extension" drives the user's via the bridge. */
+  mode: "process" | "extension"
+  bridge?: Bridge
+  /** Unsubscribes from the bridge's tab and connection events. */
+  unbridge?: () => void
+  /** Every tab the extension sees, so the agent can list and switch to any of them. */
+  targets: BridgeTarget[]
+  /** Resolved once: looking for binaries on every status update would be wasteful. */
+  external?: LaunchTarget
+  /** When each host was last handed over. */
+  handed: Map<string, number>
   tabs: Map<string, Tab>
   /** Attachments in flight, so a tab reported twice is only attached once. */
   attaching: Map<string, Promise<Tab>>
@@ -111,6 +142,12 @@ export interface Interface {
   readonly control: (command: Command) => Effect.Effect<Status>
   /** Forwards mouse and keyboard input from the live view to the active tab. */
   readonly input: (event: UserInput) => Effect.Effect<void>
+  /**
+   * Opens a page in the person's own browser, with their everyday profile.
+   * The tab it opens is theirs: the agent can neither see nor drive it. With
+   * `once`, a host handed over in the last few minutes is not opened again.
+   */
+  readonly handoff: (url: string, options?: { once?: boolean }) => Effect.Effect<Handoff>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Browser") {}
@@ -160,6 +197,57 @@ async function waitForPort(profileDir: string, child: ChildProcess) {
 }
 
 /**
+ * Starts a browser the way clicking a link would: no flags, its own profile,
+ * and detached, so it outlives opencode. With the browser already open this
+ * only adds a tab to it. Resolves to the reason it failed, if it did.
+ */
+function startPlain(executable: string, url: string) {
+  return new Promise<string | undefined>((resolve) => {
+    let child: ChildProcess
+    try {
+      child = spawn(executable, [url], { detached: true, stdio: "ignore" })
+    } catch (error) {
+      resolve(error instanceof Error ? error.message : String(error))
+      return
+    }
+    const timer = setTimeout(() => resolve(undefined), HANDOFF_START)
+    child.once("spawn", () => {
+      clearTimeout(timer)
+      resolve(undefined)
+    })
+    child.once("error", (error) => {
+      clearTimeout(timer)
+      resolve(error.message)
+    })
+    child.unref()
+  })
+}
+
+/** Opens a page in the system's default browser. Resolves to the reason it failed, if it did. */
+async function openDefault(url: string) {
+  try {
+    const child = await open(url)
+    child.on("error", () => {})
+    child.unref()
+    return undefined
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error)
+  }
+}
+
+async function deliver(external: LaunchTarget | undefined, url: string): Promise<Handoff> {
+  if (external?.executablePath) {
+    const failure = await startPlain(external.executablePath, url)
+    if (!failure) return { browser: external.label, opened: true }
+    // A browser that will not start still leaves the default one.
+    if (!(await openDefault(url))) return { opened: true }
+    return { browser: external.label, opened: false, error: failure }
+  }
+  const failure = await openDefault(url)
+  return failure ? { opened: false, error: failure } : { opened: true }
+}
+
+/**
  * Turns what someone typed into the address bar into a URL. Like any browser,
  * something that is not recognisably an address becomes a search.
  */
@@ -175,11 +263,13 @@ const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const config = yield* Config.Service
+    const bridgeService = yield* BrowserBridge.Service
 
     const state = yield* InstanceState.make(
       Effect.fn("Browser.state")(function* () {
         const cfg = yield* config.get()
         const options = cfg.browser ?? {}
+        const bridge = yield* bridgeService.get()
 
         const s: State = {
           headless: options.headless ?? true,
@@ -190,6 +280,11 @@ const layer = Layer.effect(
           },
           profileDir: path.join(Global.Path.data, "browser", options.profile ?? "default"),
           options,
+          external: BrowserInstall.external(options),
+          mode: options.mode ?? "process",
+          bridge,
+          targets: [],
+          handed: new Map(),
           tabs: new Map(),
           attaching: new Map(),
           counter: 0,
@@ -206,6 +301,21 @@ const layer = Layer.effect(
       }),
     )
 
+    /** Whether a browser is currently driveable, whichever transport backs it. */
+    function live(s: State) {
+      return s.mode === "extension" ? s.bridge?.connected === true : s.connection?.connected === true
+    }
+
+    /**
+     * Whether this session has wired its browser up, not merely that a transport
+     * exists. The extension can be connected before we have adopted its tabs and
+     * subscribed to its events, so "connected" is not enough to skip setup.
+     */
+    function ready(s: State) {
+      if (s.mode === "extension") return s.bridge?.connected === true && s.unbridge !== undefined
+      return s.connection?.connected === true
+    }
+
     function emit(s: State, event: BrowserEvent) {
       for (const listener of s.listeners) {
         try {
@@ -217,7 +327,32 @@ const layer = Layer.effect(
     }
 
     async function statusOf(s: State): Promise<Status> {
-      if (!s.connection?.connected) return { running: false, headless: s.headless, tabs: [] }
+      if (!live(s)) return { running: false, mode: s.mode, headless: s.headless, tabs: [] }
+      if (s.mode === "extension") {
+        // Set up tab tracking the moment anyone looks, so the panel lists the
+        // browser's tabs before the agent has acted.
+        await trackExtension(s)
+        // The tab list is every tab in the user's browser, not only the ones the
+        // agent has attached to, so it can pick any of them.
+        const activeId = s.active ?? s.targets.find((t) => t.active)?.targetId
+        const tabs = s.targets.map((t) => ({
+          id: t.targetId,
+          url: t.url,
+          title: t.title,
+          active: t.targetId === activeId,
+        }))
+        const active = tabs.find((t) => t.active)
+        return {
+          running: true,
+          mode: s.mode,
+          browser: s.label,
+          headless: s.headless,
+          url: active?.url,
+          title: active?.title,
+          tabs,
+          external: s.external?.label,
+        }
+      }
       const list = await Promise.all(
         [...s.tabs.values()].map(async (item) => ({
           id: item.id,
@@ -229,11 +364,13 @@ const layer = Layer.effect(
       const active = list.find((item) => item.active)
       return {
         running: true,
+        mode: s.mode,
         browser: s.label,
         headless: s.headless,
         url: active?.url,
         title: active?.title,
         tabs: list,
+        external: s.external?.label,
       }
     }
 
@@ -257,7 +394,7 @@ const layer = Layer.effect(
 
     /** Streams the active tab while anyone watches, and nothing otherwise. */
     async function recast(s: State) {
-      const wanted = s.listeners.size > 0 && s.connection?.connected ? s.active : undefined
+      const wanted = s.listeners.size > 0 && live(s) ? s.active : undefined
       if (s.cast === wanted) return
       const previous = s.cast ? s.tabs.get(s.cast) : undefined
       s.cast = wanted
@@ -280,6 +417,19 @@ const layer = Layer.effect(
     async function teardown(s: State) {
       if (s.statusTimer) clearTimeout(s.statusTimer)
       s.cast = undefined
+      // The extension owns the browser process and lives on across sessions;
+      // shutting down just means we stop tracking its tabs, not closing it.
+      if (s.mode === "extension") {
+        s.unbridge?.()
+        s.unbridge = undefined
+        for (const tab of s.tabs.values()) tab.close()
+        s.tabs.clear()
+        s.attaching.clear()
+        s.targets = []
+        s.active = undefined
+        emit(s, { type: "status", status: { running: false, mode: s.mode, headless: s.headless, tabs: [] } })
+        return
+      }
       for (const tab of s.tabs.values()) tab.close()
       s.tabs.clear()
       s.attaching.clear()
@@ -304,7 +454,7 @@ const layer = Layer.effect(
           if (child.exitCode === null && Date.now() > deadline - 3000) child.kill()
         }
       }
-      emit(s, { type: "status", status: { running: false, headless: s.headless, tabs: [] } })
+      emit(s, { type: "status", status: { running: false, mode: s.mode, headless: s.headless, tabs: [] } })
     }
 
     /** Attaches to a page target once, however many times it is reported. */
@@ -313,8 +463,20 @@ const layer = Layer.effect(
       if (known) return Promise.resolve(known)
       const pending = s.attaching.get(targetId)
       if (pending) return pending
-      const url = `${s.endpoint!.replace(/^http/, "ws")}/devtools/page/${targetId}`
-      const attached = Tab.attach(`tab_${++s.counter}`, targetId, url, hooksFor(s))
+      const open =
+        s.mode === "extension"
+          ? (async () => {
+              const connection = s.bridge!.connection(targetId)
+              await connection.connect()
+              return Tab.attachTransport(targetId, targetId, connection, hooksFor(s))
+            })()
+          : Tab.attach(
+              `tab_${++s.counter}`,
+              targetId,
+              `${s.endpoint!.replace(/^http/, "ws")}/devtools/page/${targetId}`,
+              hooksFor(s),
+            )
+      const attached = open
         .then(async (tab) => {
           if (s.fit) await tab.resize(s.fit.width, s.fit.height).catch(() => {})
           s.tabs.set(tab.id, tab)
@@ -323,6 +485,59 @@ const layer = Layer.effect(
         .finally(() => s.attaching.delete(targetId))
       s.attaching.set(targetId, attached)
       return attached
+    }
+
+    /** Reacts to tabs opened, closed or focused in the user's own browser. */
+    function onBridgeTarget(s: State, event: TargetEvent) {
+      const { targetId, url, title, active } = event.target
+      if (event.event === "removed") {
+        s.targets = s.targets.filter((t) => t.targetId !== targetId)
+        const gone = [...s.tabs.values()].find((tab) => tab.targetId === targetId)
+        if (gone) {
+          gone.close()
+          s.tabs.delete(gone.id)
+          if (s.active === gone.id) s.active = s.tabs.keys().next().value
+        }
+        changed(s)
+        return
+      }
+      if (event.event === "activated") {
+        // The person focused a tab in their browser; reflect it in the list. The
+        // agent's own active tab is not moved unless it is asked to switch.
+        s.targets = s.targets.map((t) => ({ ...t, active: t.targetId === targetId }))
+        announceStatus(s)
+        return
+      }
+      // Created or updated: refresh the cached entry (attaching to a tab the agent
+      // is not driving would badge it, so tabs are only attached on demand).
+      const entry = { targetId, url: url ?? "", title: title ?? "", active: active === true }
+      const at = s.targets.findIndex((t) => t.targetId === targetId)
+      if (at >= 0) s.targets[at] = { ...s.targets[at], ...entry }
+      else s.targets.push(entry)
+      announceStatus(s)
+    }
+
+    /**
+     * Subscribes to the extension's tabs and caches them, so the browser's tab
+     * list is known whether or not the agent has acted. Idempotent and does not
+     * attach to any tab; attaching happens on demand when a tab is driven.
+     */
+    async function trackExtension(s: State) {
+      const bridge = s.bridge
+      if (!bridge?.connected || s.unbridge) return
+      const offTarget = bridge.onTarget((event) => onBridgeTarget(s, event))
+      const offState = bridge.onState(() => {
+        if (bridge.connected)
+          void trackExtension(s)
+            .then(() => changed(s))
+            .catch(() => {})
+        else void teardown(s)
+      })
+      s.unbridge = () => {
+        offTarget()
+        offState()
+      }
+      s.targets = await bridge.listTargets().catch(() => [])
     }
 
     async function launch(s: State) {
@@ -442,16 +657,33 @@ const layer = Layer.effect(
     }
 
     async function newTab(s: State, url = "about:blank") {
-      const created = await s.connection!.send<CreateTargetResult>("Target.createTarget", { url })
-      const tab = await adopt(s, created.targetId)
+      const targetId =
+        s.mode === "extension"
+          ? await s.bridge!.createTarget(url)
+          : (await s.connection!.send<CreateTargetResult>("Target.createTarget", { url })).targetId
+      const tab = await adopt(s, targetId)
       s.active = tab.id
+      if (s.mode === "extension" && !s.targets.some((t) => t.targetId === targetId)) {
+        s.targets.push({ targetId, url, title: "", active: true })
+      }
       changed(s)
       return tab
     }
 
     const ensure = Effect.fn("Browser.ensure")(function* () {
       const s = yield* InstanceState.get(state)
-      if (!s.connection?.connected) {
+      if (s.mode === "extension") {
+        // The extension is the browser; if it is not paired there is nothing to
+        // drive, and this must never fall back to launching one.
+        if (!s.bridge?.connected) {
+          yield* Effect.die(
+            new BrowserStartError(
+              "the OpenCode Browser Bridge extension is not connected. Open the browser panel to see the port, load the extension, and pair it (set browser.extensionToken and enter it in the extension popup).",
+            ),
+          )
+        }
+        yield* Effect.promise(() => trackExtension(s))
+      } else if (!ready(s)) {
         if (s.process || s.connection) yield* Effect.promise(() => teardown(s))
         yield* Effect.tryPromise({
           try: () => launch(s),
@@ -469,6 +701,14 @@ const layer = Layer.effect(
         if (existing) {
           s.active = existing.id
           changed(s)
+        } else if (s.mode === "extension") {
+          // Reuse the tab the person is on rather than opening a blank one.
+          const target = s.targets.find((t) => t.active) ?? s.targets[0]
+          if (target) {
+            const adopted = yield* Effect.promise(() => adopt(s, target.targetId))
+            s.active = adopted.id
+            changed(s)
+          } else yield* Effect.promise(() => newTab(s))
         } else yield* Effect.promise(() => newTab(s))
       }
       return s
@@ -481,7 +721,7 @@ const layer = Layer.effect(
 
     const current: Interface["current"] = Effect.fn("Browser.current")(function* () {
       const s = yield* InstanceState.get(state)
-      if (!s.connection?.connected || !s.active) return undefined
+      if (!live(s) || !s.active) return undefined
       const found = s.tabs.get(s.active)
       return found?.connected ? found : undefined
     })
@@ -498,10 +738,17 @@ const layer = Layer.effect(
 
     const select: Interface["select"] = Effect.fn("Browser.select")(function* (id: string) {
       const s = yield* ensure()
-      const found = s.tabs.get(id)
+      let found = s.tabs.get(id)
+      // In extension mode the id is a Brave tab that the agent may not have
+      // attached to yet, so attach on demand before switching to it.
+      if (!found && s.mode === "extension" && s.targets.some((t) => t.targetId === id)) {
+        found = yield* Effect.promise(() => adopt(s, id).catch(() => undefined))
+      }
       if (!found) return yield* Effect.die(new Error(`No open tab with id ${id}`))
-      s.active = id
-      yield* Effect.promise(() => found.bringToFront())
+      s.active = found.id
+      yield* Effect.promise(() =>
+        s.mode === "extension" ? s.bridge!.activateTarget(found!.targetId).catch(() => {}) : found!.bringToFront(),
+      )
       changed(s)
       return found
     })
@@ -509,6 +756,16 @@ const layer = Layer.effect(
     const close: Interface["close"] = Effect.fn("Browser.close")(function* (id: string) {
       const s = yield* InstanceState.get(state)
       const found = s.tabs.get(id)
+      if (s.mode === "extension") {
+        // The id is a Brave tab; close it even if the agent never attached to it.
+        found?.close()
+        if (found) s.tabs.delete(id)
+        s.targets = s.targets.filter((t) => t.targetId !== id)
+        if (s.bridge?.connected) yield* Effect.promise(() => s.bridge!.closeTarget(id).catch(() => {}))
+        if (s.active === id) s.active = s.tabs.keys().next().value
+        changed(s)
+        return
+      }
       if (!found) return
       found.close()
       s.tabs.delete(id)
@@ -585,6 +842,14 @@ const layer = Layer.effect(
         yield* close(command.tab)
         return yield* status()
       }
+      if (command.action === "open_external") {
+        // Hands over whatever is on screen. With nothing open there is nothing
+        // to hand over, and this must not be what starts a browser.
+        const active = yield* current()
+        const url = active ? yield* Effect.promise(() => active.url()) : undefined
+        if (url) yield* handoff(url)
+        return yield* status()
+      }
 
       // Toolbar navigation returns at once; the address bar follows the page
       // through status events instead of holding the request open.
@@ -594,6 +859,25 @@ const layer = Layer.effect(
       if (command.action === "forward") yield* Effect.promise(() => active.step(1))
       if (command.action === "reload") yield* Effect.promise(() => active.refresh())
       return yield* status()
+    })
+
+    const handoff: Interface["handoff"] = Effect.fn("Browser.handoff")(function* (
+      url: string,
+      options?: { once?: boolean },
+    ) {
+      const s = yield* InstanceState.get(state)
+      const browser = s.external?.label
+      const target = URL.canParse(url) ? new URL(url) : undefined
+      // Only web pages leave: a file:// or javascript: URL handed to another
+      // program is a way to run things, not to browse.
+      if (!target || (target.protocol !== "http:" && target.protocol !== "https:")) {
+        return { browser, opened: false, error: "Only http:// and https:// pages can be opened in another browser." }
+      }
+      const last = s.handed.get(target.host)
+      if (options?.once && last !== undefined && Date.now() - last < HANDOFF_REPEAT) return { browser, opened: false }
+      const result = yield* Effect.promise(() => deliver(s.external, target.href))
+      if (result.opened) s.handed.set(target.host, Date.now())
+      return result
     })
 
     const input: Interface["input"] = Effect.fn("Browser.input")(function* (event: UserInput) {
@@ -615,10 +899,11 @@ const layer = Layer.effect(
       subscribe,
       control,
       input,
+      handoff,
     })
   }),
 )
 
-export const node = LayerNode.make({ service: Service, layer, deps: [Config.node] })
+export const node = LayerNode.make({ service: Service, layer, deps: [Config.node, BrowserBridge.node] })
 
 export * as Browser from "./session"

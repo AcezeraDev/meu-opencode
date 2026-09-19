@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+      }
+      body {
+        width: 260px;
+        margin: 0;
+        padding: 14px;
+        font-size: 13px;
+      }
+      h1 {
+        font-size: 13px;
+        margin: 0 0 10px;
+      }
+      label {
+        display: block;
+        margin: 8px 0 2px;
+        opacity: 0.8;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 6px 8px;
+        border-radius: 6px;
+        border: 1px solid rgba(128, 128, 128, 0.4);
+        background: transparent;
+        color: inherit;
+        font: inherit;
+      }
+      button {
+        margin-top: 12px;
+        width: 100%;
+        padding: 7px;
+        border-radius: 6px;
+        border: 0;
+        background: #6b5cff;
+        color: white;
+        font: inherit;
+        cursor: pointer;
+      }
+      .status {
+        margin-top: 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .led {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #999;
+      }
+      .led[data-on] {
+        background: #22c55e;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>OpenCode Browser Bridge</h1>
+    <label for="port">Porta do servidor OpenCode</label>
+    <input id="port" type="number" inputmode="numeric" placeholder="4919" />
+    <label for="token">Token de pareamento</label>
+    <input id="token" type="text" placeholder="cole o token do OpenCode" />
+    <button id="save">Salvar e conectar</button>
+    <div class="status"><span class="led" id="led"></span><span id="state">desconectado</span></div>
+    <script src="popup.js"></script>
+  </body>
+</html>

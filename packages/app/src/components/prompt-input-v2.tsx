@@ -14,6 +14,8 @@ import { normalizePromptHistoryEntry, promptLength, type PromptHistoryComment } 
 import { createPersistedPromptInputHistory } from "@/components/prompt-input/history-store"
 import { promptDesignPlaceholder, promptPlaceholder } from "@/components/prompt-input/placeholder"
 import { createPromptSubmit } from "@/components/prompt-input/submit"
+import { createPermissionModeState, PermissionModeControl } from "@/components/prompt-input/permission-mode"
+import { createSkillAttachments, SkillPickerControl } from "@/components/prompt-input/skill-picker"
 import { selectionFromLines, type SelectedLineRange, useFile } from "@/context/file"
 import { useComments } from "@/context/comments"
 import { useCommand } from "@/context/command"
@@ -44,6 +46,8 @@ export type PromptInputV2ComposerProps = {
 export type PromptInputV2ControllerProps = Omit<PromptInputProps, "class" | "submission">
 export type PromptInputV2ComposerController = PromptInputV2Interaction & {
   readonly model: PromptInputProps["controls"]["model"]
+  readonly permissionMode: ReturnType<typeof createPermissionModeState>
+  readonly skills: ReturnType<typeof createSkillAttachments>
 }
 
 export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
@@ -62,6 +66,12 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
         attachShortcut={command.keybind("file.attach")}
         modelControl={
           <>
+            <SkillPickerControl skills={props.controller.skills} onClose={props.controller.restoreFocus} />
+            <PermissionModeControl
+              current={props.controller.permissionMode.current()}
+              onSelect={props.controller.permissionMode.set}
+              onClose={props.controller.restoreFocus}
+            />
             {props.contextControl}
             <PromptInputV2ModelControl
               loading={props.controller.model.loading}
@@ -200,6 +210,11 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     if (!id) return permission.isAutoAcceptingDirectory(sdk().directory)
     return permission.isAutoAccepting(id, sdk().directory)
   })
+  const permissionMode = createPermissionModeState({
+    sessionID: () => props.controls.session.id,
+    metadata: () => info()?.metadata,
+    save: (sessionID, metadata) => sdk().client.session.update({ sessionID, directory: sdk().directory, metadata }),
+  })
   const submission = createPromptSubmit({
     prompt,
     info,
@@ -224,6 +239,7 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     onAbort: props.onAbort,
     onSubmit: props.onSubmit,
     model: props.controls.model.selection,
+    permissionMode: permissionMode.current,
   })
 
   const referenceDescription = (reference: ReferenceInfo) =>
@@ -414,6 +430,14 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     },
   })
   Object.defineProperty(controller, "model", { get: () => props.controls.model })
+  Object.defineProperty(controller, "permissionMode", { value: permissionMode })
+  Object.defineProperty(controller, "skills", {
+    value: createSkillAttachments({
+      attachments: () => controller.attachments(),
+      add: (files) => controller.addAttachments(files),
+      remove: (id) => controller.removeAttachment(id),
+    }),
+  })
 
   command.register("prompt-input", () => [
     {

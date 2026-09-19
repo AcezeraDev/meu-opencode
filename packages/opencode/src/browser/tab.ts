@@ -1,4 +1,4 @@
-import { CDPConnection } from "./cdp"
+import { CDPConnection, type CDPTransport } from "./cdp"
 import { BrowserCursor } from "./cursor"
 import { BrowserSnapshot, type SnapshotOptions, type SnapshotResult } from "./snapshot"
 import {
@@ -26,6 +26,14 @@ export interface NetworkEntry {
 }
 
 export type WaitUntil = "load" | "domcontentloaded" | "networkidle"
+
+/** The response that served the tab's top-level page. */
+export interface DocumentResponse {
+  url: string
+  status: number
+  /** Header names lower-cased, since HTTP/2 and HTTP/1 disagree on case. */
+  headers: Record<string, string>
+}
 
 export interface Rect {
   x: number
@@ -55,6 +63,7 @@ export type ActivityKind =
   | "read"
   | "screenshot"
   | "inspect"
+  | "handoff"
 
 export interface Activity {
   kind: ActivityKind
@@ -211,6 +220,8 @@ interface Target {
 export class Tab {
   readonly console: ConsoleEntry[] = []
   readonly network: NetworkEntry[] = []
+  /** The last top-level page response, which bot walls give away through. */
+  document?: DocumentResponse
   private inflight = new Set<string>()
   private requestIds = new Map<string, NetworkEntry>()
   /** Where the agent's pointer last was, in viewport CSS pixels. */
@@ -220,13 +231,21 @@ export class Tab {
   private constructor(
     readonly id: string,
     readonly targetId: string,
-    private connection: CDPConnection,
+    private connection: CDPTransport,
     private hooks: TabHooks,
   ) {}
 
   static async attach(id: string, targetId: string, wsUrl: string, hooks: TabHooks = IDLE) {
     const connection = new CDPConnection(wsUrl)
     await connection.connect()
+    return Tab.attachTransport(id, targetId, connection, hooks)
+  }
+
+  /**
+   * Attaches to a tab over a transport that is already connected, such as the
+   * one relayed through the browser extension.
+   */
+  static async attachTransport(id: string, targetId: string, connection: CDPTransport, hooks: TabHooks = IDLE) {
     const tab = new Tab(id, targetId, connection, hooks)
     await tab.prepare()
     return tab
@@ -274,8 +293,17 @@ export class Tab {
 
     this.connection.on("Network.responseReceived", (params) => {
       const entry = this.requestIds.get(asText(params["requestId"]))
-      const status = asRecord(params["response"])["status"]
+      const response = asRecord(params["response"])
+      const status = response["status"]
       if (entry && typeof status === "number") entry.status = status
+      // The top-level frame shares its id with the target; iframes do not.
+      if (asText(params["type"]) === "Document" && asText(params["frameId"]) === this.targetId) {
+        const headers: Record<string, string> = {}
+        for (const [name, value] of Object.entries(asRecord(response["headers"]))) {
+          headers[name.toLowerCase()] = asText(value)
+        }
+        this.document = { url: asText(response["url"]), status: typeof status === "number" ? status : 0, headers }
+      }
     })
 
     this.connection.on("Network.loadingFinished", (params) => {

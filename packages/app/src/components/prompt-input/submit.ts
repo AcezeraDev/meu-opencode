@@ -229,6 +229,8 @@ type PromptSubmitInput = {
   onAbort?: () => void
   onSubmit?: () => void
   model?: ModelSelection
+  /** The permission mode picked before the session existed; saved on the new session. */
+  permissionMode?: Accessor<string | undefined>
 }
 
 export function createPromptSubmit(input: PromptSubmitInput) {
@@ -417,6 +419,15 @@ export function createPromptSubmit(input: PromptSubmitInput) {
       if (created) {
         seed(sessionDirectory, created)
         session = created
+        const permissionMode = input.permissionMode?.()
+        // Saved before the first message goes out, so its tool calls already follow the mode.
+        if (permissionMode && permissionMode !== "default") {
+          await client.session
+            .update({ sessionID: created.id, directory: sessionDirectory, metadata: { permissionMode } })
+            .catch((err) => {
+              showToast({ title: language.t("ui.permissionMode.saveFailed"), description: errorMessage(err) })
+            })
+        }
         await startTransition(() => {
           if (!session) return
           if (shouldAutoAccept) permissionState.enableAutoAccept(session.id, sessionDirectory)

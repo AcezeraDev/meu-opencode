@@ -201,6 +201,62 @@ export function merge(...rulesets: PermissionV1.Ruleset[]): PermissionV1.Rule[] 
   return rulesets.flat()
 }
 
+export type Mode = PermissionV1.Mode
+
+/** The permission mode stored on a session, if it has a valid one. */
+export function mode(metadata: Record<string, unknown> | undefined): Mode | undefined {
+  const value = metadata?.["permissionMode"]
+  return PermissionV1.Mode.literals.find((item) => item === value)
+}
+
+/**
+ * Applies a session's permission mode on top of its ruleset. A mode only moves
+ * "ask" to "allow" or "allow" to "ask", so the config's deny rules still win;
+ * plan is the one exception, refusing file edits outright.
+ *
+ * - manual: ask before edits and shell commands.
+ * - accept-edits: apply edits without asking; everything else follows the rules.
+ * - plan: read and search freely, refuse edits, ask before shell commands.
+ * - bypass: never ask.
+ */
+export function withMode(ruleset: PermissionV1.Ruleset, mode: Mode | undefined): PermissionV1.Rule[] {
+  switch (mode) {
+    case "manual":
+      return shift(shift(ruleset, "edit", "allow", "ask"), "bash", "allow", "ask")
+    case "accept-edits":
+      return shift(ruleset, "edit", "ask", "allow")
+    case "plan":
+      return [...shift(ruleset, "bash", "allow", "ask"), { permission: "edit", pattern: "*", action: "deny" }]
+    case "bypass":
+      return shift(ruleset, "*", "ask", "allow")
+    default:
+      return [...ruleset]
+  }
+}
+
+/**
+ * Re-points every rule that resolves `permission` to `from` so it resolves to
+ * `to` instead, including the implicit "ask" when nothing matches. Each rule is
+ * followed by its replacement, which keeps any later rule's precedence intact.
+ */
+function shift(
+  ruleset: PermissionV1.Ruleset,
+  permission: string,
+  from: PermissionV1.Action,
+  to: PermissionV1.Action,
+): PermissionV1.Rule[] {
+  const fallback: PermissionV1.Rule[] = from === "ask" ? [{ permission, pattern: "*", action: to }] : []
+  return [
+    ...fallback,
+    ...ruleset.flatMap((rule) => {
+      if (rule.action !== from) return [rule]
+      if (permission === "*") return [rule, { ...rule, action: to }]
+      if (!Wildcard.match(permission, rule.permission)) return [rule]
+      return [rule, { ...rule, permission, action: to }]
+    }),
+  ]
+}
+
 export function disabled(tools: string[], ruleset: PermissionV1.Ruleset): Set<string> {
   const edits = ["edit", "write", "apply_patch"]
   const reads = ["list_mcp_resources", "list_mcp_resource_templates", "read_mcp_resource"]

@@ -6,11 +6,14 @@ import { authTokenFromCredentials } from "@/utils/server"
 export type BrowserTab = { id: string; url: string; title: string; active: boolean }
 export type BrowserStatus = {
   running: boolean
+  mode?: "process" | "extension"
   browser?: string
   headless: boolean
   url?: string
   title?: string
   tabs: BrowserTab[]
+  /** The person's own browser, where the current page can be handed over. Absent means the system default. */
+  external?: string
 }
 export type BrowserActivity = { kind: string; target?: string; tab: string; at: number }
 /** A JPEG as base64, with the viewport it shows in CSS pixels. */
@@ -25,6 +28,7 @@ export type BrowserCommand =
   | { action: "select_tab"; tab: string }
   | { action: "close_tab"; tab: string }
   | { action: "resize"; width: number; height: number }
+  | { action: "open_external" }
 
 export type BrowserInput =
   | {
@@ -186,6 +190,17 @@ export function createBrowserFeed(input: { directory: Accessor<string | undefine
     status,
     activity,
     connected,
+    /** The server's port, shown so the extension can be paired to it. */
+    serverPort() {
+      const url = server.current?.http.url
+      if (!url) return undefined
+      try {
+        const parsed = new URL(url)
+        return parsed.port || (parsed.protocol === "https:" ? "443" : "80")
+      } catch {
+        return undefined
+      }
+    },
     onFrame(listener: (frame: BrowserFrame) => void) {
       frameListeners.add(listener)
       return () => frameListeners.delete(listener)

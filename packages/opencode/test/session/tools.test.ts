@@ -143,6 +143,7 @@ it.effect("preserves running tool start time across metadata updates", () =>
       bypassAgentCheck: false,
       messages: [],
       promptOps: {} as never,
+      permissionMode: Effect.succeed(undefined),
     })
     const execute = tools.timing.execute
     if (!execute) throw new Error("timing tool is missing execute")

@@ -187,14 +187,26 @@ export const Info = Schema.Struct({
       }),
       channel: Schema.optional(Schema.String).annotate({
         description:
-          "Browser channel to launch, such as \"msedge\", \"chrome\" or \"chromium\". Defaults to reusing a browser already installed on this machine.",
+          'Browser channel to launch, such as "msedge", "chrome" or "chromium". Defaults to reusing a browser already installed on this machine.',
       }),
       executablePath: Schema.optional(Schema.String).annotate({
         description: "Absolute path to a Chromium-based browser executable. Overrides channel detection.",
       }),
+      external: Schema.optional(Schema.String).annotate({
+        description:
+          "Absolute path to your own browser, where sites that block the built-in one are opened. Defaults to Brave when installed, otherwise the system's default browser.",
+      }),
+      mode: Schema.optional(Schema.Literals(["process", "extension"])).annotate({
+        description:
+          "How the agent drives a browser. 'process' (default) launches its own Chromium. 'extension' drives your real browser through the OpenCode Browser Bridge extension, so pages see your logged-in browser.",
+      }),
+      extensionToken: Schema.optional(Schema.String).annotate({
+        description:
+          "Shared secret the Browser Bridge extension must send to pair. Required for mode 'extension'; enter the same value in the extension popup.",
+      }),
       profile: Schema.optional(Schema.String).annotate({
         description:
-          "Name of the persistent browser profile. Logins are kept between sessions per profile. Defaults to \"default\".",
+          'Name of the persistent browser profile. Logins are kept between sessions per profile. Defaults to "default".',
       }),
       viewport: Schema.optional(
         Schema.Struct({ width: Schema.optional(PositiveInt), height: Schema.optional(PositiveInt) }),

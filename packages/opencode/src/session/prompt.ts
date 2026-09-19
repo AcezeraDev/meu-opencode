@@ -81,6 +81,8 @@ IMPORTANT:
 
 const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested structured output. You MUST use the StructuredOutput tool to provide your final response. Do NOT respond with plain text - you MUST call the StructuredOutput tool with your answer formatted according to the schema.`
 
+const PLAN_MODE_SYSTEM_PROMPT = `The user has turned on plan mode. Read and search as much as you need, then answer with a concrete plan for the change. Do not modify files: the edit tools are turned off until the user leaves plan mode, and shell commands need their approval.`
+
 function mcpResourceBase64Size(value: string) {
   const trimmed = value.replace(/\s/g, "")
   const padding = trimmed.endsWith("==") ? 2 : trimmed.endsWith("=") ? 1 : 0
@@ -152,6 +154,22 @@ const layer = Layer.effect(
     const cancel = Effect.fn("SessionPrompt.cancel")(function* (sessionID: SessionID) {
       yield* Effect.logInfo("cancel", { "session.id": sessionID })
       yield* state.cancel(sessionID)
+    })
+
+    // Read fresh on every use so a mode picked mid-run applies to the next tool call.
+    // Subagent sessions have no mode of their own and follow the session that started them.
+    const permissionMode = Effect.fn("SessionPrompt.permissionMode")(function* (sessionID: SessionID) {
+      let next: SessionID | undefined = sessionID
+      for (let depth = 0; next && depth < 8; depth++) {
+        const info: Session.Info | undefined = yield* sessions
+          .get(next)
+          .pipe(Effect.catch(() => Effect.succeed(undefined)))
+        if (!info) return undefined
+        const mode = Permission.mode(info.metadata)
+        if (mode) return mode
+        next = info.parentID
+      }
+      return undefined
     })
 
     const resolvePromptParts = Effect.fn("SessionPrompt.resolvePromptParts")(function* (template: string) {
@@ -339,13 +357,16 @@ const layer = Layer.effect(
               } satisfies SessionV1.ToolPart)
             }),
           ask: (req: any) =>
-            permission
-              .ask({
-                ...req,
-                sessionID,
-                ruleset: Permission.merge(taskAgent.permission, session.permission ?? []),
-              })
-              .pipe(Effect.orDie),
+            permissionMode(sessionID).pipe(
+              Effect.flatMap((mode) =>
+                permission.ask({
+                  ...req,
+                  sessionID,
+                  ruleset: Permission.withMode(Permission.merge(taskAgent.permission, session.permission ?? []), mode),
+                }),
+              ),
+              Effect.orDie,
+            ),
         })
         .pipe(
           Effect.catchCause((cause) => {
@@ -1222,6 +1243,7 @@ const layer = Layer.effect(
             const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
             const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
             const promptOps = yield* ops()
+            const mode = yield* permissionMode(sessionID)
 
             const tools = yield* SessionTools.resolve({
               agent,
@@ -1231,6 +1253,7 @@ const layer = Layer.effect(
               bypassAgentCheck,
               messages: msgs,
               promptOps,
+              permissionMode: permissionMode(sessionID),
             }).pipe(
               Effect.provideService(Plugin.Service, plugin),
               Effect.provideService(Permission.Service, permission),
@@ -1269,10 +1292,12 @@ const layer = Layer.effect(
             ]
             const format = lastUser.format ?? { type: "text" as const }
             if (format.type === "json_schema") system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
+            if (mode === "plan") system.push(PLAN_MODE_SYSTEM_PROMPT)
             const result = yield* handle.process({
               user: lastUser,
               agent,
-              permission: session.permission,
+              // With the mode applied, plan mode hides the edit tools instead of refusing each call.
+              permission: Permission.withMode(Permission.merge(agent.permission, session.permission ?? []), mode),
               sessionID,
               parentSessionID: session.parentID,
               system,

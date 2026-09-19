@@ -1,0 +1,41 @@
+[data-slot="permission-mode-menu"] {
+  width: 340px;
+}
+
+/* Two-line rows: the mode's name over what it does. */
+[data-component="menu-v2-item"][data-slot="permission-mode-item"] {
+  height: auto;
+  min-height: 44px;
+  padding-block: 6px;
+
+  [data-slot="menu-v2-item-content"] {
+    line-height: 1.3;
+  }
+}
+
+[data-slot="permission-mode-text"] {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+[data-slot="permission-mode-label"],
+[data-slot="permission-mode-description"] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-slot="permission-mode-description"] {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--v2-text-text-faint);
+}
+
+/* Bypass turns every prompt off, so it reads as a warning wherever it shows. */
+[data-permission-mode="bypass"] [data-slot="permission-mode-label"],
+[data-component="button-v2"][data-action="prompt-permission-mode"][data-permission-mode="bypass"],
+[data-component="button-v2"][data-action="prompt-permission-mode"][data-permission-mode="bypass"] svg {
+  color: var(--v2-state-fg-warning);
+}

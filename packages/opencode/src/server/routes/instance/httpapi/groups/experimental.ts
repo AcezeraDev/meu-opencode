@@ -95,11 +95,13 @@ const BrowserTab = Schema.Struct({
 }).annotate({ identifier: "BrowserTab" })
 const BrowserStatus = Schema.Struct({
   running: Schema.Boolean,
+  mode: Schema.optional(Schema.Literals(["process", "extension"])),
   browser: Schema.optional(Schema.String),
   headless: Schema.Boolean,
   url: Schema.optional(Schema.String),
   title: Schema.optional(Schema.String),
   tabs: Schema.Array(BrowserTab),
+  external: Schema.optional(Schema.String),
 }).annotate({ identifier: "BrowserStatus" })
 const BrowserFrame = Schema.Struct({
   running: Schema.Boolean,
@@ -140,7 +142,7 @@ export const BrowserInput = Schema.Union([
 ]).annotate({ identifier: "BrowserInput" })
 export const BrowserCommand = Schema.Union([
   Schema.Struct({ action: Schema.Literal("navigate"), url: Schema.String }),
-  Schema.Struct({ action: Schema.Literals(["back", "forward", "reload"]) }),
+  Schema.Struct({ action: Schema.Literals(["back", "forward", "reload", "open_external"]) }),
   Schema.Struct({ action: Schema.Literal("new_tab"), url: Schema.optional(Schema.String) }),
   Schema.Struct({ action: Schema.Literals(["select_tab", "close_tab"]), tab: Schema.String }),
   Schema.Struct({ action: Schema.Literal("resize"), width: Schema.Number, height: Schema.Number }),
@@ -441,7 +443,7 @@ export const ExperimentalApi = HttpApi.make("experimental")
             identifier: "experimental.browser.control",
             summary: "Control the browser",
             description:
-              "Navigate, go back or forward, reload, or open, switch and close tabs, as from a browser toolbar. Starts the browser if needed.",
+              "Navigate, go back or forward, reload, open, switch and close tabs, or open the current page in your own browser, as from a browser toolbar. Starts the browser if needed.",
           }),
         ),
       )

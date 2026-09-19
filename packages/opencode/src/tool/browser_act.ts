@@ -53,6 +53,10 @@ interface Metadata {
   url: string
   ref?: string
   refs?: number
+  /** The browser a page was handed to; empty for the system default. */
+  handoff?: string
+  /** Why the site was considered to have blocked the built-in browser. */
+  blocked?: string
 }
 
 /** Actions that cannot do anything without knowing which element they mean. */
@@ -150,9 +154,26 @@ export const BrowserActTool = Tool.define(
             yield* Effect.promise(() => tab.waitForLoad("domcontentloaded", 1500).catch(() => {}))
           }
 
+          const done = `${params.action} on ${label} succeeded.`
+
+          // A click or a search can land on a captcha as easily as a link can.
+          const handed = yield* BrowserPage.handOver(browser, tab)
+          if (handed) {
+            const { handoff } = handed
+            return {
+              output: [done, "", handed.output].join("\n"),
+              title: `${params.action} ${label}`,
+              metadata: {
+                action: params.action,
+                url: handed.url,
+                blocked: handed.block.reason,
+                ...(handoff.error ? {} : { handoff: handoff.browser ?? "" }),
+              },
+            }
+          }
+
           const current = yield* Effect.promise(() => tab.url())
           const title = yield* Effect.promise(() => tab.title())
-          const done = `${params.action} on ${label} succeeded.`
 
           if (params.snapshot === false) {
             return {

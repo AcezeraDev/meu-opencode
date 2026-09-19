@@ -24,6 +24,16 @@ export type Rule = typeof Rule.Type
 export const Ruleset = Schema.Array(Rule).annotate({ identifier: "PermissionRuleset" })
 export type Ruleset = typeof Ruleset.Type
 
+/**
+ * A per-session permission mode, like the ones Claude Code offers, kept in the
+ * session's `metadata.permissionMode`. Absent or "default" leaves the config's
+ * own rules in charge.
+ */
+export const Mode = Schema.Literals(["default", "manual", "accept-edits", "plan", "bypass"]).annotate({
+  identifier: "PermissionMode",
+})
+export type Mode = typeof Mode.Type
+
 export const Request = Schema.Struct({
   id: ID,
   sessionID: SessionID,

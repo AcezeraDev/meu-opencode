@@ -17,6 +17,18 @@ Actions:
 - close_tab: close the tab given by `tab`, or the active one
 - list_tabs: list open tabs without navigating
 - close_browser: shut the browser down and release its memory
+- open_external: open `url`, or the current page, in the user's own browser
 
 Refs are renumbered on every navigation and every snapshot. Always act on refs
 from the most recent output.
+
+Some sites turn automated browsers away with a bot check, a captcha or an
+"Access denied" page. When navigating or acting lands on one, the page is
+handed to the user's own browser automatically and the output says so (with a
+`blocked:` line) instead of showing the page. When that happens, tell the user
+the page is open in their browser and leave that site to them: retrying it here
+will not get past the block.
+
+open_external is for the same situation when it was not detected, or when the
+user asks for it. The tab it opens is out of your reach: you cannot see, read
+or control it. So do not use it for pages you still need to work on.

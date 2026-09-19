@@ -39,7 +39,11 @@ const ACTIVITY_KEYS: Record<string, string> = {
   read: "ui.browserPane.agent.read",
   screenshot: "ui.browserPane.agent.screenshot",
   inspect: "ui.browserPane.agent.inspect",
+  handoff: "ui.browserPane.agent.handoff",
 }
+
+/** Activities whose target is a page, shown by its site rather than quoted. */
+const PAGE_ACTIVITIES = new Set(["navigate", "back", "forward", "handoff"])
 
 const BUTTONS = ["left", "middle", "right"] as const
 
@@ -81,6 +85,7 @@ const GLYPH = {
   reload: "M13 8 A5 5 0 1 1 11.5 4.4 M13 2.5 V5.2 H10.3",
   plus: "M8 3.5 V12.5 M3.5 8 H12.5",
   close: "M4.5 4.5 L11.5 11.5 M11.5 4.5 L4.5 11.5",
+  external: "M9.5 2.5 H13.5 V6.5 M13.5 2.5 L8 8 M11.5 9.5 V13.5 H2.5 V4.5 H6.5",
 }
 
 export function BrowserPane(props: { directory: Accessor<string | undefined>; onClose: () => void }) {
@@ -101,6 +106,9 @@ export function BrowserPane(props: { directory: Accessor<string | undefined>; on
   const status = () => feed.status()
   const running = () => status()?.running === true
   const live = () => feed.connected() && running()
+  /** Only a web page can go to another browser; a blank tab or a local file cannot. */
+  const handable = () => running() && /^https?:\/\//.test(status()?.url ?? "")
+  const externalName = () => status()?.external || language.t("ui.browserPane.defaultBrowser")
 
   // The address bar follows the page, except while someone is typing in it.
   createEffect(() => {
@@ -295,15 +303,14 @@ export function BrowserPane(props: { directory: Accessor<string | undefined>; on
     const key = ACTIVITY_KEYS[activity.kind]
     if (!key) return undefined
     const target = activity.target
-    const shown =
-      activity.kind === "navigate" || activity.kind === "back" || activity.kind === "forward"
-        ? host(target) || target || ""
-        : activity.kind === "press" || activity.kind === "inspect"
-          ? (target ?? "")
-          : target
-            ? `“${target}”`
-            : language.t("ui.browserPane.agent.element")
-    return language.t(key, { target: shown })
+    const shown = PAGE_ACTIVITIES.has(activity.kind)
+      ? host(target) || target || ""
+      : activity.kind === "press" || activity.kind === "inspect"
+        ? (target ?? "")
+        : target
+          ? `“${target}”`
+          : language.t("ui.browserPane.agent.element")
+    return language.t(key, { target: shown, browser: externalName() })
   })
 
   return (
@@ -393,6 +400,16 @@ export function BrowserPane(props: { directory: Accessor<string | undefined>; on
         >
           <Glyph d={GLYPH.reload} />
         </button>
+        <button
+          type="button"
+          class="browser-pane-icon"
+          aria-label={language.t("ui.browserPane.openExternal", { browser: externalName() })}
+          title={language.t("ui.browserPane.openExternal", { browser: externalName() })}
+          disabled={!handable()}
+          onClick={() => void feed.control({ action: "open_external" })}
+        >
+          <Glyph d={GLYPH.external} />
+        </button>
         <input
           ref={addressInput}
           class="browser-pane-address"
@@ -440,10 +457,22 @@ export function BrowserPane(props: { directory: Accessor<string | undefined>; on
           onPaste={onPaste}
         />
         <Show when={!running()}>
-          <div class="browser-pane-empty">
-            <p class="browser-pane-empty-title">{language.t("ui.browserPane.closed")}</p>
-            <p class="browser-pane-empty-hint">{language.t("ui.browserPane.closedHint")}</p>
-          </div>
+          <Show
+            when={status()?.mode === "extension"}
+            fallback={
+              <div class="browser-pane-empty">
+                <p class="browser-pane-empty-title">{language.t("ui.browserPane.closed")}</p>
+                <p class="browser-pane-empty-hint">{language.t("ui.browserPane.closedHint")}</p>
+              </div>
+            }
+          >
+            <div class="browser-pane-empty">
+              <p class="browser-pane-empty-title">{language.t("ui.browserPane.pairTitle")}</p>
+              <p class="browser-pane-empty-hint">
+                {language.t("ui.browserPane.pairHint", { port: feed.serverPort() ?? "?" })}
+              </p>
+            </div>
+          </Show>
         </Show>
         <Show when={running() && !hasFrame()}>
           <div class="browser-pane-empty">

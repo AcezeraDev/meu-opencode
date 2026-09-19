@@ -46,6 +46,8 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   bypassAgentCheck: boolean
   messages: SessionV1.WithParts[]
   promptOps: TaskPromptOps
+  /** Reads the session's current permission mode; it can change while the agent works. */
+  permissionMode: Effect.Effect<Permission.Mode | undefined>
 }) {
   const tools: Record<string, AITool> = {}
   const run = yield* EffectBridge.make()
@@ -79,14 +81,20 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
         }
       }),
     ask: (req) =>
-      permission
-        .ask({
-          ...req,
-          sessionID: input.session.id,
-          tool: { messageID: input.processor.message.id, callID: options.toolCallId },
-          ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
-        })
-        .pipe(Effect.orDie),
+      input.permissionMode.pipe(
+        Effect.flatMap((mode) =>
+          permission.ask({
+            ...req,
+            sessionID: input.session.id,
+            tool: { messageID: input.processor.message.id, callID: options.toolCallId },
+            ruleset: Permission.withMode(
+              Permission.merge(input.agent.permission, input.session.permission ?? []),
+              mode,
+            ),
+          }),
+        ),
+        Effect.orDie,
+      ),
   })
 
   for (const item of yield* registry.tools({

@@ -169,6 +169,52 @@ export function resolve(options: Options = {}): LaunchTarget {
   return found
 }
 
+/** Where Brave installs itself, most common first. */
+function braveCandidates(): string[] {
+  if (process.platform === "win32") {
+    const tail = path.join("BraveSoftware", "Brave-Browser", "Application", "brave.exe")
+    return [
+      process.env["ProgramFiles"] ?? "C:\\Program Files",
+      process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)",
+      process.env["LOCALAPPDATA"] ?? path.join(os.homedir(), "AppData", "Local"),
+    ].map((root) => path.join(root, tail))
+  }
+  if (process.platform === "darwin") return ["/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"]
+  return ["/usr/bin/brave-browser", "/usr/bin/brave", "/snap/bin/brave", "/opt/brave.com/brave/brave-browser"]
+}
+
+const KNOWN_NAMES: Record<string, string> = {
+  brave: "Brave",
+  "brave browser": "Brave",
+  "brave-browser": "Brave",
+  chrome: "Google Chrome",
+  "google chrome": "Google Chrome",
+  msedge: "Microsoft Edge",
+  "microsoft edge": "Microsoft Edge",
+  firefox: "Firefox",
+  opera: "Opera",
+  vivaldi: "Vivaldi",
+}
+
+/** A readable name for a browser binary, for the toolbar and the chat. */
+function nameOf(executable: string) {
+  const base = path.basename(executable).replace(/\.(exe|app)$/i, "")
+  return KNOWN_NAMES[base.toLowerCase()] ?? base
+}
+
+/**
+ * The person's own browser, where sites that turn the built-in one away are
+ * handed over. It runs with their everyday profile, so it is started plainly:
+ * no debugging port and no profile of ours. `undefined` means the system's
+ * default browser.
+ */
+export function external(options: { external?: string } = {}): LaunchTarget | undefined {
+  if (options.external) return { executablePath: options.external, label: nameOf(options.external) }
+  const brave = braveCandidates().find((item) => fs.existsSync(item))
+  if (brave) return { executablePath: brave, channel: "brave", label: "Brave" }
+  return undefined
+}
+
 /** Whether any browser can be started, used to decide if the tools are offered. */
 export function available(options: Options = {}) {
   if (options.executablePath ?? process.env["OPENCODE_BROWSER_EXECUTABLE"]) return true

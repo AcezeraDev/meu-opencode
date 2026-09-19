@@ -20,6 +20,7 @@ import { ProjectApi } from "./groups/project"
 import { ProjectCopyApi } from "./groups/project-copy"
 import { ProviderApi } from "./groups/provider"
 import { PtyApi, PtyConnectApi } from "./groups/pty"
+import { BrowserBridgeApi } from "./groups/browser-bridge"
 import { QuestionApi } from "./groups/question"
 import { SessionApi } from "./groups/session"
 import { SyncApi } from "./groups/sync"
@@ -82,6 +83,7 @@ export const OpenCodeHttpApi = HttpApi.make("opencode")
   .addHttpApi(InstanceHttpApi)
   .addHttpApi(ServerApi)
   .addHttpApi(PtyConnectApi)
+  .addHttpApi(BrowserBridgeApi)
   .annotate(HttpApi.AdditionalSchemas, [
     EventSchema,
     Question.Replied,

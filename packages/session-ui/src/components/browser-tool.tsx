@@ -57,6 +57,11 @@ export function BrowserToolCard(props: ToolProps) {
   })
 
   const heading = createMemo(() => {
+    // A page the site refused to the agent went to the user's own browser.
+    const handoff = props.metadata?.handoff
+    if (typeof handoff === "string") {
+      return i18n.t("ui.tool.browser.handoff", { browser: handoff || i18n.t("ui.browserPane.defaultBrowser") })
+    }
     if (props.tool === "browser_screenshot") return i18n.t("ui.tool.browser.screenshot")
     if (props.tool === "browser_snapshot") return i18n.t("ui.tool.browser.read")
     if (props.tool === "browser_inspect") {

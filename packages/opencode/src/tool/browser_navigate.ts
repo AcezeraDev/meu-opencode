@@ -1,5 +1,6 @@
 import { Effect, Schema } from "effect"
 import { Browser } from "@/browser/session"
+import { BrowserBlocked } from "@/browser/blocked"
 import { BrowserPage } from "@/browser/page"
 import * as Tool from "./tool"
 import DESCRIPTION from "./browser_navigate.txt"
@@ -14,11 +15,15 @@ const ACTIONS = [
   "close_tab",
   "list_tabs",
   "close_browser",
+  // Last on purpose: strict function calling backends fill an omitted enum
+  // with its first value, and this one hands the page away.
+  "open_external",
 ] as const
 
 export const Parameters = Schema.Struct({
   url: Schema.optional(Schema.String).annotate({
-    description: "The URL to open. Required for goto and new_tab. https:// is assumed when no scheme is given.",
+    description:
+      "The URL to open. Required for goto and new_tab. For open_external it defaults to the current page. https:// is assumed when no scheme is given.",
   }),
   action: Schema.optional(Schema.Literals(ACTIONS)).annotate({
     description: "What to do. Defaults to goto when a url is given, otherwise list_tabs.",
@@ -42,7 +47,13 @@ interface Metadata {
   url?: string
   tab?: string
   refs?: number
+  /** The browser a page was handed to; empty for the system default. */
+  handoff?: string
+  /** Why the site was considered to have blocked the built-in browser. */
+  blocked?: string
 }
+
+const NAVIGATIONS = new Set(["goto", "new_tab", "back", "forward", "reload"])
 
 function normalize(url: string) {
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)) return url
@@ -87,6 +98,28 @@ export const BrowserNavigateTool = Tool.define(
             return { output: BrowserPage.renderStatus(status), title: "Browser tabs", metadata: { action } }
           }
 
+          if (action === "open_external") {
+            // Never starts the browser: with nothing open, the url must say what to open.
+            const active = url ? undefined : yield* browser.current()
+            const target = url ?? (active ? yield* Effect.promise(() => active.url()) : undefined)
+            if (!target || !/^https?:\/\//.test(target)) {
+              throw new Error("open_external needs an http(s) url, or an http(s) page open in the browser.")
+            }
+            yield* ctx.ask({
+              permission: "browser",
+              patterns: [target],
+              always: ["*"],
+              metadata: { action, url: target },
+            })
+            const handoff = yield* browser.handoff(target)
+            if (handoff.error) throw new Error(`Could not open ${target} in the user's browser: ${handoff.error}`)
+            return {
+              output: BrowserPage.renderHandoff({ url: target, handoff }),
+              title: `Opened in ${handoff.browser ?? "the default browser"}`,
+              metadata: { action, url: target, handoff: handoff.browser ?? "" },
+            }
+          }
+
           if (action === "close_browser") {
             yield* browser.shutdown()
             return { output: "Browser closed.", title: "Browser closed", metadata: { action } }
@@ -113,14 +146,44 @@ export const BrowserNavigateTool = Tool.define(
           const waitUntil = params.waitUntil ?? "load"
           const timeout = yield* browser.timeout()
 
+          let refusal: ReturnType<typeof BrowserBlocked.refused>
           if (action === "goto" || action === "new_tab") {
-            yield* Effect.promise(() => tab.navigate(url!, waitUntil, timeout))
+            const failure = yield* Effect.promise(() =>
+              tab.navigate(url!, waitUntil, timeout).then(
+                () => undefined,
+                (error: unknown) => (error instanceof Error ? error : new Error(String(error))),
+              ),
+            )
+            refusal = failure ? BrowserBlocked.refused(failure.message) : undefined
+            if (failure && !refusal) throw failure
           } else if (action === "back") {
             yield* Effect.promise(() => tab.history(-1, waitUntil, timeout))
           } else if (action === "forward") {
             yield* Effect.promise(() => tab.history(1, waitUntil, timeout))
           } else if (action === "reload") {
             yield* Effect.promise(() => tab.reload(waitUntil, timeout))
+          }
+
+          // A bot wall is not worth an outline: the page goes to the user's own
+          // browser, and the model is told to leave the site to them.
+          if (NAVIGATIONS.has(action)) {
+            const requested = action === "goto" || action === "new_tab" ? url : undefined
+            const handed = yield* BrowserPage.handOver(browser, tab, requested, refusal)
+            if (handed) {
+              const { handoff } = handed
+              return {
+                output: handed.output,
+                title: handoff.error
+                  ? `Blocked: ${handed.block.reason}`
+                  : `Opened in ${handoff.browser ?? "the default browser"}`,
+                metadata: {
+                  action,
+                  url: handed.url,
+                  blocked: handed.block.reason,
+                  ...(handoff.error ? {} : { handoff: handoff.browser ?? "" }),
+                },
+              }
+            }
           }
 
           const current = yield* Effect.promise(() => tab.url())

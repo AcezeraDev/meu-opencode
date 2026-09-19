@@ -82,6 +82,7 @@ import {
 } from "./middleware/authorization"
 import { EventApi } from "./groups/event"
 import { PtyConnectApi } from "./groups/pty"
+import { BrowserBridgeApi } from "./groups/browser-bridge"
 import { eventHandlers } from "./handlers/event"
 import { configHandlers } from "./handlers/config"
 import { controlHandlers } from "./handlers/control"
@@ -96,6 +97,7 @@ import { projectHandlers } from "./handlers/project"
 import { projectCopyHandlers } from "./handlers/project-copy"
 import { providerHandlers } from "./handlers/provider"
 import { ptyConnectHandlers, ptyHandlers } from "./handlers/pty"
+import { browserBridgeHandlers } from "./handlers/browser-bridge"
 import { questionHandlers } from "./handlers/question"
 import { sessionHandlers } from "./handlers/session"
 import { syncHandlers } from "./handlers/sync"
@@ -151,6 +153,12 @@ const eventApiRoutes = HttpApiBuilder.layer(EventApi).pipe(
 const ptyConnectApiRoutes = HttpApiBuilder.layer(PtyConnectApi).pipe(
   Layer.provide(ptyConnectHandlers),
   Layer.provide([ptyConnectHttpApiAuthLayer, workspaceRoutingLive, instanceContextLayer]),
+)
+// Global, directory-free, token-gated: no auth or workspace routing, just the
+// WebSocket constructor the upgrade needs.
+const browserBridgeApiRoutes = HttpApiBuilder.layer(BrowserBridgeApi).pipe(
+  Layer.provide(browserBridgeHandlers),
+  Layer.provide(Socket.layerWebSocketConstructorGlobal),
 )
 const instanceApiRoutes = HttpApiBuilder.layer(InstanceHttpApi).pipe(
   Layer.provide([
@@ -279,6 +287,7 @@ export function createRoutes(
     rootApiRoutes,
     eventApiRoutes,
     ptyConnectApiRoutes,
+    browserBridgeApiRoutes,
     instanceRoutes,
     serverRoutes,
     docRoute,

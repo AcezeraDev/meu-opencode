@@ -1,7 +1,7 @@
 import fs from "fs"
 import os from "os"
 import path from "path"
-import { describe, expect, test } from "bun:test"
+import { afterAll, describe, expect, test } from "bun:test"
 import { Effect } from "effect"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { addressToUrl, Browser, type BrowserEvent } from "@/browser/session"
@@ -25,6 +25,20 @@ const file = path.join(directory, "page.html")
 fs.writeFileSync(file, PAGE)
 const pageUrl = `file://${file.replace(/\\/g, "/")}`
 
+// Handing a page over must never open the real browser during tests, so the
+// "browser" is a harmless program that takes a URL argument and exits.
+const FAKE_BROWSER = process.platform === "win32" ? "C:\\Windows\\System32\\where.exe" : "/usr/bin/true"
+const FAKE_NAME = path.parse(FAKE_BROWSER).name
+
+// Only web pages can be handed over, so those tests need one.
+const server = Bun.serve({
+  port: 0,
+  hostname: "127.0.0.1",
+  fetch: () => new Response(PAGE, { headers: { "content-type": "text/html; charset=utf-8" } }),
+})
+const webUrl = `http://127.0.0.1:${server.port}/`
+afterAll(() => server.stop(true))
+
 const it = testEffect(
   LayerNode.compile(LayerNode.group([Browser.node]), [
     [
@@ -32,7 +46,8 @@ const it = testEffect(
       TestConfig.layer({
         directories: () => InstanceState.directory.pipe(Effect.map((dir) => [path.join(dir, ".opencode")])),
         // A profile of its own keeps the test from touching the real one.
-        get: () => Effect.succeed({ browser: { headless: true, profile: "test", timeout: 20_000 } }),
+        get: () =>
+          Effect.succeed({ browser: { headless: true, profile: "test", timeout: 20_000, external: FAKE_BROWSER } }),
       }),
     ],
   ]),
@@ -69,6 +84,38 @@ describe("address bar", () => {
     expect(addressToUrl("gatos fofos")).toBe("https://www.google.com/search?q=gatos%20fofos")
     expect(addressToUrl("googl")).toBe("https://www.google.com/search?q=googl")
   })
+})
+
+describe("handing pages over", () => {
+  it.instance("opens web pages in the person's own browser, once per site when automatic", () =>
+    Effect.gen(function* () {
+      const browser = yield* Browser.Service
+
+      expect(yield* browser.handoff("https://example.com/a", { once: true })).toEqual({
+        browser: FAKE_NAME,
+        opened: true,
+      })
+      // An agent hitting the same wall again must not open a tab per attempt.
+      expect(yield* browser.handoff("https://example.com/b", { once: true })).toEqual({
+        browser: FAKE_NAME,
+        opened: false,
+      })
+      // Another site still goes, and so does anything asked for explicitly.
+      expect((yield* browser.handoff("https://example.org/", { once: true })).opened).toBe(true)
+      expect((yield* browser.handoff("https://example.com/c")).opened).toBe(true)
+    }),
+  )
+
+  it.instance("refuses anything that is not a web page", () =>
+    Effect.gen(function* () {
+      const browser = yield* Browser.Service
+      for (const url of ["file:///C:/Windows/win.ini", "javascript:alert(1)", "not an address"]) {
+        const result = yield* browser.handoff(url)
+        expect(result.opened).toBe(false)
+        expect(result.error).toContain("http")
+      }
+    }),
+  )
 })
 
 describeBrowser("browser service", () => {
@@ -206,7 +253,10 @@ describeBrowser("browser service", () => {
 
         // Closing the browser is itself news to anyone watching.
         yield* browser.shutdown()
-        expect(events.at(-1)).toEqual({ type: "status", status: { running: false, headless: true, tabs: [] } })
+        expect(events.at(-1)).toEqual({
+          type: "status",
+          status: { running: false, mode: "process", headless: true, tabs: [] },
+        })
         unsubscribe()
       }),
     60_000,
@@ -235,6 +285,29 @@ describeBrowser("browser service", () => {
         expect(html.html).not.toContain("oc-agent-cursor")
 
         unsubscribe()
+        yield* browser.shutdown()
+      }),
+    60_000,
+  )
+
+  it.instance(
+    "hands the page on screen to the person's own browser from the toolbar",
+    () =>
+      Effect.gen(function* () {
+        const browser = yield* Browser.Service
+
+        // Nothing open, nothing to hand over, and no browser started for it.
+        expect((yield* browser.control({ action: "open_external" })).running).toBe(false)
+
+        const tab = yield* browser.tab()
+        yield* Effect.promise(() => tab.navigate(webUrl, "load", 20_000))
+        expect((yield* browser.status()).external).toBe(FAKE_NAME)
+
+        const after = yield* browser.control({ action: "open_external" })
+        expect(after.url).toBe(webUrl)
+        // The toolbar's handoff counts: the agent reaching the same site next does not open another tab.
+        expect((yield* browser.handoff(`${webUrl}other`, { once: true })).opened).toBe(false)
+
         yield* browser.shutdown()
       }),
     60_000,

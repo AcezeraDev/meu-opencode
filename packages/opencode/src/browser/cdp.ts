@@ -16,6 +16,23 @@ export interface CDPEvent {
 
 type Handler = (params: Record<string, unknown>) => void
 
+/**
+ * What a {@link Tab} needs from whatever carries the DevTools protocol.
+ *
+ * A tab does not care whether the protocol travels over a WebSocket straight to
+ * a browser's debugging port ({@link CDPConnection}) or is relayed through the
+ * browser extension. Both offer this same surface, so the transport can be
+ * swapped without the tab knowing.
+ */
+export interface CDPTransport {
+  connect(): Promise<void>
+  send<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>
+  on(method: string, handler: Handler): () => void
+  once(method: string, timeout: number): Promise<Record<string, unknown>>
+  close(): void
+  readonly connected: boolean
+}
+
 export class CDPError extends Error {
   constructor(
     readonly method: string,
