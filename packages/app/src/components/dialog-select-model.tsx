@@ -26,6 +26,7 @@ const isFree = (provider: string, cost: { input: number } | undefined) =>
   provider === "opencode" && (!cost || cost.input === 0)
 
 type ModelState = ReturnType<typeof useLocal>["model"]
+export type ModelSelectorState = Pick<ModelState, "current" | "list" | "visible" | "set">
 type ModelItem = ReturnType<ModelState["list"]>[number]
 
 const modelKey = (model: ModelItem) => `${model.provider.id}:${model.id}`
@@ -48,7 +49,7 @@ const ModelList: Component<{
   class?: string
   onSelect: () => void
   action?: JSX.Element
-  model?: ModelState
+  model?: ModelSelectorState
 }> = (props) => {
   const model = props.model ?? useLocal().model
   const language = useLanguage()
@@ -117,7 +118,7 @@ type Dismiss = "escape" | "outside" | "select" | "manage" | "provider"
 
 export function ModelSelectorPopover(props: {
   provider?: string
-  model?: ModelState
+  model?: ModelSelectorState
   trigger: ModelSelectorTrigger
   onClose?: (cause: "escape" | "select") => void
 }) {
@@ -223,7 +224,7 @@ export function ModelSelectorPopover(props: {
 
 export function ModelSelectorPopoverV2(props: {
   provider?: string
-  model?: ModelState
+  model?: ModelSelectorState
   trigger: ModelSelectorTrigger
   onClose?: () => void
 }) {
@@ -253,7 +254,7 @@ export function ModelSelectorPopoverV2(props: {
 
 function createModelSelectorController(input: {
   provider: () => string | undefined
-  model?: ModelState
+  model?: ModelSelectorState
   onSelect: () => void
 }) {
   const model = input.model ?? useLocal().model

@@ -1571,7 +1571,18 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
 
   return (
     <Show when={!hideQuestion()}>
-      <div data-component="tool-part-wrapper" data-timeline-part-id={part().id}>
+      <div
+        data-component="tool-part-wrapper"
+        data-tool={part().tool}
+        data-activity-state={
+          part().state.status === "pending" || part().state.status === "running"
+            ? "active"
+            : part().state.status === "error"
+              ? "error"
+              : "complete"
+        }
+        data-timeline-part-id={part().id}
+      >
         <Switch>
           <Match when={part().state.status === "error" && (part().state as any).error}>
             {(error) => {
@@ -1796,6 +1807,8 @@ ToolRegistry.register({
           icon="glasses"
           trigger={{
             title: i18n.t("ui.tool.read"),
+            activeTitle: i18n.t("ui.tool.read.active"),
+            doneTitle: i18n.t("ui.tool.read.done"),
             subtitle: props.input.filePath ? getFilename(props.input.filePath) : "",
             args,
           }}
@@ -1823,7 +1836,12 @@ ToolRegistry.register({
       <BasicTool
         {...props}
         icon="bullet-list"
-        trigger={{ title: i18n.t("ui.tool.list"), subtitle: getDirectory(props.input.path || "/") }}
+        trigger={{
+          title: i18n.t("ui.tool.list"),
+          activeTitle: i18n.t("ui.tool.list.active"),
+          doneTitle: i18n.t("ui.tool.list.done"),
+          subtitle: getDirectory(props.input.path || "/"),
+        }}
       >
         <Show when={props.output}>
           <div
@@ -1851,6 +1869,8 @@ ToolRegistry.register({
         icon="magnifying-glass-menu"
         trigger={{
           title: i18n.t("ui.tool.glob"),
+          activeTitle: i18n.t("ui.tool.glob.active"),
+          doneTitle: i18n.t("ui.tool.glob.done"),
           subtitle: getDirectory(props.input.path || "/"),
           args: props.input.pattern ? ["pattern=" + props.input.pattern] : [],
         }}
@@ -1884,6 +1904,8 @@ ToolRegistry.register({
         icon="magnifying-glass-menu"
         trigger={{
           title: i18n.t("ui.tool.grep"),
+          activeTitle: i18n.t("ui.tool.grep.active"),
+          doneTitle: i18n.t("ui.tool.grep.done"),
           subtitle: getDirectory(props.input.path || "/"),
           args,
         }}
@@ -1923,9 +1945,13 @@ ToolRegistry.register({
           <div data-slot="basic-tool-tool-info-structured">
             <div data-slot="basic-tool-tool-info-main">
               <span data-slot="basic-tool-tool-title">
-                <TextShimmer text={i18n.t("ui.tool.webfetch")} active={pending()} />
+                <ToolStatusTitle
+                  active={pending()}
+                  activeText={i18n.t("ui.tool.webfetch.active")}
+                  doneText={i18n.t("ui.tool.webfetch.done")}
+                />
               </span>
-              <Show when={!pending() && url()}>
+              <Show when={url()}>
                 <a
                   data-slot="basic-tool-tool-subtitle"
                   class="clickable subagent-link"
@@ -1967,6 +1993,8 @@ ToolRegistry.register({
         icon="window-cursor"
         trigger={{
           title: title(),
+          activeTitle: i18n.t("ui.tool.websearch.active"),
+          doneTitle: i18n.t("ui.tool.websearch.done"),
           subtitle: query(),
           subtitleClass: "exa-tool-query",
         }}
@@ -2115,7 +2143,11 @@ ToolRegistry.register({
           <div data-slot="basic-tool-tool-info-structured">
             <div data-slot="basic-tool-tool-info-main">
               <span data-slot="basic-tool-tool-title">
-                <TextShimmer text={i18n.t("ui.tool.shell")} active={pending()} />
+                <ToolStatusTitle
+                  active={pending()}
+                  activeText={i18n.t("ui.tool.shell.active")}
+                  doneText={i18n.t("ui.tool.shell.done")}
+                />
               </span>
               <Show when={!open() && props.input.command}>
                 <ShellSubmessage text={props.input.command} animate={sawPending} />
@@ -2213,11 +2245,13 @@ ToolRegistry.register({
               <div data-slot="message-part-title-area">
                 <div data-slot="message-part-title">
                   <span data-slot="message-part-title-text">
-                    <TextShimmer text={i18n.t("ui.messagePart.title.edit")} active={pending()} />
+                    <ToolStatusTitle
+                      active={pending()}
+                      activeText={i18n.t("ui.messagePart.title.edit.active")}
+                      doneText={i18n.t("ui.messagePart.title.edit.done")}
+                    />
                   </span>
-                  <Show when={!pending()}>
-                    <span data-slot="message-part-title-filename">{filename()}</span>
-                  </Show>
+                  <span data-slot="message-part-title-filename">{filename()}</span>
                 </div>
                 <Show when={!pending() && props.input.filePath?.includes("/")}>
                   <div data-slot="message-part-path">
@@ -2280,11 +2314,13 @@ ToolRegistry.register({
               <div data-slot="message-part-title-area">
                 <div data-slot="message-part-title">
                   <span data-slot="message-part-title-text">
-                    <TextShimmer text={i18n.t("ui.messagePart.title.write")} active={pending()} />
+                    <ToolStatusTitle
+                      active={pending()}
+                      activeText={i18n.t("ui.messagePart.title.write.active")}
+                      doneText={i18n.t("ui.messagePart.title.write.done")}
+                    />
                   </span>
-                  <Show when={!pending()}>
-                    <span data-slot="message-part-title-filename">{filename()}</span>
-                  </Show>
+                  <span data-slot="message-part-title-filename">{filename()}</span>
                 </div>
                 <Show when={!pending() && props.input.filePath?.includes("/")}>
                   <div data-slot="message-part-path">
@@ -2648,12 +2684,6 @@ ToolRegistry.register({
   render: WebVideoToolCard,
 })
 
-for (const name of [
-  "browser_navigate",
-  "browser_snapshot",
-  "browser_act",
-  "browser_screenshot",
-  "browser_inspect",
-]) {
+for (const name of ["browser_navigate", "browser_snapshot", "browser_act", "browser_screenshot", "browser_inspect"]) {
   ToolRegistry.register({ name, render: BrowserToolCard })
 }

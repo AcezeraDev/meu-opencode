@@ -1,8 +1,8 @@
 import { useI18n } from "@opencode-ai/ui/context/i18n"
 import { createMemo, Show } from "solid-js"
 import { BasicTool } from "./basic-tool"
-import { TextShimmer } from "@opencode-ai/ui/text-shimmer"
 import type { ToolProps } from "./message-part"
+import { ToolStatusTitle } from "./tool-status-title"
 
 /**
  * One card shape for every browser tool.
@@ -13,19 +13,25 @@ import type { ToolProps } from "./message-part"
  * the raw output is a page outline that only the model needs.
  */
 
-const ACT_LABELS: Record<string, string> = {
-  click: "ui.tool.browser.action.click",
-  double_click: "ui.tool.browser.action.double_click",
-  right_click: "ui.tool.browser.action.right_click",
-  hover: "ui.tool.browser.action.hover",
-  fill: "ui.tool.browser.action.fill",
-  type: "ui.tool.browser.action.type",
-  press: "ui.tool.browser.action.press",
-  select: "ui.tool.browser.action.select",
-  check: "ui.tool.browser.action.check",
-  uncheck: "ui.tool.browser.action.uncheck",
-  scroll: "ui.tool.browser.action.scroll",
-  wait_for: "ui.tool.browser.action.wait_for",
+const ACT_LABELS: Record<string, { active: string; done: string }> = {
+  click: { active: "ui.tool.browser.action.click.active", done: "ui.tool.browser.action.click.done" },
+  double_click: {
+    active: "ui.tool.browser.action.double_click.active",
+    done: "ui.tool.browser.action.double_click.done",
+  },
+  right_click: {
+    active: "ui.tool.browser.action.right_click.active",
+    done: "ui.tool.browser.action.right_click.done",
+  },
+  hover: { active: "ui.tool.browser.action.hover.active", done: "ui.tool.browser.action.hover.done" },
+  fill: { active: "ui.tool.browser.action.fill.active", done: "ui.tool.browser.action.fill.done" },
+  type: { active: "ui.tool.browser.action.type.active", done: "ui.tool.browser.action.type.done" },
+  press: { active: "ui.tool.browser.action.press.active", done: "ui.tool.browser.action.press.done" },
+  select: { active: "ui.tool.browser.action.select.active", done: "ui.tool.browser.action.select.done" },
+  check: { active: "ui.tool.browser.action.check.active", done: "ui.tool.browser.action.check.done" },
+  uncheck: { active: "ui.tool.browser.action.uncheck.active", done: "ui.tool.browser.action.uncheck.done" },
+  scroll: { active: "ui.tool.browser.action.scroll.active", done: "ui.tool.browser.action.scroll.done" },
+  wait_for: { active: "ui.tool.browser.action.wait_for.active", done: "ui.tool.browser.action.wait_for.done" },
 }
 
 const INSPECT_LABELS: Record<string, string> = {
@@ -56,27 +62,41 @@ export function BrowserToolCard(props: ToolProps) {
     return typeof fromInput === "string" ? fromInput : ""
   })
 
-  const heading = createMemo(() => {
+  const headings = createMemo(() => {
     // A page the site refused to the agent went to the user's own browser.
     const handoff = props.metadata?.handoff
     if (typeof handoff === "string") {
-      return i18n.t("ui.tool.browser.handoff", { browser: handoff || i18n.t("ui.browserPane.defaultBrowser") })
+      const browser = handoff || i18n.t("ui.browserPane.defaultBrowser")
+      return {
+        active: i18n.t("ui.tool.browser.handoff.active", { browser }),
+        done: i18n.t("ui.tool.browser.handoff", { browser }),
+      }
     }
-    if (props.tool === "browser_screenshot") return i18n.t("ui.tool.browser.screenshot")
-    if (props.tool === "browser_snapshot") return i18n.t("ui.tool.browser.read")
+    if (props.tool === "browser_screenshot")
+      return {
+        active: i18n.t("ui.tool.browser.screenshot.active"),
+        done: i18n.t("ui.tool.browser.screenshot.done"),
+      }
+    if (props.tool === "browser_snapshot")
+      return { active: i18n.t("ui.tool.browser.read"), done: i18n.t("ui.tool.browser.read.done") }
     if (props.tool === "browser_inspect") {
       const what = typeof props.input?.what === "string" ? props.input.what : "console"
-      return i18n.t(INSPECT_LABELS[what] ?? "ui.tool.browser")
+      const key = INSPECT_LABELS[what]
+      if (!key) return { active: i18n.t("ui.tool.browser.active"), done: i18n.t("ui.tool.browser.done") }
+      return { active: i18n.t(`${key}.active`), done: i18n.t(`${key}.done`) }
     }
     if (props.tool === "browser_act") {
       const action = typeof props.input?.action === "string" ? props.input.action : ""
-      const key = ACT_LABELS[action]
-      return key ? i18n.t(key) : i18n.t("ui.tool.browser")
+      const keys = ACT_LABELS[action]
+      if (!keys) return { active: i18n.t("ui.tool.browser.active"), done: i18n.t("ui.tool.browser.done") }
+      return { active: i18n.t(keys.active), done: i18n.t(keys.done) }
     }
     const action = typeof props.input?.action === "string" ? props.input.action : ""
-    if (action === "list_tabs") return i18n.t("ui.tool.browser.tabs")
-    if (action === "close_browser") return i18n.t("ui.tool.browser.closed")
-    return i18n.t("ui.tool.browser.navigate")
+    if (action === "list_tabs")
+      return { active: i18n.t("ui.tool.browser.tabs.active"), done: i18n.t("ui.tool.browser.tabs.done") }
+    if (action === "close_browser")
+      return { active: i18n.t("ui.tool.browser.closed.active"), done: i18n.t("ui.tool.browser.closed") }
+    return { active: i18n.t("ui.tool.browser.navigate"), done: i18n.t("ui.tool.browser.navigate.done") }
   })
 
   /** For an interaction, the element is more informative than the page. */
@@ -98,7 +118,7 @@ export function BrowserToolCard(props: ToolProps) {
         <div data-slot="basic-tool-tool-info-structured">
           <div data-slot="basic-tool-tool-info-main">
             <span data-slot="basic-tool-tool-title">
-              <TextShimmer text={heading()} active={pending()} />
+              <ToolStatusTitle active={pending()} activeText={headings().active} doneText={headings().done} />
             </span>
             <Show when={subtitle()}>
               <span data-slot="basic-tool-tool-subtitle">{subtitle()}</span>

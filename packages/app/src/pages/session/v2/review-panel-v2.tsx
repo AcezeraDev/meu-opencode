@@ -43,6 +43,7 @@ export type ReviewPanelV2Props = {
   activeFile?: string
   onSelectFile: (path: string) => void
   diffStyle: SessionReviewDiffStyle
+  splitDiffDisabled?: boolean
   onDiffStyleChange?: (style: SessionReviewDiffStyle) => void
   state: ReviewPanelV2State
   onLineComment?: (comment: SessionReviewLineComment) => void
@@ -134,6 +135,7 @@ export function ReviewPanelV2(props: ReviewPanelV2Props) {
       files={filteredFiles()}
       onSelectFile={props.onSelectFile}
       diffStyle={props.diffStyle}
+      splitDiffDisabled={props.splitDiffDisabled}
       onDiffStyleChange={props.onDiffStyleChange}
       expandMode={props.state.expandMode()}
       onExpandModeChange={props.state.setExpandMode}

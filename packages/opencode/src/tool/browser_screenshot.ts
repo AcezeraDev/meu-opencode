@@ -22,6 +22,8 @@ type Params = Schema.Schema.Type<typeof Parameters>
 interface Metadata {
   url: string
   bytes: number
+  /** Marks the result as a view of the page, which a later outline supersedes in the model's context. */
+  page?: string
 }
 
 export const BrowserScreenshotTool = Tool.define(
@@ -42,16 +44,24 @@ export const BrowserScreenshotTool = Tool.define(
           const selector = BrowserPage.selectorFor(params)
           const buffer = yield* Effect.promise(() => tab.screenshot({ selector, fullPage: params.fullPage }))
           const title = yield* Effect.promise(() => tab.title())
+          // Many models cannot see images; the text the picture shows lets
+          // them read it anyway, and costs the others little.
+          const text = selector
+            ? ""
+            : yield* Effect.promise(() => tab.visibleText({ fullPage: params.fullPage === true }))
 
           return {
-            output: `Screenshot of ${url} attached.`,
+            output: [
+              `Screenshot of ${url} attached.`,
+              ...(text ? ["", "Text shown in it, top to bottom (for reading when images cannot be seen):", text] : []),
+            ].join("\n"),
             title: title || url,
-            metadata: { url, bytes: buffer.byteLength },
+            metadata: { url, bytes: buffer.byteLength, page: "screenshot" },
             attachments: [
               {
                 type: "file" as const,
-                mime: "image/png",
-                url: `data:image/png;base64,${buffer.toString("base64")}`,
+                mime: "image/jpeg",
+                url: `data:image/jpeg;base64,${buffer.toString("base64")}`,
               },
             ],
           }

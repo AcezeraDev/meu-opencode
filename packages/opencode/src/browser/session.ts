@@ -10,6 +10,7 @@ import { InstanceState } from "@/effect/instance-state"
 import { CDPConnection } from "./cdp"
 import { BrowserInstall, type LaunchTarget } from "./install"
 import { BrowserBridge, type Bridge, type BridgeTarget, type TargetEvent } from "./bridge"
+import { BrowserPdf } from "./pdf"
 import { asRecord, asText, type CreateTargetResult, type TargetInfo, type VersionInfo } from "./protocol"
 import { Tab, type Activity, type Frame, type TabHooks, type UserInput } from "./tab"
 
@@ -67,6 +68,12 @@ export type Command =
 /** Bounds for the viewport the live view asks for, whatever size its pane is. */
 const VIEWPORT_MIN = { width: 320, height: 240 }
 const VIEWPORT_MAX = { width: 2560, height: 1600 }
+/**
+ * Streamed pictures are capped at the pane's size with some headroom for dense
+ * screens: a window larger than the pane would otherwise send pixels nobody
+ * sees, and through the extension they share one socket with every command.
+ */
+const CAST_HEADROOM = 1.5
 
 const DEFAULT_TIMEOUT = 30_000
 const DEFAULT_VIEWPORT = { width: 1280, height: 800 }
@@ -109,7 +116,15 @@ interface State {
   /** The tab currently being streamed to the live view. */
   cast?: string
   statusTimer?: ReturnType<typeof setTimeout>
-  /** The live view's size, applied to every tab so pages fill the pane. */
+  /** The last status sent to the live view, so an unchanged one is not sent again. */
+  announced?: string
+  /**
+   * The live view's size. It caps the pictures that are streamed to it and
+   * nothing else: the page is laid out at {@link State.viewport}, whatever the
+   * pane's shape, so dragging the pane's edge cannot relayout a page the agent
+   * is in the middle of working on, and the same site behaves the same on
+   * every screen. The pane scales what it receives to fit.
+   */
   fit?: { width: number; height: number }
 }
 
@@ -148,6 +163,15 @@ export interface Interface {
    * `once`, a host handed over in the last few minutes is not opened again.
    */
   readonly handoff: (url: string, options?: { once?: boolean }) => Effect.Effect<Handoff>
+  /** Whether this session launches its own browser or drives the person's through the extension. */
+  readonly mode: () => Effect.Effect<"process" | "extension">
+  /**
+   * Takes a tab back from a PDF it landed on, to the page it was on, so the
+   * agent can carry on there. Driving the person's own browser this is also
+   * how the agent gets the tab back, since the browser's PDF viewer throws the
+   * debugger off. Resolves to whether the tab is drivable again.
+   */
+  readonly leavePdf: (tab: Tab) => Effect.Effect<boolean>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Browser") {}
@@ -163,6 +187,24 @@ export class BrowserStartError extends Error {
     )
     this.name = "BrowserStartError"
   }
+}
+
+/**
+ * Why a tab of the person's browser could not be attached, in terms the agent
+ * can act on: the browser keeps extensions off its PDF viewer and its own pages.
+ */
+function attachError(s: State, targetId: string, error: unknown) {
+  const url = s.targets.find((t) => t.targetId === targetId)?.url ?? ""
+  const reason = error instanceof Error ? error.message : String(error)
+  if (BrowserPdf.looksLikePdf(url) || /pdf/i.test(reason)) {
+    return new Error(
+      `Tab ${targetId} shows a PDF (${url || "unknown address"}), which the browser does not let extensions drive. To read it, call browser_navigate with its URL: PDFs are downloaded and read directly.`,
+    )
+  }
+  if (/^(chrome|brave|edge|about|devtools|chrome-extension):/i.test(url) || /chrome-extension:\/\//i.test(reason)) {
+    return new Error(`Tab ${targetId} shows a browser page (${url}), which extensions may not drive. Use another tab.`)
+  }
+  return error instanceof Error ? error : new Error(reason)
 }
 
 function sleep(ms: number) {
@@ -271,8 +313,12 @@ const layer = Layer.effect(
         const options = cfg.browser ?? {}
         const bridge = yield* bridgeService.get()
 
+        const mode = options.mode ?? "process"
         const s: State = {
-          headless: options.headless ?? true,
+          // The person's own browser is a window on their screen, so the agent
+          // always has an audience there: its cursor shows whether or not the
+          // live view is open.
+          headless: mode === "extension" ? false : (options.headless ?? true),
           timeout: options.timeout ?? DEFAULT_TIMEOUT,
           viewport: {
             width: options.viewport?.width ?? DEFAULT_VIEWPORT.width,
@@ -281,7 +327,7 @@ const layer = Layer.effect(
           profileDir: path.join(Global.Path.data, "browser", options.profile ?? "default"),
           options,
           external: BrowserInstall.external(options),
-          mode: options.mode ?? "process",
+          mode,
           bridge,
           targets: [],
           handed: new Map(),
@@ -379,7 +425,16 @@ const layer = Layer.effect(
       if (s.statusTimer) clearTimeout(s.statusTimer)
       s.statusTimer = setTimeout(() => {
         s.statusTimer = undefined
-        void statusOf(s).then((status) => emit(s, { type: "status", status }))
+        void statusOf(s).then((status) => {
+          // The person's own browser reports a title or address change for
+          // every tab in it, most of which leave this status exactly as it was.
+          // Sending it again would have the pane rebuild its tab strip for
+          // nothing, which with a browser full of tabs is felt.
+          const serialized = JSON.stringify(status)
+          if (serialized === s.announced) return
+          s.announced = serialized
+          emit(s, { type: "status", status })
+        })
       }, STATUS_DEBOUNCE)
     }
 
@@ -392,10 +447,21 @@ const layer = Layer.effect(
       }
     }
 
-    /** Streams the active tab while anyone watches, and nothing otherwise. */
-    async function recast(s: State) {
+    function castSize(s: State) {
+      if (!s.fit) return undefined
+      return {
+        width: Math.min(VIEWPORT_MAX.width, Math.round(s.fit.width * CAST_HEADROOM)),
+        height: Math.min(VIEWPORT_MAX.height, Math.round(s.fit.height * CAST_HEADROOM)),
+      }
+    }
+
+    /**
+     * Streams the active tab while anyone watches, and nothing otherwise.
+     * `restart` streams it afresh, for when the pane changed size.
+     */
+    async function recast(s: State, restart = false) {
       const wanted = s.listeners.size > 0 && live(s) ? s.active : undefined
-      if (s.cast === wanted) return
+      if (s.cast === wanted && !restart) return
       const previous = s.cast ? s.tabs.get(s.cast) : undefined
       s.cast = wanted
       if (previous?.connected) await previous.stopScreencast()
@@ -403,7 +469,7 @@ const layer = Layer.effect(
       if (!next?.connected) return
       await next.startScreencast((frame) => {
         if (s.cast === next.id) emit(s, { type: "frame", frame })
-      })
+      }, castSize(s))
       // Chromium only sends frames on change, so a still page needs one sent by hand.
       const first = await next.frame().catch(() => undefined)
       if (first && s.cast === next.id) emit(s, { type: "frame", frame: first })
@@ -467,8 +533,14 @@ const layer = Layer.effect(
         s.mode === "extension"
           ? (async () => {
               const connection = s.bridge!.connection(targetId)
-              await connection.connect()
-              return Tab.attachTransport(targetId, targetId, connection, hooksFor(s))
+              try {
+                await connection.connect()
+                return await Tab.attachTransport(targetId, targetId, connection, hooksFor(s))
+              } catch (error) {
+                // A transport that never came up must not be handed out again.
+                connection.close()
+                throw attachError(s, targetId, error)
+              }
             })()
           : Tab.attach(
               `tab_${++s.counter}`,
@@ -478,7 +550,12 @@ const layer = Layer.effect(
             )
       const attached = open
         .then(async (tab) => {
-          if (s.fit) await tab.resize(s.fit.width, s.fit.height).catch(() => {})
+          // Every tab lays out at its own window's size and nothing else: the
+          // browser we launch is opened at the configured viewport, and the
+          // person's own window is theirs. The pane scales what it is sent.
+          // This also undoes an emulated size a previous version forced on it,
+          // which is worth doing on a browser we reconnected to.
+          await tab.clearResize()
           s.tabs.set(tab.id, tab)
           return tab
         })
@@ -691,11 +768,14 @@ const layer = Layer.effect(
         }).pipe(Effect.orDie)
         changed(s)
       }
-      // Tabs the user or the site closed leave the active id dangling.
-      if (s.active && !s.tabs.get(s.active)?.connected) {
-        s.tabs.delete(s.active)
-        s.active = undefined
+      // Tabs the user or the site closed, or that the browser took out of
+      // reach, are let go properly, so attaching to them again starts afresh.
+      for (const [id, item] of s.tabs) {
+        if (item.connected) continue
+        item.close()
+        s.tabs.delete(id)
       }
+      if (s.active && !s.tabs.has(s.active)) s.active = undefined
       if (!s.active) {
         const existing = [...s.tabs.values()].find((tab) => tab.connected)
         if (existing) {
@@ -703,9 +783,13 @@ const layer = Layer.effect(
           changed(s)
         } else if (s.mode === "extension") {
           // Reuse the tab the person is on rather than opening a blank one.
+          // One the debugger may not attach to (a PDF, a browser page) must
+          // not leave the agent stuck: it gets a tab of its own instead.
           const target = s.targets.find((t) => t.active) ?? s.targets[0]
-          if (target) {
-            const adopted = yield* Effect.promise(() => adopt(s, target.targetId))
+          const adopted = target
+            ? yield* Effect.promise(() => adopt(s, target.targetId).catch(() => undefined))
+            : undefined
+          if (adopted) {
             s.active = adopted.id
             changed(s)
           } else yield* Effect.promise(() => newTab(s))
@@ -742,7 +826,14 @@ const layer = Layer.effect(
       // In extension mode the id is a Brave tab that the agent may not have
       // attached to yet, so attach on demand before switching to it.
       if (!found && s.mode === "extension" && s.targets.some((t) => t.targetId === id)) {
-        found = yield* Effect.promise(() => adopt(s, id).catch(() => undefined))
+        const attached = yield* Effect.promise(() =>
+          adopt(s, id).then(
+            (tab) => ({ tab }),
+            (error: unknown) => ({ error: error instanceof Error ? error : new Error(String(error)) }),
+          ),
+        )
+        if ("error" in attached) return yield* Effect.die(attached.error)
+        found = attached.tab
       }
       if (!found) return yield* Effect.die(new Error(`No open tab with id ${id}`))
       s.active = found.id
@@ -822,11 +913,12 @@ const layer = Layer.effect(
         const width = Math.round(Math.min(VIEWPORT_MAX.width, Math.max(VIEWPORT_MIN.width, command.width)))
         const height = Math.round(Math.min(VIEWPORT_MAX.height, Math.max(VIEWPORT_MIN.height, command.height)))
         s.fit = { width, height }
-        // Only resizes a browser that is already open; one started later picks
-        // the size up as its tabs attach.
-        yield* Effect.promise(() =>
-          Promise.all([...s.tabs.values()].map((item) => item.resize(width, height).catch(() => {}))),
-        )
+        // The pane's size says how large the pictures need to be, and nothing
+        // more. Laying the page out at the pane's size instead meant a site
+        // reflowed to a phone layout because someone narrowed a panel, and an
+        // element could move out from under a click the agent had already
+        // aimed. The page keeps the viewport it was configured with.
+        if (s.cast) void recast(s, true).catch(() => {})
         return yield* status()
       }
       if (command.action === "new_tab") {
@@ -880,6 +972,59 @@ const layer = Layer.effect(
       return result
     })
 
+    const mode: Interface["mode"] = Effect.fn("Browser.mode")(function* () {
+      return (yield* InstanceState.get(state)).mode
+    })
+
+    const leavePdf: Interface["leavePdf"] = Effect.fn("Browser.leavePdf")(function* (tab: Tab) {
+      const s = yield* InstanceState.get(state)
+      if (s.mode === "process") {
+        // The browser's own viewer keeps the tab drivable; it just has nothing
+        // to act on. The page before usually comes back from the back/forward
+        // cache, which fires no load event, so the wait follows the navigation.
+        return yield* Effect.promise(async () => {
+          const mark = tab.mark()
+          const went = await tab.step(-1).then(
+            () => true,
+            () => false,
+          )
+          if (!went) return false
+          await tab.settle(mark, s.timeout)
+          return tab.pdf === undefined
+        })
+      }
+      const bridge = s.bridge
+      if (!bridge?.connected) return false
+      const pdf = tab.pdf
+      // An extension from before this existed does not know the request.
+      const went = yield* Effect.promise(() =>
+        bridge.goBack(tab.targetId).then(
+          () => true,
+          () => false,
+        ),
+      )
+      if (!went) return false
+      return yield* Effect.promise(async () => {
+        // The tab stays out of reach until the page before replaces the PDF viewer.
+        const showing = () => s.targets.find((t) => t.targetId === tab.targetId)?.url
+        const deadline = Date.now() + 6000
+        while (pdf && showing() === pdf && Date.now() < deadline) await sleep(150)
+        tab.close()
+        for (const [id, item] of s.tabs) if (item === tab) s.tabs.delete(id)
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const adopted = await adopt(s, tab.targetId).catch(() => undefined)
+          if (adopted) {
+            s.active = adopted.id
+            await adopted.quiet()
+            changed(s)
+            return true
+          }
+          await sleep(400)
+        }
+        return false
+      })
+    })
+
     const input: Interface["input"] = Effect.fn("Browser.input")(function* (event: UserInput) {
       const active = yield* current()
       if (!active) return
@@ -900,6 +1045,8 @@ const layer = Layer.effect(
       control,
       input,
       handoff,
+      mode,
+      leavePdf,
     })
   }),
 )

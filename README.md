@@ -71,6 +71,27 @@ bun script/personal-desktop/startup.ts   # liga o vigia junto com o Windows
 
 O app pessoal nunca divide pasta, nome de pacote ou cache com o oficial.
 
+### Instalar em outro PC
+
+O código vem daqui, do GitHub. As configurações vêm num arquivo `.ocpack` criptografado com senha: configuração, agentes, skills, chaves de API e logins, as preferências do app e, se eu quiser, o histórico de conversas. Esse arquivo nunca vai para o GitHub.
+
+1. **No PC de sempre:** dois cliques em `script/personal-desktop/Exportar configuracoes.cmd`. Ele pede uma senha e deixa o arquivo na Área de Trabalho. Levo o arquivo por pendrive ou Drive.
+2. **No PC novo:** abro o PowerShell (não precisa ser administrador) e rodo:
+
+   ```powershell
+   irm https://raw.githubusercontent.com/AcezeraDev/meu-opencode/dev/script/personal-desktop/instalar.ps1 | iex
+   ```
+
+   Ele instala o Git e o Bun, baixa o código, pede o arquivo e a senha, compila e instala o app (uns 10 minutos na primeira vez) e abre o Brave na página de extensões. Lá, ligo o "Modo do desenvolvedor", uso "Carregar sem compactação" com a pasta `browser-extension` e coloco a porta e o código que o painel do navegador do app mostra.
+
+Depois disso, o PC novo **segue o GitHub**: a cada 20 minutos, e quando o Windows inicia, ele confere se publiquei algo novo, recompila e instala quando o app fecha. O botão **Atualizar** também puxa de lá. Para publicar o que mudei aqui:
+
+```bash
+bun script/personal-desktop/publish.ts "o que mudou"
+```
+
+Antes de enviar, ele confere se nenhum arquivo tem uma chave ou login meu, porque este repositório é público.
+
 ## Como rodar
 
 ```bash
@@ -88,7 +109,7 @@ A branch `dev` aqui do meu computador guarda o histórico completo do projeto or
 git pull origin dev
 ```
 
-Este repositório recebe só uma foto do código, sem os commits do projeto original:
+Este repositório recebe só uma foto do código, sem os commits do projeto original. O `publish.ts` faz isto e confere as chaves antes:
 
 ```bash
 git branch -f pessoal $(git commit-tree "dev^{tree}" -p pessoal -m "o que mudou")

@@ -1,6 +1,7 @@
-import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, type Accessor } from "solid-js"
+import { createEffect, createMemo, createSignal, Index, onCleanup, onMount, Show, type Accessor } from "solid-js"
 import { useLanguage } from "@/context/language"
-import { createBrowserFeed, type BrowserActivity, type BrowserFrame } from "./browser-feed"
+import { createBrowserFeed, type BrowserActivity } from "./browser-feed"
+import { createFramePainter, type FramePainter } from "./frame-painter"
 import "./browser-pane.css"
 
 /**
@@ -35,6 +36,8 @@ const ACTIVITY_KEYS: Record<string, string> = {
   check: "ui.browserPane.agent.check",
   uncheck: "ui.browserPane.agent.uncheck",
   scroll: "ui.browserPane.agent.scroll",
+  drag: "ui.browserPane.agent.drag",
+  upload: "ui.browserPane.agent.upload",
   wait: "ui.browserPane.agent.wait",
   read: "ui.browserPane.agent.read",
   screenshot: "ui.browserPane.agent.screenshot",
@@ -88,11 +91,21 @@ const GLYPH = {
   external: "M9.5 2.5 H13.5 V6.5 M13.5 2.5 L8 8 M11.5 9.5 V13.5 H2.5 V4.5 H6.5",
 }
 
-export function BrowserPane(props: { directory: Accessor<string | undefined>; onClose: () => void }) {
+/** How long after its last action the agent still counts as driving the page. */
+const AGENT_ACTIVE_MS = 6000
+
+export function BrowserPane(props: {
+  directory: Accessor<string | undefined>
+  onClose: () => void
+  /** Whether the session is running, so the pane can offer to stop it. */
+  working?: Accessor<boolean>
+  onStop?: () => void
+}) {
   const language = useLanguage()
   const feed = createBrowserFeed({ directory: props.directory, enabled: () => true })
 
   let canvas: HTMLCanvasElement | undefined
+  let painter: FramePainter | undefined
   let screen: HTMLDivElement | undefined
   let addressInput: HTMLInputElement | undefined
   /** The page's viewport in CSS pixels, which input coordinates are expressed in. */
@@ -120,7 +133,7 @@ export function BrowserPane(props: { directory: Accessor<string | undefined>; on
   createEffect(() => {
     if (running()) return
     setHasFrame(false)
-    canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height)
+    painter?.clear()
   })
 
   onMount(() => {
@@ -152,41 +165,20 @@ export function BrowserPane(props: { directory: Accessor<string | undefined>; on
     void feed.control({ action: "resize", width: next.width, height: next.height })
   })
 
-  // Frames are decoded off the main path and drawn straight to the canvas. If
-  // one arrives while the last is still decoding, only the newest is kept.
+  // Frames are decoded and drawn off the main thread when the platform allows
+  // (see frame-painter.ts); this thread only learns when the page's size changes.
   onMount(() => {
-    let decoding = false
-    let pending: BrowserFrame | undefined
-    const draw = async (frame: BrowserFrame) => {
-      if (decoding) {
-        pending = frame
-        return
-      }
-      decoding = true
-      try {
-        const bytes = Uint8Array.from(atob(frame.data), (char) => char.charCodeAt(0))
-        const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/jpeg" }))
-        if (canvas) {
-          if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
-            canvas.width = bitmap.width
-            canvas.height = bitmap.height
-          }
-          canvas.getContext("2d")?.drawImage(bitmap, 0, 0)
-          viewport = { width: frame.width || bitmap.width, height: frame.height || bitmap.height }
-          setHasFrame(true)
-        }
-        bitmap.close()
-      } catch {
-        // A frame that fails to decode is simply skipped.
-      } finally {
-        decoding = false
-        const next = pending
-        pending = undefined
-        if (next) void draw(next)
-      }
-    }
-    const stop = feed.onFrame((frame) => void draw(frame))
-    onCleanup(() => void stop())
+    const current = createFramePainter(canvas!, (shown) => {
+      viewport = shown
+      setHasFrame(true)
+    })
+    painter = current
+    const stop = feed.onFrame((frame) => current.draw(frame))
+    onCleanup(() => {
+      stop()
+      current.dispose()
+      if (painter === current) painter = undefined
+    })
   })
 
   /** Maps a pointer position on the canvas to the page's viewport. */
@@ -297,6 +289,12 @@ export function BrowserPane(props: { directory: Accessor<string | undefined>; on
     go()
   }
 
+  // Like Claude's and Codex's browsers, the page says so while the agent drives it.
+  const agentActive = createMemo(() => {
+    const activity = feed.activity()
+    return props.working?.() === true && !!activity && now() - activity.at < AGENT_ACTIVE_MS
+  })
+
   const caption = createMemo(() => {
     const activity: BrowserActivity | undefined = feed.activity()
     if (!activity || now() - activity.at > CAPTION_MS) return undefined
@@ -318,30 +316,33 @@ export function BrowserPane(props: { directory: Accessor<string | undefined>; on
     // to the agent, which is what a stray keystroke means elsewhere in a session.
     <section class="browser-pane" aria-label={language.t("ui.browserPane.title")} data-prevent-autofocus>
       <div class="browser-pane-tabs" role="tablist">
-        <For each={status()?.tabs ?? []}>
+        {/* By position, not by identity: every status carries freshly parsed tabs,
+            and a keyed list would throw away the whole strip and build it again
+            each time a browser full of tabs reports a new title. */}
+        <Index each={status()?.tabs ?? []}>
           {(tab) => (
-            <div class="browser-pane-tab" data-active={tab.active ? "" : undefined}>
+            <div class="browser-pane-tab" data-active={tab().active ? "" : undefined}>
               <button
                 type="button"
                 role="tab"
-                aria-selected={tab.active}
+                aria-selected={tab().active}
                 class="browser-pane-tab-label"
-                title={tab.url}
-                onClick={() => void feed.control({ action: "select_tab", tab: tab.id })}
+                title={tab().url}
+                onClick={() => void feed.control({ action: "select_tab", tab: tab().id })}
               >
-                {tab.title || host(tab.url) || language.t("ui.browserPane.newTab")}
+                {tab().title || host(tab().url) || language.t("ui.browserPane.newTab")}
               </button>
               <button
                 type="button"
                 class="browser-pane-icon browser-pane-tab-close"
                 aria-label={language.t("ui.browserPane.closeTab")}
-                onClick={() => void feed.control({ action: "close_tab", tab: tab.id })}
+                onClick={() => void feed.control({ action: "close_tab", tab: tab().id })}
               >
                 <Glyph d={GLYPH.close} />
               </button>
             </div>
           )}
-        </For>
+        </Index>
         <button
           type="button"
           class="browser-pane-icon"
@@ -400,16 +401,19 @@ export function BrowserPane(props: { directory: Accessor<string | undefined>; on
         >
           <Glyph d={GLYPH.reload} />
         </button>
-        <button
-          type="button"
-          class="browser-pane-icon"
-          aria-label={language.t("ui.browserPane.openExternal", { browser: externalName() })}
-          title={language.t("ui.browserPane.openExternal", { browser: externalName() })}
-          disabled={!handable()}
-          onClick={() => void feed.control({ action: "open_external" })}
-        >
-          <Glyph d={GLYPH.external} />
-        </button>
+        {/* Driving the person's own browser, the page is already there. */}
+        <Show when={status()?.mode !== "extension"}>
+          <button
+            type="button"
+            class="browser-pane-icon"
+            aria-label={language.t("ui.browserPane.openExternal", { browser: externalName() })}
+            title={language.t("ui.browserPane.openExternal", { browser: externalName() })}
+            disabled={!handable()}
+            onClick={() => void feed.control({ action: "open_external" })}
+          >
+            <Glyph d={GLYPH.external} />
+          </button>
+        </Show>
         <input
           ref={addressInput}
           class="browser-pane-address"
@@ -441,7 +445,12 @@ export function BrowserPane(props: { directory: Accessor<string | undefined>; on
         />
       </form>
 
-      <div class="browser-pane-screen" ref={screen}>
+      <div
+        class="browser-pane-screen"
+        ref={screen}
+        data-agent={agentActive() ? "" : undefined}
+        data-chroma={agentActive() ? "" : undefined}
+      >
         <canvas
           ref={canvas}
           class="browser-pane-canvas"
@@ -488,6 +497,17 @@ export function BrowserPane(props: { directory: Accessor<string | undefined>; on
             {language.t("ui.browserPane.agent.label")}
           </span>
           <span class="browser-pane-caption-text">{caption()}</span>
+        </Show>
+        <Show when={props.working?.() && props.onStop}>
+          <button
+            type="button"
+            class="browser-pane-stop"
+            title={language.t("ui.browserPane.stopHint")}
+            onClick={() => props.onStop?.()}
+          >
+            <span class="browser-pane-stop-square" aria-hidden="true" />
+            {language.t("ui.browserPane.stop")}
+          </button>
         </Show>
       </div>
     </section>

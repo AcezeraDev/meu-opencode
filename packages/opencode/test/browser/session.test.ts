@@ -5,11 +5,13 @@ import { afterAll, describe, expect, test } from "bun:test"
 import { Effect } from "effect"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { addressToUrl, Browser, type BrowserEvent } from "@/browser/session"
+import { BrowserPage } from "@/browser/page"
 import { BrowserInstall } from "@/browser/install"
 import { Config } from "@/config/config"
 import { InstanceState } from "@/effect/instance-state"
 import { TestConfig } from "../fixture/config"
 import { testEffect } from "../lib/effect"
+import { makePdf } from "../fixture/pdf"
 
 const PAGE = `<!doctype html>
 <html>
@@ -30,11 +32,25 @@ const pageUrl = `file://${file.replace(/\\/g, "/")}`
 const FAKE_BROWSER = process.platform === "win32" ? "C:\\Windows\\System32\\where.exe" : "/usr/bin/true"
 const FAKE_NAME = path.parse(FAKE_BROWSER).name
 
+const PDF = makePdf(["Material da aula", "Formas normais"])
+
 // Only web pages can be handed over, so those tests need one.
 const server = Bun.serve({
   port: 0,
   hostname: "127.0.0.1",
-  fetch: () => new Response(PAGE, { headers: { "content-type": "text/html; charset=utf-8" } }),
+  fetch: (request) => {
+    const path = new URL(request.url).pathname
+    if (path === "/doc.pdf") return new Response(PDF, { headers: { "content-type": "application/pdf" } })
+    const body =
+      path === "/with-pdf"
+        ? `<title>Aula</title><a id="material" href="/doc.pdf">Material da Aula</a>`
+        : path === "/opener"
+          ? `<title>Opener</title><a id="away" href="/other" target="_blank">Abrir noutra aba</a>`
+          : path === "/other"
+            ? `<title>Other Page</title><h1>Outra</h1>`
+            : PAGE
+    return new Response(body, { headers: { "content-type": "text/html; charset=utf-8" } })
+  },
 })
 const webUrl = `http://127.0.0.1:${server.port}/`
 afterAll(() => server.stop(true))
@@ -191,7 +207,7 @@ describeBrowser("browser service", () => {
 
         // And the frame the panel draws has to be a real image.
         const shot = yield* Effect.promise(() => active!.screenshot())
-        expect(shot.subarray(0, 4).toString("hex")).toBe("89504e47")
+        expect(shot.subarray(0, 3).toString("hex")).toBe("ffd8ff")
 
         yield* browser.shutdown()
         expect(yield* browser.current()).toBeUndefined()
@@ -222,6 +238,36 @@ describeBrowser("browser service", () => {
         yield* browser.shutdown()
       }),
     90_000,
+  )
+
+  it.instance(
+    "follows a click that opens a page in another tab",
+    () =>
+      Effect.gen(function* () {
+        const browser = yield* Browser.Service
+
+        const tab = yield* browser.tab()
+        yield* Effect.promise(() => tab.navigate(`${webUrl}opener`, "load", 20_000))
+        expect(yield* browser.tabs()).toHaveLength(1)
+
+        // A target=_blank link is how a site opens a tab, and the agent has to
+        // end up on it rather than carrying on with the page it left behind.
+        yield* Effect.promise(() => BrowserPage.perform(tab, { action: "click", selector: "#away" }, 20_000))
+
+        let tabs = yield* browser.tabs()
+        const deadline = Date.now() + 10_000
+        while (tabs.length < 2 && Date.now() < deadline) {
+          yield* Effect.promise(() => new Promise((resolve) => setTimeout(resolve, 50)))
+          tabs = yield* browser.tabs()
+        }
+        expect(tabs).toHaveLength(2)
+        const active = yield* browser.tab()
+        expect(yield* Effect.promise(() => active.title())).toBe("Other Page")
+        expect(tabs.find((item) => item.active)!.id).toBe(active.id)
+
+        yield* browser.shutdown()
+      }),
+    60_000,
   )
 
   it.instance(
@@ -314,6 +360,29 @@ describeBrowser("browser service", () => {
   )
 
   it.instance(
+    "reads a PDF a click lands on, and takes the tab back to where it was",
+    () =>
+      Effect.gen(function* () {
+        const browser = yield* Browser.Service
+        const tab = yield* browser.tab()
+        const lesson = `${webUrl}with-pdf`
+        yield* Effect.promise(() => tab.navigate(lesson, "load", 20_000))
+
+        yield* Effect.promise(() => BrowserPage.perform(tab, { action: "click", selector: "#material" }, 20_000))
+        const pdf = yield* BrowserPage.landedOnPdf(browser, tab)
+        expect(pdf?.url).toBe(`${webUrl}doc.pdf`)
+        expect(pdf?.output).toContain("Formas normais")
+        expect(pdf?.output).toContain("went back")
+        expect(yield* Effect.promise(() => tab.url())).toBe(lesson)
+        // Back on the lesson, the same PDF is not news any more.
+        expect(yield* BrowserPage.landedOnPdf(browser, tab)).toBeUndefined()
+
+        yield* browser.shutdown()
+      }),
+    60_000,
+  )
+
+  it.instance(
     "lets the person watching drive the page",
     () =>
       Effect.gen(function* () {
@@ -336,14 +405,21 @@ describeBrowser("browser service", () => {
 
         expect(yield* Effect.promise(() => tab.title())).toBe("Clicked")
 
-        // The page lays out at the size of the pane showing it, new tabs included.
-        yield* browser.control({ action: "resize", width: 812, height: 670 })
+        // The pane's size says how large the streamed pictures should be and
+        // nothing more: a page that relaid out because someone dragged a panel
+        // edge would move elements out from under the agent mid-action, and
+        // the same site would behave differently on every screen. So the
+        // viewport is whatever the window was opened at, before and after, and
+        // a tab opened afterwards gets the same one.
         const size = () => tab.evaluate<string>("innerWidth + 'x' + innerHeight")
-        expect(yield* Effect.promise(size)).toBe("812x670")
+        const before = yield* Effect.promise(size)
+        expect(before).toMatch(/^\d+x\d+$/)
+        yield* browser.control({ action: "resize", width: 812, height: 670 })
+        expect(yield* Effect.promise(size)).toBe(before)
 
         const tabs = yield* browser.control({ action: "new_tab", url: "about:blank" })
         const fresh = yield* browser.tab()
-        expect(yield* Effect.promise(() => fresh.evaluate<string>("innerWidth + 'x' + innerHeight"))).toBe("812x670")
+        expect(yield* Effect.promise(() => fresh.evaluate<string>("innerWidth + 'x' + innerHeight"))).toBe(before)
         expect(tabs.tabs).toHaveLength(2)
         const back = tabs.tabs.find((item) => !item.active)!
         yield* browser.control({ action: "close_tab", tab: tabs.tabs.find((item) => item.active)!.id })

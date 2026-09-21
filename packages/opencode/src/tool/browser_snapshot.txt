@@ -3,11 +3,27 @@ Read the current page of the built-in browser, after JavaScript has run.
 Formats:
 - outline (default): a compact accessibility tree. Every actionable element gets
   a ref like `ref_12` for browser_act. This is the cheapest and most reliable way
-  to understand and operate a page.
+  to understand and operate a page. Elements the page makes clickable by script
+  (quiz answers, cards, custom menus) show up as `clickable`.
 - text: the visible text of the page
 - markdown: the page converted to markdown, for reading articles and docs
 - html: the raw serialized DOM. Expensive; only use when the markup itself matters.
 
-Refs are renumbered on every snapshot and every navigation. Act only on refs from
-the most recent output. When a click changes the page, take a new snapshot before
-acting again.
+Frames from the same site, where embedded activities and quizzes (H5P) usually
+live, are part of the outline: their questions, options and buttons get refs
+and can be acted on like anything else, with no need to open the frame's own
+address. On a PDF, the text of the PDF is returned instead.
+
+Open shadow DOM is traversed too, including nested shadow roots. Closed shadow
+roots are deliberately inaccessible to page JavaScript, so their internal
+elements cannot appear in the outline.
+
+Refs are stable: an element keeps its ref for as long as it is on the page,
+across snapshots and actions, and keeps it when the page rebuilds it in a
+re-render. A new page gets new refs. When two elements are alike enough that a
+rebuilt one cannot be told from its twin, both get new refs rather than a
+guess, so a ref never quietly comes to mean a different element.
+
+You rarely need this after browser_navigate, browser_act or browser_batch: they
+already return the outline, or what changed in it. Use it to re-read the whole
+page, or to read it in another format.

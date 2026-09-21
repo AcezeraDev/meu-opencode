@@ -20,6 +20,8 @@ interface Metadata {
   format: string
   url: string
   refs?: number
+  /** What the result shows of the page, so older views can be left out of the model's context. */
+  page?: string
 }
 
 export const BrowserSnapshotTool = Tool.define(
@@ -35,6 +37,13 @@ export const BrowserSnapshotTool = Tool.define(
           const tab = params.tab ? yield* browser.select(params.tab) : yield* browser.tab()
           const format = params.format ?? "outline"
           tab.announce("read")
+
+          // A PDF has no DOM worth reading: its text is, whatever the format.
+          const pdf = tab.pdf
+          if (pdf) {
+            const text = yield* Effect.promise(() => BrowserPage.readPdf(pdf, tab))
+            return { output: text, title: `PDF ${pdf}`, metadata: { format: "pdf", url: pdf, page: "pdf" } }
+          }
           const url = yield* Effect.promise(() => tab.url())
           yield* ctx.metadata({ title: url, metadata: { format, url } })
 
@@ -45,13 +54,17 @@ export const BrowserSnapshotTool = Tool.define(
                 "\n",
               ),
               title: result.title || result.url,
-              metadata: { format, url: result.url },
+              metadata: { format, url: result.url, page: "text" },
             }
           }
 
           if (format === "html") {
             const result = yield* Effect.promise(() => tab.html())
-            return { output: result.html, title: result.title || result.url, metadata: { format, url: result.url } }
+            return {
+              output: result.html,
+              title: result.title || result.url,
+              metadata: { format, url: result.url, page: "text" },
+            }
           }
 
           if (format === "markdown") {
@@ -61,15 +74,15 @@ export const BrowserSnapshotTool = Tool.define(
                 "\n",
               ),
               title: result.title || result.url,
-              metadata: { format, url: result.url },
+              metadata: { format, url: result.url, page: "text" },
             }
           }
 
           const result = yield* Effect.promise(() => tab.snapshot({ maxNodes: params.maxNodes }))
           return {
-            output: BrowserPage.render(result),
+            output: BrowserPage.outline(tab, result),
             title: result.title || result.url,
-            metadata: { format, url: result.url, refs: result.refs },
+            metadata: { format, url: result.url, refs: result.refs, page: "outline" },
           }
         }).pipe(Effect.orDie),
     }

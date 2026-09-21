@@ -1,0 +1,156 @@
+/*
+ * Session workspace
+ * --------------------------------------------------------------------------
+ * A calm, layered canvas for long-running developer work. The workspace keeps
+ * the scope/instrument identity, but pushes texture and chrome behind content.
+ */
+
+[data-component="session-workspace"] {
+  --workspace-panel-radius: 14px;
+  --workspace-panel-border: color-mix(in srgb, var(--v2-border-border-base) 72%, transparent);
+  --workspace-panel-highlight: color-mix(in srgb, white 5%, transparent);
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 22% -18%, color-mix(in srgb, var(--v2-blue-600) 8%, transparent), transparent 38%),
+    radial-gradient(circle at 88% 112%, color-mix(in srgb, var(--scope-ch-edit) 5%, transparent), transparent 32%),
+    var(--v2-background-bg-deep);
+}
+
+[data-component="session-workspace"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--v2-text-text-base) 10%, transparent) 0.6px,
+    transparent 0.8px
+  );
+  background-size: 24px 24px;
+  opacity: 0.16;
+  mask-image: linear-gradient(to bottom, black, transparent 72%);
+}
+
+.session-workspace-panels {
+  position: relative;
+}
+
+.session-workspace-panels > * {
+  min-width: 0;
+}
+
+[data-component="session-workspace-panel"] {
+  border: 1px solid var(--workspace-panel-border);
+  border-radius: var(--workspace-panel-radius) !important;
+  background-color: color-mix(in srgb, var(--scope-screen) 97%, transparent);
+  box-shadow:
+    0 1px 0 var(--workspace-panel-highlight) inset,
+    0 18px 48px -32px rgb(0 0 0 / 0.72);
+  animation: session-workspace-panel-in 420ms var(--ease-out-expo, ease-out) both;
+}
+
+[data-component="session-workspace-panel"].scope-screen {
+  background-image:
+    radial-gradient(circle, color-mix(in srgb, var(--scope-grid-dot) 56%, transparent) 0.7px, transparent 0.9px),
+    radial-gradient(circle at 50% -10%, color-mix(in srgb, var(--v2-text-text-base) 2.5%, transparent), transparent 46%);
+  background-size:
+    56px 56px,
+    100% 100%;
+  background-position:
+    22px 14px,
+    0 0;
+}
+
+[data-component="session-workspace-panel"][data-raised] {
+  box-shadow:
+    0 1px 0 var(--workspace-panel-highlight) inset,
+    0 22px 54px -34px rgb(0 0 0 / 0.82),
+    0 0 0 1px color-mix(in srgb, var(--v2-border-border-muted) 44%, transparent);
+}
+
+[data-component="session-workspace-panel"] h1 {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+}
+
+.session-workspace-sidecar {
+  overflow: hidden;
+  border: 1px solid var(--workspace-panel-border);
+  border-radius: var(--workspace-panel-radius);
+  background: color-mix(in srgb, var(--v2-background-bg-base) 97%, transparent);
+  box-shadow:
+    0 1px 0 var(--workspace-panel-highlight) inset,
+    0 22px 54px -34px rgb(0 0 0 / 0.82);
+  animation: session-workspace-sidecar-in 480ms var(--ease-out-expo, ease-out) both;
+}
+
+.session-workspace-sidecar .session-review-v2-tabs-bar {
+  min-height: 52px;
+  border-bottom: 1px solid color-mix(in srgb, var(--v2-border-border-base) 68%, transparent);
+  background: color-mix(in srgb, var(--v2-background-bg-layer-01) 72%, var(--v2-background-bg-base));
+  box-shadow: 0 1px 0 color-mix(in srgb, white 3%, transparent) inset;
+}
+
+[data-component="session-workspace"] [data-component="session-prompt-dock"] {
+  padding-bottom: 14px;
+  background: linear-gradient(
+    to top,
+    var(--scope-screen) 0%,
+    color-mix(in srgb, var(--scope-screen) 96%, transparent) 68%,
+    transparent 100%
+  );
+}
+
+[data-component="session-workspace"] [data-component="prompt-input-v2"] {
+  border: 1px solid color-mix(in srgb, var(--v2-border-border-strong) 58%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--v2-background-bg-base) 94%, transparent);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, white 5%, transparent) inset,
+    0 16px 38px -24px rgb(0 0 0 / 0.9),
+    0 0 0 1px color-mix(in srgb, var(--v2-border-border-muted) 36%, transparent);
+  transition:
+    border-color 180ms ease-out,
+    box-shadow 240ms var(--ease-out-expo, ease-out),
+    transform 240ms var(--ease-out-expo, ease-out);
+}
+
+[data-component="session-workspace"] [data-component="prompt-input-v2"]:hover {
+  border-color: color-mix(in srgb, var(--v2-border-border-strong) 82%, transparent);
+}
+
+[data-component="session-workspace"] [data-component="prompt-input-v2"]:has([contenteditable]:focus) {
+  border-color: color-mix(in srgb, var(--scope-ch-edit) 54%, var(--v2-border-border-base));
+  box-shadow:
+    0 1px 0 color-mix(in srgb, white 6%, transparent) inset,
+    0 18px 44px -24px rgb(0 0 0 / 0.92),
+    0 0 0 3px color-mix(in srgb, var(--scope-ch-edit) 10%, transparent);
+  transform: translateY(-1px);
+}
+
+@keyframes session-workspace-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.995);
+  }
+}
+
+@keyframes session-workspace-sidecar-in {
+  from {
+    opacity: 0;
+    transform: translateX(10px) scale(0.995);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-component="session-workspace-panel"],
+  .session-workspace-sidecar {
+    animation: none;
+  }
+
+  [data-component="session-workspace"] [data-component="prompt-input-v2"] {
+    transition: border-color 1ms linear;
+  }
+}

@@ -32,6 +32,8 @@ import { ProviderError } from "@/provider/error"
 import { iife } from "@/util/iife"
 import { errorMessage } from "@/util/error"
 import { isMedia } from "@/util/media"
+import { BrowserPdf } from "@/browser/pdf"
+import { createHash } from "crypto"
 import type { SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
 import { Effect, Schema } from "effect"
@@ -45,6 +47,81 @@ interface FetchDecompressionError extends Error {
 
 export const SYNTHETIC_ATTACHMENT_PROMPT = "Attached media from tool result:"
 export { isMedia }
+
+/**
+ * Browser tools that show the model the page. Each such result is tagged in its
+ * metadata with `page`: a full `outline` (with refs), a `change` to the last
+ * one, a `text` read, a `screenshot` or a `pdf`.
+ */
+const PAGE_TOOLS = new Set(["browser_navigate", "browser_snapshot", "browser_act", "browser_batch", "browser_screenshot"])
+/** Below this, a stale result costs less than the cache it would invalidate. */
+const STALE_PAGE_MIN_CHARS = 400
+const STALE_PAGE_TEXT = "[Earlier view of the browser page, cleared: a newer outline of the page comes later.]"
+
+/**
+ * Browser results superseded by a later full outline. A browsing session reads
+ * the page dozens of times in one turn, and every old outline would otherwise
+ * be sent again on each step, though only the latest outline and the changes
+ * after it describe the page. PDF text stays: it is content, not a view of the
+ * page, and a text read does not replace an outline, which carries the refs.
+ */
+function stalePageReads(input: WithParts[]) {
+  const reads: { id: string; outline: boolean; clearable: boolean }[] = []
+  for (const msg of input) {
+    for (const part of msg.parts) {
+      if (part.type !== "tool" || !PAGE_TOOLS.has(part.tool) || part.state.status !== "completed") continue
+      const metadata = part.state.metadata ?? {}
+      // Results from before the tag: navigate and snapshot outlines carry refs.
+      const page =
+        typeof metadata["page"] === "string"
+          ? metadata["page"]
+          : metadata["refs"] !== undefined
+            ? part.tool === "browser_act" || part.tool === "browser_batch"
+              ? "change"
+              : "outline"
+            : part.tool === "browser_screenshot"
+              ? "screenshot"
+              : undefined
+      if (!page || page === "pdf") continue
+      const size = part.state.output.length + (part.state.attachments?.length ?? 0) * STALE_PAGE_MIN_CHARS
+      reads.push({ id: part.id, outline: page === "outline", clearable: size >= STALE_PAGE_MIN_CHARS })
+    }
+  }
+  const last = reads.findLastIndex((read) => read.outline)
+  return new Set(reads.slice(0, Math.max(0, last)).flatMap((read) => (read.clearable ? [read.id] : [])))
+}
+
+/** Extracted PDF text by content hash, so replaying a conversation does not parse the same file on every step. */
+const pdfTexts = new Map<string, string>()
+const PDF_CACHE_LIMIT = 24
+
+/**
+ * The text of a PDF attachment, for models that cannot take PDF files. Without
+ * it such a model gets only an error in place of the file.
+ */
+function pdfAsText(url: string, filename?: string) {
+  return Effect.promise(async () => {
+    const name = filename ? `"${filename}"` : "attached"
+    const comma = url.indexOf(",")
+    if (!url.startsWith("data:") || comma < 0) return `[The ${name} PDF could not be read.]`
+    const key = createHash("sha1").update(url).digest("hex")
+    const known = pdfTexts.get(key)
+    if (known !== undefined) return known
+    const bytes = new Uint8Array(Buffer.from(url.slice(comma + 1), "base64"))
+    const text = await BrowserPdf.text(bytes).then(
+      (result) =>
+        [
+          `Text of the ${name} PDF (extracted, since this model cannot read PDF files directly):`,
+          BrowserPdf.render({ url: filename ?? "attachment", ...result }).replace(/^url: /, "file: "),
+        ].join("\n"),
+      (error: unknown) =>
+        `[Could not extract the text of the ${name} PDF: ${error instanceof Error ? error.message : String(error)}]`,
+    )
+    if (pdfTexts.size >= PDF_CACHE_LIMIT) pdfTexts.delete(pdfTexts.keys().next().value!)
+    pdfTexts.set(key, text)
+    return text
+  })
+}
 
 function truncateToolOutput(text: string, maxChars?: number) {
   if (!maxChars || text.length <= maxChars) return text
@@ -135,6 +212,8 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
 ) {
   const result: UIMessage[] = []
   const toolNames = new Set<string>()
+  const stale = stalePageReads(input)
+  const readsPdf = model.capabilities.input.pdf
   // Track media from tool results that need to be injected as user messages
   // for providers that don't support that media type in tool results.
   //
@@ -210,7 +289,9 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
           })
         // text/plain and directory files are converted into text parts, ignore them
         if (part.type === "file" && part.mime !== "text/plain" && part.mime !== "application/x-directory") {
-          if (options?.stripMedia && isMedia(part.mime)) {
+          if (part.mime === "application/pdf" && !readsPdf && !options?.stripMedia) {
+            userMessage.parts.push({ type: "text", text: yield* pdfAsText(part.url, part.filename) })
+          } else if (options?.stripMedia && isMedia(part.mime)) {
             userMessage.parts.push({
               type: "text",
               text: `[Attached ${part.mime}: ${part.filename ?? "file"}]`,
@@ -290,10 +371,20 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
         if (part.type === "tool") {
           toolNames.add(part.tool)
           if (part.state.status === "completed") {
-            const outputText = part.state.time.compacted
+            const cleared = part.state.time.compacted || stale.has(part.id)
+            let outputText = part.state.time.compacted
               ? "[Old tool result content cleared]"
-              : truncateToolOutput(part.state.output, options?.toolOutputMaxChars)
-            const attachments = part.state.time.compacted || options?.stripMedia ? [] : (part.state.attachments ?? [])
+              : stale.has(part.id)
+                ? STALE_PAGE_TEXT
+                : truncateToolOutput(part.state.output, options?.toolOutputMaxChars)
+            let attachments = cleared || options?.stripMedia ? [] : (part.state.attachments ?? [])
+            // A model that cannot take PDF files gets the text of one a tool returned.
+            if (!readsPdf) {
+              for (const pdf of attachments.filter((attachment) => attachment.mime === "application/pdf")) {
+                outputText += "\n\n" + (yield* pdfAsText(pdf.url, pdf.filename))
+              }
+              attachments = attachments.filter((attachment) => attachment.mime !== "application/pdf")
+            }
 
             // For providers that don't support media in tool results, extract media files
             // (images, PDFs) to be sent as a separate user message

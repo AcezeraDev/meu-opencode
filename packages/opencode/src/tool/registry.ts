@@ -16,6 +16,7 @@ import { WebFetchTool } from "./webfetch"
 import { BrowserNavigateTool } from "./browser_navigate"
 import { BrowserSnapshotTool } from "./browser_snapshot"
 import { BrowserActTool } from "./browser_act"
+import { BrowserBatchTool } from "./browser_batch"
 import { BrowserScreenshotTool } from "./browser_screenshot"
 import { BrowserInspectTool } from "./browser_inspect"
 import { Browser } from "@/browser/session"
@@ -83,6 +84,7 @@ const BROWSER_TOOL_IDS = new Set<string>([
   BrowserNavigateTool.id,
   BrowserSnapshotTool.id,
   BrowserActTool.id,
+  BrowserBatchTool.id,
   BrowserScreenshotTool.id,
   BrowserInspectTool.id,
 ])
@@ -133,6 +135,7 @@ const layer = Layer.effect(
     const browserNavigate = yield* BrowserNavigateTool
     const browserSnapshot = yield* BrowserSnapshotTool
     const browserAct = yield* BrowserActTool
+    const browserBatch = yield* BrowserBatchTool
     const browserScreenshot = yield* BrowserScreenshotTool
     const browserInspect = yield* BrowserInspectTool
     const webvideo = yield* WebVideoTool
@@ -249,6 +252,7 @@ const layer = Layer.effect(
           browserNavigate: Tool.init(browserNavigate),
           browserSnapshot: Tool.init(browserSnapshot),
           browserAct: Tool.init(browserAct),
+          browserBatch: Tool.init(browserBatch),
           browserScreenshot: Tool.init(browserScreenshot),
           browserInspect: Tool.init(browserInspect),
           video: Tool.init(webvideo),
@@ -278,6 +282,7 @@ const layer = Layer.effect(
             tool.browserNavigate,
             tool.browserSnapshot,
             tool.browserAct,
+            tool.browserBatch,
             tool.browserScreenshot,
             tool.browserInspect,
             tool.video,

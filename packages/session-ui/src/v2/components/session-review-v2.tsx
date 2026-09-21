@@ -31,6 +31,7 @@ export type SessionReviewV2Props = {
   files: string[]
   onSelectFile: (file: string) => void
   diffStyle: SessionReviewDiffStyle
+  splitDiffDisabled?: boolean
   onDiffStyleChange?: (style: SessionReviewDiffStyle) => void
   expandMode: SessionReviewExpandMode
   onExpandModeChange: (mode: SessionReviewExpandMode) => void
@@ -301,7 +302,11 @@ export function SessionReviewV2(props: SessionReviewV2Props) {
             </SegmentedControlItemV2>
           </TooltipV2>
           <TooltipV2 openDelay={2000} value={i18n.t("ui.sessionReviewV2.splitDiff")}>
-            <SegmentedControlItemV2 value="split" aria-label={i18n.t("ui.sessionReviewV2.splitDiff")}>
+            <SegmentedControlItemV2
+              value="split"
+              disabled={props.splitDiffDisabled}
+              aria-label={i18n.t("ui.sessionReviewV2.splitDiff")}
+            >
               <Icon name="split" />
             </SegmentedControlItemV2>
           </TooltipV2>

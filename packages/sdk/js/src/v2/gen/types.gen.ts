@@ -2021,6 +2021,25 @@ export type Config = {
     preserve_recent_tokens?: number
     reserved?: number
   }
+  websearch?: {
+    enabled?: boolean
+    provider?: "exa" | "parallel"
+  }
+  browser?: {
+    enabled?: boolean
+    headless?: boolean
+    channel?: string
+    executablePath?: string
+    external?: string
+    mode?: "process" | "extension"
+    extensionToken?: string
+    profile?: string
+    viewport?: {
+      width?: number
+      height?: number
+    }
+    timeout?: number
+  }
   experimental?: {
     disable_paste_summary?: boolean
     batch_tool?: boolean
@@ -2257,6 +2276,114 @@ export type McpResource = {
   client: string
 }
 
+export type UsageSpend = {
+  total: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  messages: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+}
+
+export type UsageEta = {
+  elapsed: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  remaining?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  basis?: "plan" | "history"
+  typical?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  runs: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  todos?: {
+    total: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    done: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  }
+}
+
+export type WebVideoCatalog = {
+  configured: boolean
+  defaultModel: string
+  models: Array<unknown>
+  error?: string
+}
+
+export type WebVideoDefaults = {
+  [key: string]: unknown
+}
+
+export type BrowserTab = {
+  id: string
+  url: string
+  title: string
+  active: boolean
+}
+
+export type BrowserStatus = {
+  running: boolean
+  mode?: "process" | "extension"
+  browser?: string
+  headless: boolean
+  url?: string
+  title?: string
+  tabs: Array<BrowserTab>
+  external?: string
+}
+
+export type BrowserFrame = {
+  running: boolean
+  url?: string
+  title?: string
+  image?: string
+}
+
+export type BrowserInput =
+  | {
+      type: "mouse"
+      action: "move" | "down" | "up"
+      x: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      y: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      button?: "left" | "middle" | "right" | "none"
+      buttons?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      clickCount?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      modifiers?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }
+  | {
+      type: "wheel"
+      x: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      y: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      deltaX: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      deltaY: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      modifiers?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }
+  | {
+      type: "key"
+      action: "down" | "up"
+      key: string
+      code: string
+      keyCode: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      text?: string
+      modifiers?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }
+  | {
+      type: "text"
+      text: string
+    }
+
+export type BrowserCommand =
+  | {
+      action: "navigate"
+      url: string
+    }
+  | {
+      action: "back" | "forward" | "reload" | "open_external"
+    }
+  | {
+      action: "new_tab"
+      url?: string
+    }
+  | {
+      action: "select_tab" | "close_tab"
+      tab: string
+    }
+  | {
+      action: "resize"
+      width: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      height: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }
+
 export type Symbol = {
   name: string
   kind: number
@@ -2370,6 +2497,98 @@ export type Agent = {
     [key: string]: unknown
   }
   steps?: number
+}
+
+export type AgentGenerateInput = {
+  description: string
+  model?: {
+    providerID: string
+    modelID: string
+  }
+}
+
+export type AgentGenerated = {
+  identifier: string
+  whenToUse: string
+  systemPrompt: string
+}
+
+export type AgentGenerateError = {
+  name: "AgentGenerateError"
+  data: {
+    message: string
+  }
+}
+
+export type AgentRuntime = {
+  name: string
+  enabled: boolean
+  status: "starting" | "running" | "waiting" | "error" | "stopped"
+  sessionID?: string
+  startedAt?: number
+  lastRunAt?: number
+  nextRunAt?: number
+  updatedAt: number
+  cycles: number
+  error?: string
+}
+
+export type AgentRuntimeUpdateInput = {
+  enabled: boolean
+}
+
+export type AgentRuntimeError = {
+  name: "AgentRuntimeError"
+  data: {
+    message: string
+  }
+}
+
+export type AgentWriteInput = {
+  description?: string
+  mode: "all" | "primary" | "subagent"
+  model?: {
+    providerID: string
+    modelID: string
+  }
+  variant?: string
+  prompt: string
+  temperature?: number
+  topP?: number
+  color?: string | "primary" | "secondary" | "accent" | "success" | "warning" | "error" | "info"
+  options?: {
+    [key: string]: unknown
+  }
+  steps?: number
+  permissions: Array<
+    | "bash"
+    | "read"
+    | "edit"
+    | "glob"
+    | "grep"
+    | "webfetch"
+    | "task"
+    | "todowrite"
+    | "websearch"
+    | "lsp"
+    | "skill"
+    | "browser"
+  >
+}
+
+export type AgentMutationError = {
+  name: "AgentMutationError"
+  data: {
+    message: string
+    reason: "invalid-name" | "native"
+  }
+}
+
+export type AgentFileError = {
+  name: "AgentFileError"
+  data: {
+    message: string
+  }
 }
 
 export type LspStatus = {
@@ -7892,6 +8111,298 @@ export type ExperimentalResourceListResponses = {
 export type ExperimentalResourceListResponse =
   ExperimentalResourceListResponses[keyof ExperimentalResourceListResponses]
 
+export type ExperimentalUsageSpendData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+    since?: string
+  }
+  url: "/experimental/usage/spend"
+}
+
+export type ExperimentalUsageSpendErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalUsageSpendError = ExperimentalUsageSpendErrors[keyof ExperimentalUsageSpendErrors]
+
+export type ExperimentalUsageSpendResponses = {
+  /**
+   * Model spend since a time
+   */
+  200: UsageSpend
+}
+
+export type ExperimentalUsageSpendResponse = ExperimentalUsageSpendResponses[keyof ExperimentalUsageSpendResponses]
+
+export type ExperimentalUsageEtaData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    workspace?: string
+    sessionID: string
+  }
+  url: "/experimental/usage/eta"
+}
+
+export type ExperimentalUsageEtaErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalUsageEtaError = ExperimentalUsageEtaErrors[keyof ExperimentalUsageEtaErrors]
+
+export type ExperimentalUsageEtaResponses = {
+  /**
+   * Estimated time left for the request in progress
+   */
+  200: UsageEta
+}
+
+export type ExperimentalUsageEtaResponse = ExperimentalUsageEtaResponses[keyof ExperimentalUsageEtaResponses]
+
+export type ExperimentalWebVideoModelsData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/web-video/models"
+}
+
+export type ExperimentalWebVideoModelsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalWebVideoModelsError = ExperimentalWebVideoModelsErrors[keyof ExperimentalWebVideoModelsErrors]
+
+export type ExperimentalWebVideoModelsResponses = {
+  /**
+   * NanoGPT video models with capabilities
+   */
+  200: WebVideoCatalog
+}
+
+export type ExperimentalWebVideoModelsResponse =
+  ExperimentalWebVideoModelsResponses[keyof ExperimentalWebVideoModelsResponses]
+
+export type ExperimentalWebVideoSettingsData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/web-video/settings"
+}
+
+export type ExperimentalWebVideoSettingsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalWebVideoSettingsError =
+  ExperimentalWebVideoSettingsErrors[keyof ExperimentalWebVideoSettingsErrors]
+
+export type ExperimentalWebVideoSettingsResponses = {
+  /**
+   * Saved web video defaults
+   */
+  200: WebVideoDefaults
+}
+
+export type ExperimentalWebVideoSettingsResponse =
+  ExperimentalWebVideoSettingsResponses[keyof ExperimentalWebVideoSettingsResponses]
+
+export type ExperimentalWebVideoSettingsUpdateData = {
+  body?: WebVideoDefaults
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/web-video/settings"
+}
+
+export type ExperimentalWebVideoSettingsUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalWebVideoSettingsUpdateError =
+  ExperimentalWebVideoSettingsUpdateErrors[keyof ExperimentalWebVideoSettingsUpdateErrors]
+
+export type ExperimentalWebVideoSettingsUpdateResponses = {
+  /**
+   * Updated web video defaults
+   */
+  200: WebVideoDefaults
+}
+
+export type ExperimentalWebVideoSettingsUpdateResponse =
+  ExperimentalWebVideoSettingsUpdateResponses[keyof ExperimentalWebVideoSettingsUpdateResponses]
+
+export type ExperimentalBrowserStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/browser/status"
+}
+
+export type ExperimentalBrowserStatusErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalBrowserStatusError = ExperimentalBrowserStatusErrors[keyof ExperimentalBrowserStatusErrors]
+
+export type ExperimentalBrowserStatusResponses = {
+  /**
+   * State of the built-in browser
+   */
+  200: BrowserStatus
+}
+
+export type ExperimentalBrowserStatusResponse =
+  ExperimentalBrowserStatusResponses[keyof ExperimentalBrowserStatusResponses]
+
+export type ExperimentalBrowserFrameData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/browser/frame"
+}
+
+export type ExperimentalBrowserFrameErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalBrowserFrameError = ExperimentalBrowserFrameErrors[keyof ExperimentalBrowserFrameErrors]
+
+export type ExperimentalBrowserFrameResponses = {
+  /**
+   * Current frame of the built-in browser
+   */
+  200: BrowserFrame
+}
+
+export type ExperimentalBrowserFrameResponse =
+  ExperimentalBrowserFrameResponses[keyof ExperimentalBrowserFrameResponses]
+
+export type ExperimentalBrowserStreamData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/browser/stream"
+}
+
+export type ExperimentalBrowserStreamErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalBrowserStreamError = ExperimentalBrowserStreamErrors[keyof ExperimentalBrowserStreamErrors]
+
+export type ExperimentalBrowserStreamResponses = {
+  /**
+   * Success
+   */
+  200: string
+}
+
+export type ExperimentalBrowserStreamResponse =
+  ExperimentalBrowserStreamResponses[keyof ExperimentalBrowserStreamResponses]
+
+export type ExperimentalBrowserInputData = {
+  body?: BrowserInput
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/browser/input"
+}
+
+export type ExperimentalBrowserInputErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalBrowserInputError = ExperimentalBrowserInputErrors[keyof ExperimentalBrowserInputErrors]
+
+export type ExperimentalBrowserInputResponses = {
+  /**
+   * Input forwarded
+   */
+  200: boolean
+}
+
+export type ExperimentalBrowserInputResponse =
+  ExperimentalBrowserInputResponses[keyof ExperimentalBrowserInputResponses]
+
+export type ExperimentalBrowserControlData = {
+  body?: BrowserCommand
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/browser/control"
+}
+
+export type ExperimentalBrowserControlErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalBrowserControlError = ExperimentalBrowserControlErrors[keyof ExperimentalBrowserControlErrors]
+
+export type ExperimentalBrowserControlResponses = {
+  /**
+   * State of the built-in browser after the command
+   */
+  200: BrowserStatus
+}
+
+export type ExperimentalBrowserControlResponse =
+  ExperimentalBrowserControlResponses[keyof ExperimentalBrowserControlResponses]
+
 export type FindTextData = {
   body?: never
   path?: never
@@ -8341,6 +8852,160 @@ export type AppAgentsResponses = {
 }
 
 export type AppAgentsResponse = AppAgentsResponses[keyof AppAgentsResponses]
+
+export type AppAgentGenerateData = {
+  body?: AgentGenerateInput
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/agent/generate"
+}
+
+export type AppAgentGenerateErrors = {
+  /**
+   * AgentGenerateError | InvalidRequestError
+   */
+  400: AgentGenerateError | InvalidRequestError
+}
+
+export type AppAgentGenerateError = AppAgentGenerateErrors[keyof AppAgentGenerateErrors]
+
+export type AppAgentGenerateResponses = {
+  /**
+   * Generated agent draft
+   */
+  200: AgentGenerated
+}
+
+export type AppAgentGenerateResponse = AppAgentGenerateResponses[keyof AppAgentGenerateResponses]
+
+export type AppAgentRuntimeData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/agent/runtime"
+}
+
+export type AppAgentRuntimeErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type AppAgentRuntimeError = AppAgentRuntimeErrors[keyof AppAgentRuntimeErrors]
+
+export type AppAgentRuntimeResponses = {
+  /**
+   * Continuous agent runtimes
+   */
+  200: Array<AgentRuntime>
+}
+
+export type AppAgentRuntimeResponse = AppAgentRuntimeResponses[keyof AppAgentRuntimeResponses]
+
+export type AppAgentRuntimeUpdateData = {
+  body?: AgentRuntimeUpdateInput
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/agent/{name}/runtime"
+}
+
+export type AppAgentRuntimeUpdateErrors = {
+  /**
+   * AgentRuntimeError | InvalidRequestError
+   */
+  400: AgentRuntimeError | InvalidRequestError
+}
+
+export type AppAgentRuntimeUpdateError = AppAgentRuntimeUpdateErrors[keyof AppAgentRuntimeUpdateErrors]
+
+export type AppAgentRuntimeUpdateResponses = {
+  /**
+   * Continuous agent runtime
+   */
+  200: AgentRuntime
+}
+
+export type AppAgentRuntimeUpdateResponse = AppAgentRuntimeUpdateResponses[keyof AppAgentRuntimeUpdateResponses]
+
+export type AppAgentDeleteData = {
+  body?: never
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/agent/{name}"
+}
+
+export type AppAgentDeleteErrors = {
+  /**
+   * AgentMutationError | InvalidRequestError
+   */
+  400: AgentMutationError | InvalidRequestError
+  /**
+   * AgentFileError
+   */
+  500: AgentFileError
+}
+
+export type AppAgentDeleteError = AppAgentDeleteErrors[keyof AppAgentDeleteErrors]
+
+export type AppAgentDeleteResponses = {
+  /**
+   * Agent deleted
+   */
+  200: boolean
+}
+
+export type AppAgentDeleteResponse = AppAgentDeleteResponses[keyof AppAgentDeleteResponses]
+
+export type AppAgentUpdateData = {
+  body?: AgentWriteInput
+  path: {
+    name: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/agent/{name}"
+}
+
+export type AppAgentUpdateErrors = {
+  /**
+   * AgentMutationError | InvalidRequestError
+   */
+  400: AgentMutationError | InvalidRequestError
+  /**
+   * AgentFileError
+   */
+  500: AgentFileError
+}
+
+export type AppAgentUpdateError = AppAgentUpdateErrors[keyof AppAgentUpdateErrors]
+
+export type AppAgentUpdateResponses = {
+  /**
+   * Saved agent
+   */
+  200: Agent
+}
+
+export type AppAgentUpdateResponse = AppAgentUpdateResponses[keyof AppAgentUpdateResponses]
 
 export type AppSkillsData = {
   body?: never
@@ -13623,3 +14288,28 @@ export type PtyConnectResponses = {
 }
 
 export type PtyConnectResponse = PtyConnectResponses[keyof PtyConnectResponses]
+
+export type BrowserExtensionConnectData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/experimental/browser/extension"
+}
+
+export type BrowserExtensionConnectErrors = {
+  /**
+   * Forbidden
+   */
+  403: EffectHttpApiErrorForbidden
+}
+
+export type BrowserExtensionConnectError = BrowserExtensionConnectErrors[keyof BrowserExtensionConnectErrors]
+
+export type BrowserExtensionConnectResponses = {
+  /**
+   * Connected
+   */
+  200: boolean
+}
+
+export type BrowserExtensionConnectResponse = BrowserExtensionConnectResponses[keyof BrowserExtensionConnectResponses]

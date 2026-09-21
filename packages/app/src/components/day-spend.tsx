@@ -6,6 +6,7 @@ import { useServer } from "@/context/server"
 import { useSettings } from "@/context/settings"
 import { authTokenFromCredentials } from "@/utils/server"
 import { showToast } from "@/utils/toast"
+import { createUsdBrlRate } from "./exchange-rate"
 import "./scope-shell.css"
 
 const REFRESH_MS = 30 * 1000
@@ -64,13 +65,23 @@ export function DaySpend() {
   const limit = () => settings.usage.dailyLimit()
   const ratio = () => (limit() > 0 ? (spend()?.total ?? 0) / limit() : 0)
   const level = () => (ratio() >= 1 ? "over" : ratio() >= WARN_RATIO ? "near" : "normal")
-  const money = (value: number) =>
+  // Prices come in dollars; in Portuguese the readout is in reais, which is
+  // what the spend actually costs. Until a rate is known it stays in dollars.
+  const usdBrl = createUsdBrlRate()
+  const brl = () => (language.intl().toLowerCase().startsWith("pt") ? usdBrl() : undefined)
+  const format = (value: number, currency: "USD" | "BRL") =>
     new Intl.NumberFormat(language.intl(), {
       style: "currency",
-      currency: "USD",
+      currency,
       minimumFractionDigits: 2,
       maximumFractionDigits: value > 0 && value < 1 ? 3 : 2,
     }).format(value)
+  const dollars = (value: number) => format(value, "USD")
+  /** An amount in dollars, shown in reais when the rate is known. */
+  const money = (value: number) => {
+    const rate = brl()
+    return rate ? format(value * rate, "BRL") : dollars(value)
+  }
 
   createEffect(() => {
     if (level() !== "over") return
@@ -147,6 +158,19 @@ export function DaySpend() {
                   <span>{language.t("scope.spend.title")}</span>
                   <span class="scope-readout day-spend-value">{money(value().total)}</span>
                 </div>
+                <Show when={brl()}>
+                  {(rate) => (
+                    <>
+                      <div class="day-spend-row day-spend-row-muted">
+                        <span>{language.t("scope.spend.inDollars")}</span>
+                        <span class="scope-readout">{dollars(value().total)}</span>
+                      </div>
+                      <p class="day-spend-hint">
+                        {language.t("scope.spend.rate", { rate: format(rate(), "BRL") })}
+                      </p>
+                    </>
+                  )}
+                </Show>
                 <div class="day-spend-row day-spend-row-muted">
                   <span>{language.t("scope.spend.responses")}</span>
                   <span class="scope-readout">{value().messages}</span>
@@ -167,7 +191,13 @@ export function DaySpend() {
                     onChange={(event) => settings.usage.setDailyLimit(Number(event.currentTarget.value))}
                   />
                 </label>
-                <p class="day-spend-hint">{language.t("scope.spend.limitHint")}</p>
+                <p class="day-spend-hint">
+                  {language.t("scope.spend.limitHint")}
+                  <Show when={brl() && limit() > 0}>
+                    {" "}
+                    {language.t("scope.spend.limitLocal", { value: money(limit()) })}
+                  </Show>
+                </p>
               </div>
             </Portal>
           </Show>

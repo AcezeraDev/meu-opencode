@@ -1,7 +1,7 @@
 Interact with the current page of the built-in browser.
 
-Target an element with `ref` (from the most recent browser_snapshot or
-browser_navigate output) whenever possible. Use `selector` only for elements the
+Target an element with `ref` (from a browser_snapshot, browser_navigate or
+browser_act output) whenever possible. Use `selector` only for elements the
 snapshot did not surface; it takes a CSS selector.
 
 Actions:
@@ -13,9 +13,68 @@ Actions:
 - select: choose the option matching `text` in a dropdown
 - check / uncheck: set a checkbox or radio
 - scroll: scroll the page or an element in `direction` by `amount` pixels
+- drag: press an element, move to `to_ref` (or `to_selector`) and let go
+- mouse_down / mouse_up: press and release by hand, for a gesture of your own
+- upload_file: put the file at `file` into a file input
 - wait_for: wait until an element appears, or until `text` shows up on the page
+
+Set `modifiers` to hold keys while clicking: ["Control"] for a control-click,
+["Shift"] to extend a selection. They travel on the click itself, so there is
+no separate "hold this key" action: a key press dispatched on its own leaves no
+state behind for a later click to pick up.
+
+drag uses the browser's native HTML5 drag-and-drop path for elements marked
+`draggable=true`. Other elements use a mouse drag, which is what sortable
+lists, sliders, canvases and maps listen for.
+
+Scrolling turns a real wheel where the pointer is, so pages with their own
+smooth scrolling, virtualised lists and carousels react to it. If nothing moved
+the result says so instead of reporting success, which usually means the page
+is already at the end or that something else on it scrolls.
+
+fill is the quick way to put text in a field, and is enough almost always.
+Fields that rewrite what they are given as it is typed - a phone mask, a date,
+a field a framework controls - are typed into key by key instead, which happens
+on its own: the result says when it did. Use type when you specifically want
+each keystroke seen, such as for a search box that suggests as you type.
 
 Set `submit` to press Enter after filling or typing, which submits most forms.
 
-The page outline is returned after the action, so you can see what changed. Set
-`snapshot` to false when acting several times in a row and you do not need it.
+Refs are stable: an element keeps its ref for as long as it is on the page,
+including across a re-render that rebuilds it, so refs you already have keep
+working after acting and there is no need to re-read the page for fresh ones.
+After the action you get only what changed on the page, as a diff of the
+outline; a new page, or one that changed almost completely, comes back as a
+whole outline. So there is no need to call browser_snapshot after acting.
+
+The first line of the result says what the action was seen to do, which is not
+the same as it having been sent: the element and the page are read before and
+after. It can report that the page reacted (a value, a state, the focus or the
+outline changed), that it went to another page, that the element it acted on is
+gone (what closing or removing something looks like), or that nothing
+observable changed. That last one is not a failure - clicking a label or
+re-selecting what was already selected legitimately changes nothing - but if
+you expected something to happen, read the outline below before acting again
+rather than clicking a second time.
+
+The element is measured again immediately before the click, so a page that
+moves, re-renders or scrolls while the action is under way is still clicked in
+the right place. If the element disappears in that moment the action fails
+instead of clicking whatever took its place.
+
+If an element is covered by a banner, a popup or an ad, the action fails and
+says what covers it: close that first (look for its close or "X" button).
+Dialogs the page opens (alert, confirm, "leave this page?") are answered
+automatically, and the result says what they said.
+
+Elements inside frames of the same site (embedded quizzes and activities) have
+refs in the outline and are acted on the same way. A click that opens a PDF
+returns the PDF's text and brings the tab back to where it was.
+
+Elements inside open shadow DOM are also included and act like ordinary refs.
+Closed shadow roots are deliberately inaccessible to page JavaScript, so their
+internal elements cannot appear in snapshots or be targeted.
+
+To do several things in a row (fill a form and submit it, pick an answer and
+confirm it), use browser_batch: it runs them all in one call, which is much
+faster than one browser_act per step.

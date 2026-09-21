@@ -1,0 +1,384 @@
+/*
+ * Session execution feed
+ * --------------------------------------------------------------------------
+ * Tool calls read as a calm execution timeline: the same row moves from an
+ * active verb to a confirmed result while its target remains in place.
+ */
+
+[data-component="session-workspace"] [data-slot="session-turn-assistant-content"] {
+  --activity-accent: var(--scope-ch-think, var(--v2-text-text-base));
+  --activity-complete: var(--scope-ch-read, var(--v2-text-text-muted));
+  --activity-surface: color-mix(in srgb, var(--v2-background-bg-layer-01) 58%, transparent);
+}
+
+[data-component="session-workspace"] [data-component="tool-part-wrapper"] {
+  position: relative;
+  width: 100%;
+  animation: session-activity-enter 240ms var(--ease-out-expo, ease-out) both;
+}
+
+[data-component="session-workspace"] [data-component="tool-part-wrapper"] [data-component="tool-trigger"] {
+  position: relative;
+  overflow: hidden;
+  min-height: 36px;
+  padding: 6px 10px 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  transition:
+    background-color 180ms ease-out,
+    border-color 180ms ease-out,
+    box-shadow 240ms var(--ease-out-expo, ease-out),
+    opacity 180ms ease-out;
+}
+
+[data-component="session-workspace"] [data-component="tool-part-wrapper"] [data-component="tool-trigger"] > * {
+  position: relative;
+  z-index: 1;
+}
+
+[data-component="session-workspace"]
+  [data-component="tool-part-wrapper"][data-activity-state="active"]
+  [data-component="tool-trigger"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 42%;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--activity-accent) 8%, transparent) 52%,
+    color-mix(in srgb, var(--activity-accent) 14%, transparent) 72%,
+    transparent
+  );
+  filter: blur(1px);
+  transform: translateX(-130%);
+  animation: session-activity-scan 2.1s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+}
+
+[data-component="session-workspace"]
+  [data-component="tool-part-wrapper"][data-activity-state="complete"]
+  [data-component="tool-trigger"] {
+  animation: session-activity-confirm 520ms var(--ease-out-expo, ease-out) both;
+}
+
+[data-component="session-workspace"]
+  [data-component="tool-part-wrapper"]
+  [data-slot="collapsible-trigger"]:hover
+  [data-component="tool-trigger"],
+[data-component="session-workspace"]
+  [data-component="tool-part-wrapper"]
+  [data-slot="collapsible-trigger"]:focus-visible
+  [data-component="tool-trigger"] {
+  border-color: color-mix(in srgb, var(--v2-border-border-base) 72%, transparent);
+  background: var(--activity-surface);
+}
+
+[data-component="session-workspace"]
+  [data-component="tool-part-wrapper"][data-activity-state="active"]
+  [data-component="tool-trigger"] {
+  border-color: color-mix(in srgb, var(--activity-accent) 18%, transparent);
+  background: color-mix(in srgb, var(--activity-accent) 5%, var(--activity-surface));
+  box-shadow: 0 8px 24px -20px color-mix(in srgb, var(--activity-accent) 72%, transparent);
+}
+
+[data-component="session-workspace"] [data-slot="basic-tool-tool-trigger-content"] {
+  max-width: calc(100% - 20px);
+}
+
+[data-component="session-workspace"] [data-slot="basic-tool-activity-indicator"] {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 16px;
+  color: var(--activity-complete);
+}
+
+[data-component="session-workspace"] [data-slot="basic-tool-activity-indicator"]::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 1px solid color-mix(in srgb, currentColor 44%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--scope-screen) 92%, transparent);
+  transition:
+    border-color 220ms ease-out,
+    background-color 220ms ease-out,
+    transform 220ms var(--ease-out-expo, ease-out);
+}
+
+[data-component="session-workspace"] [data-slot="basic-tool-activity-indicator"]::after {
+  content: "";
+  position: absolute;
+  width: 5px;
+  height: 3px;
+  border-left: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-1px) rotate(-45deg);
+  transform-origin: center;
+  opacity: 0.9;
+  animation: session-check-draw 320ms var(--ease-out-expo, ease-out) both;
+}
+
+[data-component="session-workspace"]
+  [data-component="tool-trigger"][data-activity-state="active"]
+  [data-slot="basic-tool-activity-indicator"] {
+  color: var(--activity-accent);
+}
+
+[data-component="session-workspace"]
+  [data-component="tool-trigger"][data-activity-state="active"]
+  [data-slot="basic-tool-activity-indicator"]::before {
+  width: 7px;
+  height: 7px;
+  border-color: currentColor;
+  background: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 12%, transparent);
+}
+
+[data-component="session-workspace"]
+  [data-component="tool-trigger"][data-activity-state="active"]
+  [data-slot="basic-tool-activity-indicator"]::after {
+  width: 14px;
+  height: 14px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  opacity: 0;
+  transform: none;
+  animation: session-activity-ping 1.8s ease-out infinite;
+}
+
+[data-component="session-workspace"]
+  [data-component="tool-trigger"]:has([data-component="task-tool-card"])
+  [data-slot="basic-tool-activity-indicator"] {
+  display: none;
+}
+
+[data-component="session-workspace"] [data-slot="basic-tool-tool-info-main"] {
+  gap: 7px;
+}
+
+[data-component="session-workspace"] [data-slot="basic-tool-tool-title"] {
+  color: var(--v2-text-text-base);
+  letter-spacing: -0.008em;
+}
+
+[data-component="session-workspace"] [data-slot="basic-tool-tool-subtitle"],
+[data-component="session-workspace"] [data-slot="basic-tool-tool-arg"] {
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+  color: var(--v2-text-text-muted);
+}
+
+[data-component="session-workspace"]
+  [data-component="tool-part-wrapper"][data-activity-state="complete"]
+  [data-slot="basic-tool-tool-title"] {
+  color: var(--v2-text-text-muted);
+}
+
+[data-component="session-workspace"] [data-slot="session-turn-thinking"] {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 34px;
+  margin-top: 8px;
+  padding: 6px 11px 6px 9px;
+  border: 1px solid color-mix(in srgb, var(--activity-accent) 16%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--activity-accent) 4%, var(--activity-surface));
+  box-shadow: 0 8px 24px -22px color-mix(in srgb, var(--activity-accent) 70%, transparent);
+  background-image: linear-gradient(
+    100deg,
+    transparent 0%,
+    color-mix(in srgb, var(--activity-accent) 4%, transparent) 42%,
+    color-mix(in srgb, var(--activity-accent) 9%, transparent) 50%,
+    color-mix(in srgb, var(--activity-accent) 4%, transparent) 58%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  animation:
+    session-activity-enter 300ms var(--ease-out-expo, ease-out) both,
+    session-thinking-scan 2.8s ease-in-out 300ms infinite;
+}
+
+[data-component="session-workspace"] [data-slot="session-turn-thinking"]::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 999px;
+  background: var(--activity-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--activity-accent) 12%, transparent);
+  animation: session-thinking-breathe 1.8s ease-in-out infinite;
+}
+
+[data-component="session-workspace"] [data-slot="session-turn-thinking"] [data-component="scope-signal"] {
+  display: none;
+}
+
+[data-component="session-workspace"] [data-component="text-part"] {
+  animation: session-answer-enter 440ms var(--ease-out-expo, ease-out) both;
+}
+
+[data-component="session-workspace"]
+  [data-component="text-part"]
+  [data-slot="text-part-body"]
+  > [data-component="markdown"]
+  > * {
+  animation: session-answer-line 380ms var(--ease-out-expo, ease-out) both;
+}
+
+[data-component="session-workspace"]
+  [data-component="text-part"]
+  [data-slot="text-part-body"]
+  > [data-component="markdown"]
+  > :nth-child(2) {
+  animation-delay: 45ms;
+}
+
+[data-component="session-workspace"]
+  [data-component="text-part"]
+  [data-slot="text-part-body"]
+  > [data-component="markdown"]
+  > :nth-child(3) {
+  animation-delay: 90ms;
+}
+
+[data-component="session-workspace"]
+  [data-component="text-part"]
+  [data-slot="text-part-body"]
+  > [data-component="markdown"]
+  > :nth-child(n + 4) {
+  animation-delay: 130ms;
+}
+
+@keyframes session-activity-enter {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+@keyframes session-answer-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+}
+
+@keyframes session-answer-line {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+}
+
+@keyframes session-activity-scan {
+  0%,
+  16% {
+    opacity: 0;
+    transform: translateX(-130%);
+  }
+
+  24% {
+    opacity: 1;
+  }
+
+  72% {
+    opacity: 0.85;
+  }
+
+  86%,
+  100% {
+    opacity: 0;
+    transform: translateX(340%);
+  }
+}
+
+@keyframes session-activity-confirm {
+  0% {
+    border-color: color-mix(in srgb, var(--activity-accent) 28%, transparent);
+    background-color: color-mix(in srgb, var(--activity-accent) 10%, var(--activity-surface));
+    transform: translateX(2px);
+  }
+
+  100% {
+    border-color: transparent;
+    background-color: transparent;
+    transform: translateX(0);
+  }
+}
+
+@keyframes session-check-draw {
+  from {
+    opacity: 0;
+    transform: translateY(-1px) rotate(-45deg) scale(0.45);
+  }
+
+  to {
+    opacity: 0.9;
+    transform: translateY(-1px) rotate(-45deg) scale(1);
+  }
+}
+
+@keyframes session-thinking-scan {
+  0%,
+  100% {
+    background-position: 120% 0;
+  }
+
+  50% {
+    background-position: -120% 0;
+  }
+}
+
+@keyframes session-activity-ping {
+  0% {
+    opacity: 0.36;
+    transform: scale(0.5);
+  }
+
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}
+
+@keyframes session-thinking-breathe {
+  0%,
+  100% {
+    opacity: 0.58;
+    transform: scale(0.86);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-component="session-workspace"] [data-component="tool-part-wrapper"],
+  [data-component="session-workspace"] [data-slot="session-turn-thinking"],
+  [data-component="session-workspace"] [data-component="text-part"],
+  [data-component="session-workspace"]
+    [data-component="text-part"]
+    [data-slot="text-part-body"]
+    > [data-component="markdown"]
+    > *,
+  [data-component="session-workspace"] [data-component="tool-part-wrapper"] [data-component="tool-trigger"]::after,
+  [data-component="session-workspace"] [data-slot="basic-tool-activity-indicator"]::after,
+  [data-component="session-workspace"] [data-slot="session-turn-thinking"]::before {
+    animation: none;
+  }
+
+  [data-component="session-workspace"] [data-component="tool-trigger"],
+  [data-component="session-workspace"] [data-slot="basic-tool-activity-indicator"]::before {
+    transition-duration: 1ms;
+  }
+}

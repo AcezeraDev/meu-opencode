@@ -7,10 +7,21 @@ export function SessionReviewEmptyChangesV2() {
 
   return (
     <div data-slot="session-review-v2-empty-changes">
-      <Icon name="review" size="large" />
-      <div data-slot="session-review-v2-empty-changes-title">{i18n.t("ui.sessionReviewV2.empty.changes.title")}</div>
-      <div data-slot="session-review-v2-empty-changes-description">
-        {i18n.t("ui.sessionReviewV2.empty.changes.description")}
+      <div data-slot="session-review-v2-empty-card" data-kind="changes">
+        <div data-slot="session-review-v2-empty-visual" aria-hidden="true">
+          <span data-slot="session-review-v2-empty-orbit" />
+          <Icon name="review" size="large" />
+          <span data-slot="session-review-v2-empty-node" data-position="start" />
+          <span data-slot="session-review-v2-empty-node" data-position="end" />
+        </div>
+        <div data-slot="session-review-v2-empty-copy">
+          <div data-slot="session-review-v2-empty-changes-title">
+            {i18n.t("ui.sessionReviewV2.empty.changes.title")}
+          </div>
+          <div data-slot="session-review-v2-empty-changes-description">
+            {i18n.t("ui.sessionReviewV2.empty.changes.description")}
+          </div>
+        </div>
       </div>
     </div>
   )

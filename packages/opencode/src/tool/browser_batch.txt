@@ -1,0 +1,18 @@
+Run several actions on the current page of the built-in browser in one call.
+
+Each step takes the same fields as browser_act (action, ref, selector, text,
+submit, direction, amount, timeout). The steps run in order, each one waiting
+for the page to settle before the next, and the batch stops at the first step
+that fails, saying which one and why.
+
+Use it whenever you already know the next few steps, for example:
+- fill the email and password fields, then click "Sign in"
+- check an answer, then click "Check" or "Next"
+- fill a search box with submit set to true, then wait_for a result
+
+Refs are stable while their element stays on the page, so refs from the last
+output can be used in every step. If a step opens a new page, the refs you had
+are gone: end the batch there and act on the new outline.
+
+The output lists each step's outcome, followed by what changed on the page
+since your last outline (or the whole outline, on a new page).

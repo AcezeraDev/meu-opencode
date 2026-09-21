@@ -2,6 +2,7 @@ import { createEffect, createMemo, createSignal, on, onCleanup, Show } from "sol
 import { useLanguage } from "@/context/language"
 import { ClockReadout, Readout } from "./readout"
 import { createTurnMeter, type TurnStep } from "./turn-meter"
+import { createEta, formatRemaining } from "./eta"
 import "./scope.css"
 
 /** How long the strip takes to dissolve after the agent stops (matches scope.css). */
@@ -59,6 +60,21 @@ export function MeasurementStrip(props: { sessionID?: string; active: boolean })
   )
 
   const meter = createTurnMeter({ sessionID: () => props.sessionID, active: () => props.active })
+  const eta = createEta({ sessionID: () => props.sessionID, active: () => props.active })
+
+  // What the estimate stands on, so the number can be trusted for what it is.
+  const etaHint = () => {
+    const current = eta.eta()
+    if (!current) return undefined
+    if (current.basis === "plan" && current.todos) {
+      return language.t("scope.eta.plan", { done: current.todos.done, total: current.todos.total })
+    }
+    if (current.basis === "history" && current.typical) {
+      return language.t("scope.eta.history", { typical: formatRemaining(current.typical).replace("~", ""), runs: current.runs })
+    }
+    if (current.typical && current.elapsed > current.typical) return language.t("scope.eta.over")
+    return language.t("scope.eta.unknown")
+  }
 
   const stepLabel = (step: TurnStep) => {
     if (step.kind === "waiting") return language.t("scope.step.waiting")
@@ -93,6 +109,13 @@ export function MeasurementStrip(props: { sessionID?: string; active: boolean })
         <span class="scope-strip-cell">
           <span class="scope-label">{language.t("scope.strip.time")}</span>
           <ClockReadout ms={meter.elapsed()} />
+        </span>
+
+        <span class="scope-strip-cell" title={etaHint()}>
+          <span class="scope-label">{language.t("scope.strip.eta")}</span>
+          <span class="scope-readout">
+            {eta.remaining() !== undefined ? formatRemaining(eta.remaining()!) : "—"}
+          </span>
         </span>
 
         <span class="scope-strip-cell">

@@ -1,6 +1,6 @@
 import { Icon } from "@opencode-ai/ui/v2/icon"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
-import { For } from "solid-js"
+import { For, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLanguage } from "@/context/language"
 import { Persist, persisted } from "@/utils/persist"
@@ -47,9 +47,15 @@ export function SessionModeSwitcher(props: { mode: SessionMode; onChange: (mode:
               aria-checked={props.mode === item.id}
               aria-label={language.t(item.key)}
               data-active={props.mode === item.id ? "" : undefined}
+              data-chroma={props.mode === item.id ? "" : undefined}
               onClick={() => props.onChange(item.id)}
             >
               <Icon name={item.icon} size="small" />
+              <Show when={props.mode === item.id}>
+                <span class="session-mode-option-label" aria-hidden="true">
+                  {language.t(item.key)}
+                </span>
+              </Show>
             </button>
           </TooltipV2>
         )}

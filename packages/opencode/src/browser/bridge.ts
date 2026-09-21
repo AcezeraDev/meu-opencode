@@ -2,6 +2,7 @@ import { Context, Effect, Layer } from "effect"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Config } from "@/config/config"
 import { CDPError, type CDPTransport } from "./cdp"
+import { TAB_EVENTS, TAB_FIELDS } from "./protocol"
 
 /**
  * The OpenCode side of the browser extension.
@@ -30,7 +31,18 @@ export interface TargetEvent {
   target: { targetId: string; url?: string; title?: string; active?: boolean }
 }
 
-const CALL_TIMEOUT = 60_000
+/**
+ * A command the browser has not answered in this long is stuck, most often on
+ * a frozen page; waiting a minute per call only multiplies the wait.
+ */
+const CALL_TIMEOUT = 30_000
+
+/**
+ * How long a command waits for an extension that is not connected this moment.
+ * The extension retries after a second and backs off from there, so this covers
+ * a few attempts without leaving the agent hanging on a browser that is gone.
+ */
+const RECONNECT_WAIT = 5000
 
 /**
  * One tab's slice of the relay, shaped like a {@link CDPTransport} so a Tab
@@ -39,19 +51,39 @@ const CALL_TIMEOUT = 60_000
 class BridgeConnection implements CDPTransport {
   private handlers = new Map<string, Set<Handler>>()
   private closed = false
+  /** Pending `once` waits, failed at once when the tab is lost rather than left to time out. */
+  private waiters = new Set<(error: Error) => void>()
 
   constructor(
     private bridge: Bridge,
     readonly targetId: string,
   ) {}
 
-  /** Attaches the extension's debugger to this tab, so its events start flowing. */
+  /**
+   * Attaches the extension's debugger to this tab, so its events start flowing.
+   * Only the events a tab listens to are asked for, and of those only the
+   * fields it reads; the rest would just crowd the socket that command replies
+   * also travel on.
+   */
   async connect() {
-    await this.bridge.request("attach", { targetId: this.targetId })
+    await this.bridge.request("attach", { targetId: this.targetId, events: TAB_EVENTS, fields: TAB_FIELDS })
   }
 
-  send<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
-    if (this.closed || !this.bridge.connected) return Promise.reject(new CDPError(method, "not connected"))
+  async send<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+    if (this.closed) throw new CDPError(method, "not connected")
+    // An extension whose service worker was put to sleep takes its socket down
+    // with it and comes back on its own a second later. Failing the command
+    // outright made the agent spend a whole step on an error it could do
+    // nothing about — 19 of them across the sessions measured — so a command
+    // that arrives in that gap waits for the extension instead, and reattaches
+    // to this tab before going out, since the debugger went down with it.
+    if (!this.bridge.connected) {
+      await this.bridge.whenConnected(RECONNECT_WAIT).catch(() => {
+        throw new CDPError(method, "not connected")
+      })
+      if (this.closed) throw new CDPError(method, "not connected")
+      await this.connect()
+    }
     return this.bridge.request<T>("command", { targetId: this.targetId, method, params })
   }
 
@@ -64,23 +96,38 @@ class BridgeConnection implements CDPTransport {
 
   once(method: string, timeout: number) {
     return new Promise<Record<string, unknown>>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        off()
-        reject(new CDPError(method, `event did not fire within ${timeout}ms`))
-      }, timeout)
-      const off = this.on(method, (params) => {
+      if (this.closed) return reject(new CDPError(method, "not connected"))
+      const settle = () => {
         clearTimeout(timer)
         off()
+        this.waiters.delete(fail)
+      }
+      const fail = (error: Error) => {
+        settle()
+        reject(error)
+      }
+      const timer = setTimeout(() => fail(new CDPError(method, `event did not fire within ${timeout}ms`)), timeout)
+      const off = this.on(method, (params) => {
+        settle()
         resolve(params)
       })
+      this.waiters.add(fail)
     })
+  }
+
+  /** Stops for good: no more events, pending waits fail, and the bridge forgets this tab's transport. */
+  private end() {
+    this.closed = true
+    this.handlers.clear()
+    const waiters = [...this.waiters]
+    this.waiters.clear()
+    for (const fail of waiters) fail(new CDPError("tab", "not connected"))
+    this.bridge.release(this.targetId, this)
   }
 
   close() {
     if (this.closed) return
-    this.closed = true
-    this.handlers.clear()
-    this.bridge.release(this.targetId)
+    this.end()
     // Let the browser drop the debugger banner; failure is fine, the tab may be gone.
     if (this.bridge.connected) void this.bridge.request("detach", { targetId: this.targetId }).catch(() => {})
   }
@@ -94,10 +141,15 @@ class BridgeConnection implements CDPTransport {
     for (const handler of this.handlers.get(method) ?? []) handler(params)
   }
 
-  /** The extension dropped the debugger on this tab; behave as closed. */
+  /**
+   * The extension dropped the debugger on this tab, as the browser does when
+   * the tab moves to a page extensions may not drive, like its PDF viewer.
+   * Behave as closed, and let the bridge forget this transport, so attaching
+   * to the tab again starts a fresh one instead of reusing a dead one.
+   */
   drop() {
-    this.closed = true
-    this.handlers.clear()
+    if (this.closed) return
+    this.end()
   }
 }
 
@@ -234,7 +286,13 @@ export class Bridge {
     const promise = new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id)
-        reject(new CDPError(type, `timed out after ${CALL_TIMEOUT}ms`))
+        const method = typeof extra["method"] === "string" ? extra["method"] : type
+        reject(
+          new CDPError(
+            method,
+            `the browser did not answer within ${CALL_TIMEOUT / 1000}s. The page may be frozen or busy; wait a moment and try once more, or reload it with browser_navigate.`,
+          ),
+        )
       }, CALL_TIMEOUT)
       this.pending.set(id, {
         resolve: (value) => {
@@ -269,15 +327,26 @@ export class Bridge {
     return this.request("closeTarget", { targetId })
   }
 
-  /** The transport for one tab, created once and reused. */
+  /**
+   * Takes a tab back one page in its history. It needs no debugger, so it
+   * works on a tab the debugger was thrown off, such as one showing a PDF.
+   */
+  goBack(targetId: string): Promise<unknown> {
+    return this.request("goBack", { targetId })
+  }
+
+  /** The transport for one tab, reused while it lives; a lost one is replaced. */
   connection(targetId: string): CDPTransport {
     let connection = this.connections.get(targetId)
-    if (!connection) this.connections.set(targetId, (connection = new BridgeConnection(this, targetId)))
+    if (!connection || !connection.connected) {
+      this.connections.set(targetId, (connection = new BridgeConnection(this, targetId)))
+    }
     return connection
   }
 
-  release(targetId: string) {
-    this.connections.delete(targetId)
+  /** Forgets a tab's transport, unless it has already been replaced by a newer one. */
+  release(targetId: string, connection?: BridgeConnection) {
+    if (!connection || this.connections.get(targetId) === connection) this.connections.delete(targetId)
   }
 
   onTarget(listener: (event: TargetEvent) => void) {
@@ -288,6 +357,26 @@ export class Bridge {
   onState(listener: () => void) {
     this.stateListeners.add(listener)
     return () => this.stateListeners.delete(listener)
+  }
+
+  /** Resolves once an extension is connected, or rejects if none arrives in `timeout`. */
+  whenConnected(timeout: number) {
+    if (this.connected) return Promise.resolve()
+    return new Promise<void>((resolve, reject) => {
+      const settle = () => {
+        clearTimeout(timer)
+        off()
+      }
+      const timer = setTimeout(() => {
+        settle()
+        reject(new Error("the browser extension did not reconnect"))
+      }, timeout)
+      const off = this.onState(() => {
+        if (!this.connected) return
+        settle()
+        resolve()
+      })
+    })
   }
 
   private emitState() {

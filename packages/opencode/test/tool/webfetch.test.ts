@@ -9,6 +9,7 @@ import { WebFetchTool } from "../../src/tool/webfetch"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { Tool } from "@/tool/tool"
 import { testEffect } from "../lib/effect"
+import { makePdf } from "../fixture/pdf"
 
 const it = testEffect(
   LayerNode.compile(LayerNode.group([httpClient, Truncate.node, Agent.node]), [
@@ -64,6 +65,24 @@ describe("tool.webfetch", () => {
           }),
       )
     }),
+  )
+
+  it.instance("reads a PDF as its text instead of binary noise", () =>
+    withFetch(
+      () =>
+        new Response(makePdf(["Material da aula", "Formas normais"]), {
+          status: 200,
+          headers: { "content-type": "application/pdf" },
+        }),
+      (url) =>
+        Effect.gen(function* () {
+          const result = yield* exec({ url: new URL("/aula.pdf", url).toString(), format: "markdown" })
+          expect(result.output).toContain("type: PDF, 2 pages")
+          expect(result.output).toContain("Formas normais")
+          expect(result.output).not.toContain("%PDF")
+          expect(result.attachments).toBeUndefined()
+        }),
+    ),
   )
 
   it.instance("keeps svg as text output", () =>

@@ -59,6 +59,54 @@ export interface CreateTargetResult {
   targetId: string
 }
 
+/**
+ * Every event a tab listens to. The browser extension relays only these, so a
+ * busy page's flood of events nobody reads (`Network.dataReceived` and the like)
+ * does not queue up in front of command replies on the one socket they share.
+ * A listener added to `tab.ts` must be added here too.
+ */
+export const TAB_EVENTS = [
+  "Input.dragIntercepted",
+  "Runtime.consoleAPICalled",
+  "Runtime.exceptionThrown",
+  "Network.requestWillBeSent",
+  "Network.responseReceived",
+  "Network.loadingFinished",
+  "Network.loadingFailed",
+  "Page.frameStartedLoading",
+  "Page.frameStoppedLoading",
+  "Page.frameNavigated",
+  "Page.navigatedWithinDocument",
+  "Page.domContentEventFired",
+  "Page.loadEventFired",
+  "Page.screencastFrame",
+  "Page.javascriptDialogOpening",
+] as const
+
+/**
+ * The fields each event is actually read for, so the extension can leave the
+ * rest behind.
+ *
+ * A CDP event carries far more than this engine looks at: one
+ * `Network.responseReceived` brings every response header, the timing
+ * breakdown and the whole TLS certificate chain. Relayed in full, opening an
+ * ordinary news site pushed 1.1 MB of events through the extension's single
+ * socket in twelve seconds — the same socket a click and its reply have to get
+ * through. Pruned to these fields it is 292 KB.
+ *
+ * The table travels with the attach request, so this file stays the one place
+ * that says what the engine reads. An extension that does not understand it
+ * relays everything, as before, and a field left out here is simply missing
+ * where `tab.ts` reads it — so a new listener means a new entry, same as
+ * {@link TAB_EVENTS}. Events with no entry are relayed whole.
+ */
+export const TAB_FIELDS: Record<string, readonly string[]> = {
+  "Network.requestWillBeSent": ["requestId", "type", "request.method", "request.url"],
+  "Network.responseReceived": ["requestId", "type", "frameId", "response.status", "response.url", "response.headers"],
+  "Network.loadingFinished": ["requestId"],
+  "Network.loadingFailed": ["requestId", "errorText"],
+}
+
 /** Narrowing helpers, so protocol payloads never reach `String()` untyped. */
 export function asText(value: unknown, fallback = "") {
   return typeof value === "string" ? value : fallback

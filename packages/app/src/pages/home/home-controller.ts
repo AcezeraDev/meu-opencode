@@ -46,11 +46,11 @@ export function createHomeController() {
     layout.home.setSelection(next)
   }
 
-  function openProjectNewSession(conn: ServerConnection.Any, directory: string, prompt?: string) {
+  function openProjectNewSession(conn: ServerConnection.Any, directory: string, prompt?: string, agent?: string) {
     const ctx = global.ensureServerCtx(conn)
     ctx.projects.open(directory)
     ctx.projects.touch(directory)
-    void tabs.newDraft({ server: ServerConnection.key(conn), directory }, prompt)
+    void tabs.newDraft({ server: ServerConnection.key(conn), directory, agent }, prompt)
   }
 
   return {
@@ -118,6 +118,12 @@ export function createHomeController() {
         const project = newSessionProject()
         if (!conn || !project) return
         openProjectNewSession(conn, project.worktree, prompt)
+      },
+      openNewSessionWithAgent: (agent: string) => {
+        const conn = focusedServer()
+        const project = newSessionProject()
+        if (!conn || !project) return
+        openProjectNewSession(conn, project.worktree, undefined, agent)
       },
       openProjectNewSession,
     },

@@ -44,6 +44,26 @@ O motor já fala com a extensão (ponte global, rota
 Detalhe de v1: o token só chega à ponte quando uma sessão usa o navegador ou pela
 env; parear antes disso dá 403. Veja `HANDOFF.md`.
 
+## Depois de atualizar esta pasta
+
+O Brave não relê a extensão sozinho: em `brave://extensions`, clique no ↻ do
+cartão "OpenCode Browser Bridge" (a versão aparece ali). Desde a 0.2.0 o `attach`
+leva a lista de eventos CDP que o OpenCode lê, e a extensão só repassa esses.
+Uma extensão antiga continua funcionando, só repassa tudo.
+
+Desde a 0.5.0 o `attach` também leva, por evento, quais campos o OpenCode lê, e
+a extensão poda o resto antes de mandar. Um `Network.responseReceived` inteiro
+traz todos os cabeçalhos, os tempos e a cadeia de certificados: abrir um site de
+notícias comum empurrava 1,1 MB de eventos em 12 s pelo mesmo socket em que o
+clique e a resposta dele passam; podado dá 292 KB. Uma extensão antiga continua
+funcionando, só manda tudo.
+
+Desde a 0.3.0 existe o pedido `goBack` (`chrome.tabs.goBack`, sem debugger).
+Quando a IA clica num link de PDF, o Brave abre o visualizador de PDF dele e
+expulsa o debugger da aba; o OpenCode lê o PDF baixando o arquivo e usa o
+`goBack` para devolver a aba à página anterior e retomar o controle. Sem ele, a
+IA continua numa aba nova.
+
 ## Avisos
 
 - O Brave mostra a faixa **"uma extensão está depurando este navegador"** enquanto

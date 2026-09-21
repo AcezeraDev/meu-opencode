@@ -68,6 +68,8 @@ import { createSessionLineage } from "@/pages/session/session-lineage"
 import { SessionPage, SessionRouteErrorBoundary, TargetSessionRouteContent } from "@/pages/session"
 import { NewHome } from "@/pages/home"
 import { SessionBoard } from "@/pages/board"
+import { AgentsPage } from "@/pages/agents"
+import { useLocal } from "@/context/local"
 import { LegacyHome } from "@/pages/home/legacy-home"
 import { installChromaSync, realignChroma } from "@/utils/chroma"
 
@@ -222,7 +224,7 @@ function ResolvedDraftRoute(props: { draft: DraftTab }) {
             <SDKProvider directory={directory}>
               <DirectoryDataProvider directory={directory} server={serverKey}>
                 <DraftProviders>
-                  <NewSession />
+                  <DraftSession agent={props.draft.agent} />
                 </DraftProviders>
               </DirectoryDataProvider>
             </SDKProvider>
@@ -231,6 +233,16 @@ function ResolvedDraftRoute(props: { draft: DraftTab }) {
       </ServerSDKProvider>
     </Show>
   )
+}
+
+function DraftSession(props: { agent?: string }) {
+  const local = useLocal()
+
+  createEffect(() => {
+    if (props.agent) local.agent.set(props.agent)
+  })
+
+  return <NewSession />
 }
 
 function UiI18nBridge(props: ParentProps) {
@@ -650,6 +662,7 @@ function Routes(props: { serverScoped?: JSX.Element }) {
       <Show when={settings.general.newLayoutDesigns()}>
         <Route path="/" component={NewHome} />
         <Route path="/board" component={SessionBoard} />
+        <Route path="/agents" component={AgentsPage} />
         <Route path="/:dir/session/:id" component={NewLayoutLegacySessionRedirect} />
         <Route path="/server/:serverKey/session/:id" component={TargetSessionRoute} />
       </Show>

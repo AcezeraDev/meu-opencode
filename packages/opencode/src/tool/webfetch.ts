@@ -5,8 +5,12 @@ import * as Tool from "./tool"
 import TurndownService from "turndown"
 import DESCRIPTION from "./webfetch.txt"
 import { isImageAttachment } from "@/util/media"
+import { BrowserPdf } from "@/browser/pdf"
+import { Docx } from "@/util/docx"
 
 const MAX_RESPONSE_SIZE = 5 * 1024 * 1024 // 5MB
+/** PDFs are read as text, which is far smaller than the file, so larger ones are fine. */
+const MAX_PDF_SIZE = 30 * 1024 * 1024
 const DEFAULT_TIMEOUT = 30 * 1000 // 30 seconds
 const MAX_TIMEOUT = 120 * 1000 // 2 minutes
 
@@ -92,20 +96,43 @@ export const WebFetchTool = Tool.define(
             Effect.timeoutOrElse({ duration: timeout, orElse: () => Effect.die(new Error("Request timed out")) }),
           )
 
-          // Check content length
-          const contentLength = response.headers["content-length"]
-          if (contentLength && parseInt(contentLength) > MAX_RESPONSE_SIZE) {
-            throw new Error("Response too large (exceeds 5MB limit)")
-          }
-
-          const arrayBuffer = yield* response.arrayBuffer
-          if (arrayBuffer.byteLength > MAX_RESPONSE_SIZE) {
-            throw new Error("Response too large (exceeds 5MB limit)")
-          }
-
           const contentType = response.headers["content-type"] || ""
           const mime = contentType.split(";")[0]?.trim().toLowerCase() || ""
           const title = `${params.url} (${contentType})`
+          const limit = BrowserPdf.looksLikePdf(params.url, mime) ? MAX_PDF_SIZE : MAX_RESPONSE_SIZE
+
+          // Check content length
+          const contentLength = response.headers["content-length"]
+          if (contentLength && parseInt(contentLength) > limit) {
+            throw new Error(`Response too large (exceeds ${limit / 1024 / 1024}MB limit)`)
+          }
+
+          const arrayBuffer = yield* response.arrayBuffer
+          if (arrayBuffer.byteLength > limit) {
+            throw new Error(`Response too large (exceeds ${limit / 1024 / 1024}MB limit)`)
+          }
+
+          // Decoded as text, a PDF is kilobytes of binary noise; its text is what the model wants.
+          const bytes = new Uint8Array(arrayBuffer)
+          if (mime === "application/pdf" || Buffer.from(bytes.subarray(0, 5)).toString("latin1") === "%PDF-") {
+            const text = yield* Effect.promise(() =>
+              BrowserPdf.text(bytes).then(
+                (result) => BrowserPdf.render({ url: params.url, ...result }),
+                (error: unknown) =>
+                  `Could not extract text from the PDF at ${params.url}: ${error instanceof Error ? error.message : String(error)}`,
+              ),
+            )
+            return { output: text, title, metadata: {} }
+          }
+
+          // A Word document is a zip of XML; decoded as text it is noise.
+          if (
+            mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+            (/\.docx($|\?)/i.test(params.url) && Docx.isZip(bytes))
+          ) {
+            const text = Docx.docxText(bytes)
+            if (text !== undefined) return { output: text || "(the document has no text)", title, metadata: {} }
+          }
 
           if (isImageAttachment(mime)) {
             const base64Content = Buffer.from(arrayBuffer).toString("base64")

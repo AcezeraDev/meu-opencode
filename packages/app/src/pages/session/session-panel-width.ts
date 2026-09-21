@@ -6,6 +6,20 @@ export const SESSION_PANEL_WIDTH_MIN = 450
 export const REVIEW_PANE_WIDTH_MIN = 480
 export const REVIEW_PANE_WIDTH_MIN_SPLIT = 800
 
+export function sessionSplitDiffAvailable(input: { available: number | undefined; session: boolean }) {
+  if (input.available === undefined) return true
+  return input.available >= REVIEW_PANE_WIDTH_MIN_SPLIT + (input.session ? SESSION_PANEL_WIDTH_MIN : 0)
+}
+
+export function resolveSessionDiffStyle(input: {
+  style: "unified" | "split"
+  available: number | undefined
+  session: boolean
+}) {
+  if (input.style === "unified") return input.style
+  return sessionSplitDiffAvailable(input) ? input.style : "unified"
+}
+
 export function sessionPanelWidthMax(input: { available: number; split: boolean }) {
   const pane = input.split ? REVIEW_PANE_WIDTH_MIN_SPLIT : REVIEW_PANE_WIDTH_MIN
   return Math.max(SESSION_PANEL_WIDTH_MIN, input.available - pane)

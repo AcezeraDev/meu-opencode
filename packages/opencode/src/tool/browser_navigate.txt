@@ -5,6 +5,14 @@ logins persist between sessions in a dedicated profile. Prefer it over webfetch
 whenever a page needs scripting to show its content, requires being signed in,
 or has to be interacted with.
 
+The browser belongs to this conversation, with the user's logins. Do the
+browsing yourself: a subagent (task) cannot see your tabs or use this browser.
+
+PDFs: navigating to a PDF (or a link that turns out to be one) returns its text,
+page by page, instead of an outline; the file is downloaded and read directly,
+with the site's session when it needs a login. There is nothing to click in a
+PDF, so read what you need and carry on.
+
 By default the tool returns the page outline after navigating, so you usually do
 not need a separate browser_snapshot call. Every actionable element in that
 outline carries a ref like `ref_12`, which browser_act uses to click or type.
@@ -19,8 +27,9 @@ Actions:
 - close_browser: shut the browser down and release its memory
 - open_external: open `url`, or the current page, in the user's own browser
 
-Refs are renumbered on every navigation and every snapshot. Always act on refs
-from the most recent output.
+Refs stay the same while their element stays on the page, so they keep working
+across browser_act and browser_batch calls. A new page gets new refs: act on
+the refs from the outline of the page you are on.
 
 Some sites turn automated browsers away with a bot check, a captcha or an
 "Access denied" page. When navigating or acting lands on one, the page is

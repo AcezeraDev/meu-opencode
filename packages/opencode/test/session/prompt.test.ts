@@ -781,6 +781,44 @@ it.instance("static loop returns assistant text through local provider", () =>
   }),
 )
 
+it.instance("titles a session after its first request, not the greeting before it", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({ permission: [{ permission: "*", pattern: "*", action: "allow" }] })
+    const title = () => sessions.get(session.id).pipe(Effect.map((info) => info.title))
+
+    yield* prompt.prompt({ sessionID: session.id, agent: "build", noReply: true, parts: [{ type: "text", text: "oi" }] })
+    yield* llm.text("Oi! Como posso ajudar?")
+    yield* prompt.loop({ sessionID: session.id })
+    // A greeting says nothing about the session: no title is asked for yet.
+    expect(Session.isDefaultTitle(yield* title())).toBe(true)
+
+    yield* prompt.prompt({
+      sessionID: session.id,
+      agent: "build",
+      noReply: true,
+      parts: [{ type: "text", text: "faça as lições da semana 15" }],
+    })
+    yield* llm.text("feito")
+    yield* prompt.loop({ sessionID: session.id })
+    // The title is made in the background.
+    let current = yield* title()
+    for (let attempt = 0; attempt < 100 && Session.isDefaultTitle(current); attempt++) {
+      yield* Effect.sleep("50 millis")
+      current = yield* title()
+    }
+    expect(current).toBe("E2E Title")
+    const request = (yield* llm.hits)
+      .map((hit) => JSON.stringify(hit.body))
+      .find((body) => body.includes("Generate a title for this conversation"))
+    expect(request).toContain("semana 15")
+    expect(request).not.toContain("Como posso ajudar")
+  }),
+  30_000,
+)
+
 it.instance("static loop consumes queued replies across turns", () =>
   Effect.gen(function* () {
     const { llm } = yield* useServerConfig(providerCfg)
@@ -1134,7 +1172,9 @@ it.instance(
       yield* llm.hang
 
       const chat = yield* sessions.create({})
-      yield* user(chat.id, "hi")
+      // A request rather than a greeting: a greeting no longer asks for a title,
+      // and the title request is what reaches the server first on a cold start.
+      yield* user(chat.id, "run the task")
 
       const fiber = yield* prompt.loop({ sessionID: chat.id }).pipe(Effect.forkChild)
       yield* llm.wait(1)

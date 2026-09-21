@@ -25,12 +25,15 @@
  *   ext  → server  { type: "target", event, target }     tab lifecycle
  *   ext  → server  { type: "detached", targetId, reason } debugger detached
  *   server → ext   { id, type: "listTargets" }
- *   server → ext   { id, type: "attach", targetId }
+ *   server → ext   { id, type: "attach", targetId, events?, fields? }
+ *                  events: CDP events to relay (all when absent)
+ *                  fields: per event, the fields to keep (whole event when absent)
  *   server → ext   { id, type: "detach", targetId }
  *   server → ext   { id, type: "command", targetId, method, params }
  *   server → ext   { id, type: "createTarget", url }
  *   server → ext   { id, type: "activateTarget", targetId }
  *   server → ext   { id, type: "closeTarget", targetId }
+ *   server → ext   { id, type: "goBack", targetId }         history back, without the debugger
  *
  * A `targetId` is the Chrome tab id as a string. The engine treats it as opaque.
  */
@@ -49,6 +52,52 @@ let retry = RETRY_MIN
 let pingTimer
 /** Tabs this extension has attached the debugger to. */
 const attached = new Set()
+/**
+ * Per tab, the CDP events OpenCode asked for. A busy page emits far more than
+ * it reads (Network.dataReceived and the like), and relaying those would queue
+ * them in front of command replies on the one socket.
+ */
+const wanted = new Map()
+/**
+ * Per tab, the fields OpenCode reads from each event, by event name. One
+ * `Network.responseReceived` carries every header, the timing breakdown and
+ * the TLS certificate chain; relaying an ordinary news site in full was 1.1 MB
+ * of events in twelve seconds, ahead of the clicks waiting on the same socket.
+ * OpenCode sends this table when it attaches, so what to keep is decided there,
+ * in `protocol.ts`, not here. An event with no entry is relayed whole.
+ */
+const shapes = new Map()
+
+/**
+ * A copy of `params` holding only `paths` ("response.status" and the like).
+ *
+ * A path the event does not have is left out rather than filled in, so what
+ * arrives on the other side looks exactly like an event that never carried it.
+ */
+function prune(params, paths) {
+  const out = {}
+  for (const path of paths) {
+    const parts = String(path).split(".")
+    let from = params
+    let depth = 0
+    for (; depth < parts.length - 1; depth++) {
+      if (from === null || typeof from !== "object" || !(parts[depth] in from)) break
+      from = from[parts[depth]]
+    }
+    if (depth !== parts.length - 1) continue
+    if (from === null || typeof from !== "object") continue
+    const leaf = parts[depth]
+    if (!(leaf in from)) continue
+    let to = out
+    for (let index = 0; index < parts.length - 1; index++) {
+      const key = parts[index]
+      if (typeof to[key] !== "object" || to[key] === null) to[key] = {}
+      to = to[key]
+    }
+    to[leaf] = from[leaf]
+  }
+  return out
+}
 
 async function config() {
   const stored = await chrome.storage.local.get(["port", "token"])
@@ -74,13 +123,35 @@ function tabIdOf(targetId) {
   return id
 }
 
+/** Tabs being detached on purpose to attach again, whose detach OpenCode must not hear about. */
+const reattaching = new Set()
+
 async function ensureAttached(tabId) {
   if (attached.has(tabId)) return
-  await chrome.debugger.attach({ tabId }, PROTOCOL)
+  try {
+    await chrome.debugger.attach({ tabId }, PROTOCOL)
+  } catch (error) {
+    const message = String(error && error.message ? error.message : error)
+    if (!/already attached/i.test(message)) throw error
+    // The browser restarts this service worker when it likes, and the new one
+    // forgets which tabs the old one attached to; the browser does not. Detach
+    // what is ours and attach afresh. If the detach fails the debugger is
+    // someone else's, such as DevTools open on the tab.
+    reattaching.add(tabId)
+    try {
+      await chrome.debugger.detach({ tabId })
+    } catch {
+      reattaching.delete(tabId)
+      throw new Error(`${message} DevTools or another extension is debugging this tab; close it there and try again.`)
+    }
+    await chrome.debugger.attach({ tabId }, PROTOCOL)
+  }
   attached.add(tabId)
 }
 
 async function detach(tabId) {
+  wanted.delete(tabId)
+  shapes.delete(tabId)
   if (!attached.has(tabId)) return
   attached.delete(tabId)
   try {
@@ -109,7 +180,12 @@ async function handle(message) {
       case "listTargets":
         return reply(id, { targets: await listTargets() })
       case "attach": {
-        await ensureAttached(tabIdOf(message.targetId))
+        const tabId = tabIdOf(message.targetId)
+        if (Array.isArray(message.events)) wanted.set(tabId, new Set(message.events))
+        else wanted.delete(tabId)
+        if (message.fields && typeof message.fields === "object") shapes.set(tabId, message.fields)
+        else shapes.delete(tabId)
+        await ensureAttached(tabId)
         return reply(id, {})
       }
       case "detach": {
@@ -137,6 +213,12 @@ async function handle(message) {
         const tabId = tabIdOf(message.targetId)
         await detach(tabId)
         await chrome.tabs.remove(tabId)
+        return reply(id, {})
+      }
+      case "goBack": {
+        // Needs no debugger, so it also rescues a tab the debugger was thrown
+        // off, such as one that opened a PDF in the browser's own viewer.
+        await chrome.tabs.goBack(tabIdOf(message.targetId))
         return reply(id, {})
       }
       default:
@@ -190,32 +272,51 @@ function scheduleReconnect() {
   retry = Math.min(retry * 2, RETRY_MAX)
 }
 
-// CDP events from any attached tab go straight to OpenCode.
+// CDP events from any attached tab go to OpenCode, if it asked for them.
 chrome.debugger.onEvent.addListener((source, method, params) => {
   if (typeof source.tabId !== "number") return
-  send({ type: "event", targetId: String(source.tabId), method, params: params || {} })
+  const filter = wanted.get(source.tabId)
+  if (filter && !filter.has(method)) return
+  const fields = shapes.get(source.tabId)
+  const keep = fields && Array.isArray(fields[method]) ? fields[method] : undefined
+  const payload = params || {}
+  send({ type: "event", targetId: String(source.tabId), method, params: keep ? prune(payload, keep) : payload })
 })
 
 // The debugger can be dropped by the user, by DevTools opening, or by the tab
 // closing; OpenCode needs to know the tab is no longer driveable.
 chrome.debugger.onDetach.addListener((source, reason) => {
   if (typeof source.tabId !== "number") return
+  if (reattaching.delete(source.tabId)) return
   attached.delete(source.tabId)
+  wanted.delete(source.tabId)
+  shapes.delete(source.tabId)
   send({ type: "detached", targetId: String(source.tabId), reason })
 })
 
 // Tab lifecycle, so OpenCode's tab list and the live panel stay current.
 chrome.tabs.onCreated.addListener((tab) => {
-  if (typeof tab.id === "number") send({ type: "target", event: "created", target: { targetId: String(tab.id), url: tab.url || "", title: tab.title || "", active: !!tab.active } })
+  if (typeof tab.id === "number")
+    send({
+      type: "target",
+      event: "created",
+      target: { targetId: String(tab.id), url: tab.url || "", title: tab.title || "", active: !!tab.active },
+    })
 })
 chrome.tabs.onUpdated.addListener((tabId, _info, tab) => {
-  send({ type: "target", event: "updated", target: { targetId: String(tabId), url: tab.url || "", title: tab.title || "", active: !!tab.active } })
+  send({
+    type: "target",
+    event: "updated",
+    target: { targetId: String(tabId), url: tab.url || "", title: tab.title || "", active: !!tab.active },
+  })
 })
 chrome.tabs.onActivated.addListener((info) => {
   send({ type: "target", event: "activated", target: { targetId: String(info.tabId) } })
 })
 chrome.tabs.onRemoved.addListener((tabId) => {
   attached.delete(tabId)
+  wanted.delete(tabId)
+  shapes.delete(tabId)
   send({ type: "target", event: "removed", target: { targetId: String(tabId) } })
 })
 

@@ -15,6 +15,13 @@
       "port": 3000
     },
     {
+      "name": "app-web-4097-alt",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["--cwd", "packages/app", "dev", "--port", "3100", "--strictPort"],
+      "env": { "VITE_OPENCODE_SERVER_PORT": "4097" },
+      "port": 3100
+    },
+    {
       "name": "server-4097",
       "runtimeExecutable": "bun",
       "runtimeArgs": ["--cwd", "packages/opencode", "dev", "serve", "--port", "4097"],

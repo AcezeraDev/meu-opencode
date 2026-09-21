@@ -2,6 +2,7 @@ import { Effect, Schema } from "effect"
 import { Browser } from "@/browser/session"
 import { BrowserBlocked } from "@/browser/blocked"
 import { BrowserPage } from "@/browser/page"
+import { BrowserPdf } from "@/browser/pdf"
 import * as Tool from "./tool"
 import DESCRIPTION from "./browser_navigate.txt"
 
@@ -29,11 +30,11 @@ export const Parameters = Schema.Struct({
     description: "What to do. Defaults to goto when a url is given, otherwise list_tabs.",
   }),
   tab: Schema.optional(Schema.String).annotate({
-    description: "Tab id for select_tab and close_tab, as shown by list_tabs.",
+    description: "Tab id for select_tab and close_tab, as shown by list_tabs. With goto, the tab to navigate.",
   }),
-  waitUntil: Schema.optional(Schema.Literals(["load", "domcontentloaded", "networkidle"])).annotate({
+  waitUntil: Schema.optional(Schema.Literals(["domcontentloaded", "load", "networkidle"])).annotate({
     description:
-      "How long to wait for the page. 'load' (default) waits for the load event, 'networkidle' also waits for requests to settle, which helps with single page apps.",
+      "How long to wait for the page. 'domcontentloaded' (default) returns once the document is parsed and has stopped changing, which is enough for most pages and single page apps. 'load' also waits for every image and script, 'networkidle' for requests to stop.",
   }),
   snapshot: Schema.optional(Schema.Boolean).annotate({
     description: "Return the page outline after navigating. Defaults to true.",
@@ -51,6 +52,8 @@ interface Metadata {
   handoff?: string
   /** Why the site was considered to have blocked the built-in browser. */
   blocked?: string
+  /** What the result shows of the page, so older views can be left out of the model's context. */
+  page?: string
 }
 
 const NAVIGATIONS = new Set(["goto", "new_tab", "back", "forward", "reload"])
@@ -76,8 +79,14 @@ export const BrowserNavigateTool = Tool.define(
           if ((action === "goto" || action === "new_tab") && !url) {
             throw new Error(`The ${action} action needs a url.`)
           }
-          if (url && !url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("file://")) {
-            throw new Error("URL must be http://, https:// or file://")
+          if (
+            url &&
+            url !== "about:blank" &&
+            !url.startsWith("http://") &&
+            !url.startsWith("https://") &&
+            !url.startsWith("file://")
+          ) {
+            throw new Error("URL must be http://, https://, file:// or about:blank")
           }
 
           yield* ctx.metadata({ title: url ?? action, metadata: { action, url } })
@@ -120,9 +129,30 @@ export const BrowserNavigateTool = Tool.define(
             }
           }
 
+          // A PDF has no page to act on, and the person's own browser does not
+          // let the extension into its PDF viewer: it is read directly, and the
+          // tab stays where it is.
+          if ((action === "goto" || action === "new_tab") && url && BrowserPdf.looksLikePdf(url)) {
+            const active = yield* browser.current()
+            const text = yield* Effect.promise(() => BrowserPage.readPdf(url, active))
+            return {
+              output: [text, "", "(Read directly; the browser tab was left as it was.)"].join("\n"),
+              title: `PDF ${url}`,
+              metadata: { action, url, page: "pdf" },
+            }
+          }
+
           if (action === "close_browser") {
+            const mode = yield* browser.mode()
             yield* browser.shutdown()
-            return { output: "Browser closed.", title: "Browser closed", metadata: { action } }
+            return {
+              output:
+                mode === "extension"
+                  ? "Stopped driving the user's browser; their tabs stay open. The next browser action attaches again."
+                  : "Browser closed.",
+              title: "Browser closed",
+              metadata: { action },
+            }
           }
 
           if (action === "close_tab") {
@@ -139,11 +169,12 @@ export const BrowserNavigateTool = Tool.define(
           const tab =
             action === "new_tab"
               ? yield* browser.open()
-              : action === "select_tab"
+              : action === "select_tab" || (action === "goto" && params.tab)
                 ? yield* browser.select(params.tab!)
                 : yield* browser.tab()
+          const before = tab.pdf
 
-          const waitUntil = params.waitUntil ?? "load"
+          const waitUntil = params.waitUntil ?? "domcontentloaded"
           const timeout = yield* browser.timeout()
 
           let refusal: ReturnType<typeof BrowserBlocked.refused>
@@ -162,6 +193,19 @@ export const BrowserNavigateTool = Tool.define(
             yield* Effect.promise(() => tab.history(1, waitUntil, timeout))
           } else if (action === "reload") {
             yield* Effect.promise(() => tab.reload(waitUntil, timeout))
+          }
+          // A parsed document is often still being built by its scripts; the
+          // outline should show what they render, not the empty shell.
+          if (NAVIGATIONS.has(action) && waitUntil === "domcontentloaded" && !refusal) {
+            yield* Effect.promise(() => tab.quiet(150, 2500))
+          }
+
+          // An address that did not look like one can still serve a PDF.
+          if (NAVIGATIONS.has(action)) {
+            const pdf = yield* BrowserPage.landedOnPdf(browser, tab, before)
+            if (pdf) {
+              return { output: pdf.output, title: `PDF ${pdf.url}`, metadata: { action, url: pdf.url, page: "pdf" } }
+            }
           }
 
           // A bot wall is not worth an outline: the page goes to the user's own
@@ -186,11 +230,8 @@ export const BrowserNavigateTool = Tool.define(
             }
           }
 
-          const current = yield* Effect.promise(() => tab.url())
-          const title = yield* Effect.promise(() => tab.title())
-          yield* ctx.metadata({ title: title || current, metadata: { action, url: current } })
-
           if (params.snapshot === false) {
+            const [current, title] = yield* Effect.promise(() => Promise.all([tab.url(), tab.title()]))
             return {
               output: [`url: ${current}`, `title: ${title || "(untitled)"}`].join("\n"),
               title: title || current,
@@ -200,9 +241,9 @@ export const BrowserNavigateTool = Tool.define(
 
           const result = yield* Effect.promise(() => tab.snapshot())
           return {
-            output: BrowserPage.render(result),
-            title: title || current,
-            metadata: { action, url: current, refs: result.refs },
+            output: BrowserPage.outline(tab, result),
+            title: result.title || result.url,
+            metadata: { action, url: result.url, refs: result.refs, page: "outline" },
           }
         }).pipe(Effect.orDie),
     }

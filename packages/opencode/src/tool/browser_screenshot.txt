@@ -8,3 +8,7 @@ and more precise.
 
 Pass `ref` or `selector` to capture a single element, or `fullPage` to capture the
 entire scrollable page instead of just the viewport.
+
+The result also lists the text the screenshot shows, top to bottom, so it can be
+read even without seeing the image. To act on the page, you still need refs from
+browser_snapshot.

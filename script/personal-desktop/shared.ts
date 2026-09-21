@@ -1,6 +1,6 @@
 import { $ } from "bun"
 import { existsSync, readdirSync, readFileSync } from "node:fs"
-import { appendFile, mkdir, open, rm, stat, truncate } from "node:fs/promises"
+import { appendFile, lstat, mkdir, open, rm, stat, truncate } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 
@@ -19,6 +19,12 @@ export const STATE = path.join(HOME, "state.json")
 export const PENDING = path.join(HOME, "OpenCodePersonalSetup.exe")
 export const BUILD_LOCK = path.join(HOME, "update.lock")
 export const INSTALL_LOCK = path.join(HOME, "install.lock")
+/**
+ * Present on a PC that follows the published code instead of being where it is
+ * written (instalar.ps1 creates it): updates come from `git pull` there, not
+ * from files changing on disk.
+ */
+export const FOLLOW = path.join(HOME, "follow.json")
 
 export const PRODUCT = "OpenCode Personal"
 export const EXE = `${PRODUCT}.exe`
@@ -212,4 +218,103 @@ export async function installPending(options: { relaunch?: boolean } = {}) {
   } finally {
     await releaseLock(INSTALL_LOCK)
   }
+}
+
+export type Follow = { remote: string; branch: string }
+
+/** How this PC gets its updates, when it follows the published code. */
+export async function following(): Promise<Follow | undefined> {
+  const saved = await Bun.file(FOLLOW)
+    .json()
+    .catch(() => undefined)
+  if (!saved || typeof saved.remote !== "string" || typeof saved.branch !== "string") return
+  return saved as Follow
+}
+
+/** The files the repository keeps as symbolic links. */
+async function linkedFiles() {
+  const listed = await $`git ls-files -s`.cwd(ROOT).quiet().text()
+  return listed
+    .split("\n")
+    .filter((line) => line.startsWith("120000 "))
+    .map((line) => line.slice(line.indexOf("\t") + 1).trim())
+    .filter(Boolean)
+}
+
+/**
+ * Turns the repository's symbolic links into copies of what they point at.
+ *
+ * Windows only lets Git create real links with Developer Mode on, and without
+ * it each link is checked out as a small text file holding the target's path.
+ * The app's icons are such links, so a build from that checkout ships broken
+ * images. Copying the targets in makes the checkout build the same everywhere,
+ * and marking them skip-worktree keeps Git from counting them as local edits.
+ * Real links are left alone.
+ */
+export async function materializeLinks() {
+  const files = await linkedFiles()
+  const copied: string[] = []
+  for (const file of files) {
+    const full = path.join(ROOT, file)
+    const info = await lstat(full).catch(() => undefined)
+    // A real link is already right; a placeholder is a few bytes of path.
+    if (!info || info.isSymbolicLink() || !info.isFile() || info.size > 1024) continue
+    const target = path.resolve(path.dirname(full), (await Bun.file(full).text()).trim())
+    const source = await stat(target).catch(() => undefined)
+    // A link to a folder (only the console's email templates) is not part of the app.
+    if (!source?.isFile()) continue
+    await Bun.write(full, Bun.file(target))
+    copied.push(file)
+  }
+  if (copied.length) await $`git update-index --skip-worktree ${copied}`.cwd(ROOT).quiet().nothrow()
+  return copied.length
+}
+
+/** Puts the link placeholders back, so Git can update them like any file. */
+async function restoreLinks() {
+  const files = await linkedFiles()
+  if (!files.length) return
+  await $`git update-index --no-skip-worktree ${files}`.cwd(ROOT).quiet().nothrow()
+  await $`git checkout -- ${files}`.cwd(ROOT).quiet().nothrow()
+}
+
+/**
+ * Brings a following PC up to the published code. Returns whether anything
+ * new came in. Only ever moves forward: if this checkout has commits of its
+ * own, or local edits in the way, it stays as it is and says so, rather than
+ * throwing work away.
+ */
+export async function pullPublished(follow: Follow) {
+  const fetched = await $`git fetch ${follow.remote} ${follow.branch}`.cwd(ROOT).quiet().nothrow()
+  if (fetched.exitCode !== 0) {
+    await log(`Não consegui buscar atualizações no GitHub: ${fetched.stderr.toString().trim().split("\n").at(-1)}`)
+    return false
+  }
+  const head = (await $`git rev-parse HEAD`.cwd(ROOT).quiet().text()).trim()
+  const published = (await $`git rev-parse FETCH_HEAD`.cwd(ROOT).quiet().text()).trim()
+  if (head === published) return false
+  const behind = await $`git merge-base --is-ancestor ${head} ${published}`.cwd(ROOT).quiet().nothrow()
+  if (behind.exitCode !== 0) {
+    await log("Este PC tem mudanças próprias no código; não atualizo por cima delas.")
+    return false
+  }
+  await restoreLinks()
+  // The lockfile is rewritten by `bun install` itself; a local copy of it is
+  // never work of anyone's, and left in place it would block the update.
+  await $`git checkout -- bun.lock`.cwd(ROOT).quiet().nothrow()
+  const merged = await $`git merge --ff-only ${published}`.cwd(ROOT).quiet().nothrow()
+  if (merged.exitCode !== 0) {
+    await materializeLinks()
+    await log(`Não consegui aplicar a atualização: ${merged.stderr.toString().trim().split("\n").at(-1)}`)
+    return false
+  }
+  const changed = await $`git diff --name-only ${head} ${published}`.cwd(ROOT).quiet().text()
+  if (/(^|\/)(package\.json|bun\.lock)$/m.test(changed)) {
+    await log("Dependências mudaram; instalando...")
+    const installed = await $`${process.execPath} install`.cwd(ROOT).quiet().nothrow()
+    if (installed.exitCode !== 0) throw new Error(`bun install falhou:\n${installed.stderr.toString().slice(-2000)}`)
+  }
+  await materializeLinks()
+  await log(`Código atualizado do GitHub (${head.slice(0, 7)} → ${published.slice(0, 7)}).`)
+  return true
 }

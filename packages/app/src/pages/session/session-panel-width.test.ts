@@ -3,9 +3,38 @@ import {
   clampSessionPanelWidth,
   REVIEW_PANE_WIDTH_MIN,
   REVIEW_PANE_WIDTH_MIN_SPLIT,
+  resolveSessionDiffStyle,
   SESSION_PANEL_WIDTH_MIN,
   sessionPanelWidthMax,
+  sessionSplitDiffAvailable,
 } from "./session-panel-width"
+
+describe("sessionSplitDiffAvailable", () => {
+  test("waits for enough room for chat and a split review", () => {
+    const minimum = SESSION_PANEL_WIDTH_MIN + REVIEW_PANE_WIDTH_MIN_SPLIT
+    expect(sessionSplitDiffAvailable({ available: minimum - 1, session: true })).toBeFalse()
+    expect(sessionSplitDiffAvailable({ available: minimum, session: true })).toBeTrue()
+  })
+
+  test("only reserves the review minimum in review focus", () => {
+    expect(sessionSplitDiffAvailable({ available: REVIEW_PANE_WIDTH_MIN_SPLIT - 1, session: false })).toBeFalse()
+    expect(sessionSplitDiffAvailable({ available: REVIEW_PANE_WIDTH_MIN_SPLIT, session: false })).toBeTrue()
+  })
+
+  test("keeps the stored preference before the workspace is measured", () => {
+    expect(sessionSplitDiffAvailable({ available: undefined, session: true })).toBeTrue()
+  })
+})
+
+describe("resolveSessionDiffStyle", () => {
+  test("temporarily presents a unified diff when split would be unreadable", () => {
+    expect(resolveSessionDiffStyle({ style: "split", available: 900, session: true })).toBe("unified")
+  })
+
+  test("restores split presentation when enough room returns", () => {
+    expect(resolveSessionDiffStyle({ style: "split", available: 1300, session: true })).toBe("split")
+  })
+})
 
 describe("sessionPanelWidthMax", () => {
   test("reserves the unified review pane minimum", () => {

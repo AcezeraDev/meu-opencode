@@ -78,8 +78,10 @@ import { useSessionLayout } from "@/pages/session/session-layout"
 import { restorePromptModel, syncPromptModel, syncSessionModel } from "@/pages/session/session-model-helpers"
 import {
   clampSessionPanelWidth,
+  resolveSessionDiffStyle,
   SESSION_PANEL_WIDTH_MIN,
   sessionPanelWidthMax,
+  sessionSplitDiffAvailable,
 } from "@/pages/session/session-panel-width"
 import { SessionSidePanel } from "@/pages/session/session-side-panel"
 import { sessionPanelLayout } from "@/pages/session/session-panel-layout"
@@ -101,6 +103,8 @@ import { Portal } from "solid-js/web"
 import { useTitlebarRightMount } from "@/components/titlebar"
 import { createSessionModeState, SessionModeSwitcher, type SessionMode } from "./session/session-mode"
 import { SessionRail } from "./session/session-rail"
+import "./session/session-workspace.css"
+import "./session/session-chat.css"
 import { SessionTrail } from "./session/session-trail"
 import { ContextRing } from "./session/scope/context-ring"
 import { MeasurementStrip } from "./session/scope/measurement-strip"
@@ -340,7 +344,11 @@ function SessionProviders(props: ParentProps) {
 
 function SessionRouteFrame(props: ParentProps<{ padded?: boolean }>) {
   return (
-    <div class="relative size-full overflow-hidden flex flex-col" classList={{ "p-2": props.padded }}>
+    <div
+      data-component="session-workspace"
+      class="session-workspace relative size-full overflow-hidden flex flex-col"
+      classList={{ "p-2": props.padded }}
+    >
       {props.children}
     </div>
   )
@@ -349,6 +357,9 @@ function SessionRouteFrame(props: ParentProps<{ padded?: boolean }>) {
 function SessionPanelFrame(props: ParentProps<{ newLayout: boolean; raised?: boolean; working?: boolean }>) {
   return (
     <div
+      data-component="session-workspace-panel"
+      data-raised={props.raised || undefined}
+      data-working={props.working || undefined}
       classList={{
         "relative flex-1 min-h-0 flex flex-col": true,
         "scope-screen": props.newLayout,
@@ -502,9 +513,7 @@ export default function Page() {
   // The browser pane lives in the new layout's right column, beside review and terminal.
   const desktopBrowserOpen = createMemo(() => newSessionDesign() && isDesktop() && !!params.id && browserPane.opened())
   const desktopSessionResizeOpen = createMemo(() =>
-    newSessionDesign()
-      ? desktopV2ReviewOpen() || desktopTerminalOpen() || desktopBrowserOpen()
-      : desktopReviewOpen(),
+    newSessionDesign() ? desktopV2ReviewOpen() || desktopTerminalOpen() || desktopBrowserOpen() : desktopReviewOpen(),
   )
   const desktopSidePanelOpen = createMemo(() => desktopSessionResizeOpen() || desktopFileTreeOpen())
   let panelRow: HTMLDivElement | undefined
@@ -513,9 +522,6 @@ export default function Page() {
     () => panelRow,
     ({ width }) => setPanelRowWidth(width),
   )
-  const splitReview = createMemo(
-    () => (newSessionDesign() ? desktopV2ReviewOpen() : desktopReviewOpen()) && layout.review.diffStyle() === "split",
-  )
   // The observer reports the content-box width, which already excludes the row
   // padding; only the flex gap between the panels remains to subtract.
   const sessionPanelAvailable = createMemo(() => {
@@ -523,6 +529,22 @@ export default function Page() {
     if (width === undefined) return undefined
     return width - (settings.general.newLayoutDesigns() ? 8 : 0)
   })
+  const desktopSplitReviewAvailable = createMemo(() =>
+    sessionSplitDiffAvailable({
+      available: sessionPanelAvailable(),
+      session: !reviewFocus(),
+    }),
+  )
+  const desktopReviewDiffStyle = createMemo(() =>
+    resolveSessionDiffStyle({
+      style: layout.review.diffStyle(),
+      available: sessionPanelAvailable(),
+      session: !reviewFocus(),
+    }),
+  )
+  const splitReview = createMemo(
+    () => (newSessionDesign() ? desktopV2ReviewOpen() : desktopReviewOpen()) && desktopReviewDiffStyle() === "split",
+  )
   const sessionPanelMax = createMemo(() => {
     const available = sessionPanelAvailable()
     if (available === undefined) return 1000
@@ -1384,7 +1406,10 @@ export default function Page() {
     },
     onSelectFile: focusReviewDiff,
     get diffStyle() {
-      return layout.review.diffStyle()
+      return desktopReviewDiffStyle()
+    },
+    get splitDiffDisabled() {
+      return !desktopSplitReviewAvailable()
     },
     onDiffStyleChange: layout.review.setDiffStyle,
     state: reviewV2State,
@@ -2344,7 +2369,7 @@ export default function Page() {
         </Show>
         <div
           ref={panelRow}
-          class="flex-1 min-h-0 min-w-0 flex flex-col md:flex-row"
+          class="session-workspace-panels flex-1 min-h-0 min-w-0 flex flex-col md:flex-row"
           classList={{
             "gap-2 p-2": settings.general.newLayoutDesigns(),
           }}
@@ -2419,10 +2444,17 @@ export default function Page() {
           </Show>
           <Show when={newSessionDesign()}>
             <Show when={isDesktop() ? desktopV2PanelLayout().visible : terminalOpen()}>
-              <div class="min-w-0 h-full flex flex-1 flex-col">
+              <div class="session-workspace-sidecar min-w-0 h-full flex flex-1 flex-col">
                 <Show when={desktopBrowserOpen()}>
                   <div id="browser-pane" class="min-h-0 flex-1">
-                    <BrowserPane directory={() => sdk().directory} onClose={() => browserPane.close()} />
+                    <BrowserPane
+                      directory={() => sdk().directory}
+                      onClose={() => browserPane.close()}
+                      working={() => !!params.id && busy(params.id)}
+                      onStop={() => {
+                        if (params.id) void halt(params.id)
+                      }}
+                    />
                   </div>
                 </Show>
                 <Show when={isDesktop() && (desktopV2ReviewOpen() || desktopFileTreeOpen())}>

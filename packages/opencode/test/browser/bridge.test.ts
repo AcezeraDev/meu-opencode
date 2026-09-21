@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
+import path from "path"
 import { Bridge, type TargetEvent } from "@/browser/bridge"
+import { TAB_EVENTS } from "@/browser/protocol"
 
 /**
  * The bridge multiplexes one extension socket into per-tab transports. None of
@@ -29,6 +31,28 @@ function harness(token = "secret") {
 }
 
 describe("browser bridge", () => {
+  test("relays every CDP event a tab listens to", async () => {
+    const source = await Bun.file(path.join(import.meta.dir, "../../src/browser/tab.ts")).text()
+    const listened = Array.from(source.matchAll(/this\.connection\.(?:on|once)\("([^"]+)"/g), (match) => match[1]!)
+    expect([...new Set(listened)].sort()).toEqual([
+      "Input.dragIntercepted",
+      "Network.loadingFailed",
+      "Network.loadingFinished",
+      "Network.requestWillBeSent",
+      "Network.responseReceived",
+      "Page.domContentEventFired",
+      "Page.frameNavigated",
+      "Page.frameStartedLoading",
+      "Page.frameStoppedLoading",
+      "Page.javascriptDialogOpening",
+      "Page.loadEventFired",
+      "Page.screencastFrame",
+      "Runtime.consoleAPICalled",
+      "Runtime.exceptionThrown",
+    ])
+    expect(listened.every((event) => TAB_EVENTS.includes(event as (typeof TAB_EVENTS)[number]))).toBe(true)
+  })
+
   test("stays closed until the right token arrives, and drops a wrong one", () => {
     const h = harness()
     expect(h.bridge.connected).toBe(false)
@@ -107,6 +131,27 @@ describe("browser bridge", () => {
     expect(tab.connected).toBe(true)
     h.bridge.receive(JSON.stringify({ type: "detached", targetId: "3", reason: "target_closed" }))
     expect(tab.connected).toBe(false)
+  })
+
+  test("a tab the debugger was thrown off gets a fresh transport, and its waits fail at once", async () => {
+    const h = harness()
+    h.auth()
+    const dead = h.bridge.connection("5")
+    const waiting = dead.once("Page.loadEventFired", 60_000).then(
+      () => "fired",
+      (error: Error) => error.message,
+    )
+    // What the browser does when the tab opens its PDF viewer.
+    h.bridge.receive(JSON.stringify({ type: "detached", targetId: "5", reason: "target_closed" }))
+    expect(await waiting).toContain("not connected")
+    expect(dead.connected).toBe(false)
+
+    const fresh = h.bridge.connection("5")
+    expect(fresh).not.toBe(dead)
+    expect(fresh.connected).toBe(true)
+    // Closing the old one late must not throw away the new one.
+    dead.close()
+    expect(h.bridge.connection("5")).toBe(fresh)
   })
 
   test("disconnecting fails in-flight calls and closes tabs", async () => {

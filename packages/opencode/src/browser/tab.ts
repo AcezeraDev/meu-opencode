@@ -1,6 +1,7 @@
 import { CDPConnection, type CDPTransport } from "./cdp"
 import { BrowserCursor } from "./cursor"
-import { BrowserSnapshot, type SnapshotOptions, type SnapshotResult } from "./snapshot"
+import { BrowserSnapshot, type RefIdentity, type SnapshotOptions, type SnapshotResult } from "./snapshot"
+import { BrowserTrace } from "./trace"
 import {
   asRecord,
   asText,
@@ -33,6 +34,15 @@ export interface DocumentResponse {
   status: number
   /** Header names lower-cased, since HTTP/2 and HTTP/1 disagree on case. */
   headers: Record<string, string>
+  /** What the browser took the response to be, such as text/html or application/pdf. */
+  mimeType: string
+}
+
+/** A dialog the page opened (alert, confirm, prompt, or "leave this page?"), and how it was answered. */
+export interface Dialog {
+  type: string
+  message: string
+  accepted: boolean
 }
 
 export interface Rect {
@@ -59,6 +69,8 @@ export type ActivityKind =
   | "check"
   | "uncheck"
   | "scroll"
+  | "drag"
+  | "upload"
   | "wait"
   | "read"
   | "screenshot"
@@ -114,22 +126,333 @@ export interface TabHooks {
   changed(): void
 }
 
+/** Navigation counters at one moment, to tell what an action set off since. */
+export interface Mark {
+  started: number
+  stopped: number
+  /** DOMContentLoaded, which is when a document is readable. */
+  loaded: number
+  /** The load event, which also waits for images and stylesheets. */
+  complete: number
+  request: number
+}
+
 const IDLE: TabHooks = { presenting: () => false, activity: () => {}, changed: () => {} }
 
 const BUFFER_LIMIT = 300
 
 /**
  * Pace while someone watches. Without an audience the agent acts at full speed;
- * with one, the cursor needs time to travel and a click needs a beat to land,
- * or the live view is a series of teleports.
+ * with one, the cursor needs a moment to travel (the glide itself is timed by
+ * the overlay, see cursor.ts) and a click a beat to land, or the view is a
+ * series of teleports. Kept short: the point is to follow the agent, not to
+ * slow it down.
  */
-const GLIDE_MIN = 240
-const GLIDE_MAX = 700
-const GLIDE_PER_PIXEL = 0.5
-const CLICK_SETTLE = 160
-const TYPE_DELAY = 28
-const TYPE_BUDGET = 2400
-const SCROLL_SETTLE = 450
+const CLICK_SETTLE = 40
+/**
+ * Watched typing is spread over at most `TYPE_BUDGET` ms, a few characters per
+ * `TYPE_TICK` (about a frame), so it is visible without a long text taking long.
+ */
+const TYPE_TICK = 16
+const TYPE_BUDGET = 300
+const SCROLL_SETTLE = 350
+
+/**
+ * Settling after an action. A click that does not navigate never fires a load
+ * event, so instead of waiting for one the page is watched: it has settled once
+ * its DOM has been still for `QUIET` ms, or after `QUIET_MAX` ms on a page that
+ * never stops animating.
+ */
+const QUIET = 100
+const QUIET_MAX = 800
+/** A request the action set off, such as a form post or an answer being checked, gets this long to come back. */
+const REQUEST_MAX = 2500
+/** A navigation the action started gets this long to reach DOMContentLoaded. */
+const NAVIGATION_MAX = 15_000
+/**
+ * How long a navigation that was asked for has to actually start. Past this,
+ * nothing left the page — a link to the same document, a fragment, a page that
+ * was already where it was being sent — and there is nothing to wait for.
+ */
+const NAVIGATION_START = 1500
+/** Request types that end in a re-render; images, fonts and beacons hold nothing up. */
+const SETTLE_TYPES = new Set(["XHR", "Fetch", "Document"])
+/** How recently the agent must have acted for a new document to show its cursor again. */
+const CURSOR_CARRY = 3000
+/**
+ * How far the element may have moved between aiming and pressing before the
+ * drawn cursor is sent after it. Below this it is not worth an animation, and
+ * the press is at the new point either way.
+ */
+const CURSOR_DRIFT = 2
+/** How long the cursor takes to catch up with an element that moved. */
+const CURSOR_CATCHUP = 90
+
+/**
+ * The fastest the live view is fed, in milliseconds between pictures.
+ *
+ * Chromium holds the next screencast frame until the last one is acknowledged,
+ * so when the acknowledgement goes out is what sets the pace. A page that
+ * animates would otherwise make every picture it can, and nobody has time to
+ * look at them: each one costs a JPEG, a trip through the extension and the
+ * socket, and a decode in the pane. Worse, on the extension bridge frames and
+ * command replies share one socket, so a click waits behind whatever is queued
+ * in front of it. Measured on a page animating flat out, this takes the stream
+ * from 49 pictures and 961 KB a second to 21 and 419 KB: still live to watch,
+ * with the socket free for what the hand is doing.
+ */
+const CAST_INTERVAL = 40
+
+/**
+ * Finds an element in the page or in any frame of the same site inside it,
+ * which is where embedded activities such as H5P quizzes live, and where the
+ * snapshot hands out refs too. Ref lookups inspect every match so a cloned ref
+ * cannot silently select the wrong copy.
+ */
+const FIND = String.raw`(function (selector, identity) {
+  function collect(doc, scopes) {
+    var roots = [doc]
+    for (var index = 0; index < roots.length; index++) {
+      var root = roots[index]
+      scopes.push(root)
+      var elements = root.querySelectorAll("*")
+      for (var i = 0; i < elements.length; i++) {
+        // Closed roots expose no shadowRoot to page JavaScript and therefore
+        // cannot be searched without bypassing the page's own boundary.
+        if (elements[i].shadowRoot) roots.push(elements[i].shadowRoot)
+      }
+      var frames = root.querySelectorAll("iframe, frame")
+      for (var f = 0; f < frames.length; f++) {
+        var inner = null
+        try {
+          inner = frames[f].contentDocument
+        } catch (error) {}
+        if (inner) collect(inner, scopes)
+      }
+    }
+  }
+  function matches(selector, scopes) {
+    var out = []
+    for (var r = 0; r < scopes.length; r++) {
+      var found = scopes[r].querySelectorAll(selector)
+      for (var i = 0; i < found.length; i++) out.push(found[i])
+    }
+    return out
+  }
+  function positionOf(el) {
+    var parts = []
+    var node = el
+    while (node) {
+      var parent = node.parentElement
+      var index = parent ? Array.prototype.indexOf.call(parent.children, node) : 0
+      parts.unshift(node.tagName.toLowerCase() + ":" + index)
+      if (parent) {
+        node = parent
+        continue
+      }
+      var root = node.getRootNode ? node.getRootNode() : null
+      if (root && root.host) {
+        parts.unshift("#shadow")
+        node = root.host
+        continue
+      }
+      var view = node.ownerDocument && node.ownerDocument.defaultView
+      if (view && view !== window && view.frameElement) {
+        parts.unshift("#frame")
+        node = view.frameElement
+        continue
+      }
+      break
+    }
+    return parts.join("/")
+  }
+  var isRef = /^\[data-oc-ref=/.test(selector)
+  if (!isRef) {
+    var top = document.querySelector(selector)
+    if (top) return top
+  }
+  var scopes = []
+  collect(document, scopes)
+  var direct = matches(selector, scopes)
+  if (direct.length > 1 && isRef) {
+    throw new Error("__OC_REF_ERROR__The ref matches more than one element, so it is unsafe to act on it. Take a fresh browser_snapshot and use a new ref.")
+  }
+  if (direct.length) return direct[0]
+  if (!identity || identity.document !== window.__ocDocumentIdentity) return null
+
+  var HEADINGS = { H1: 1, H2: 2, H3: 3, H4: 4, H5: 5, H6: 6 }
+  var LANDMARKS = { NAV: "navigation", MAIN: "main", HEADER: "banner", FOOTER: "contentinfo", ASIDE: "complementary", FORM: "form", DIALOG: "dialog" }
+  function clean(value) {
+    return value ? String(value).replace(/\s+/g, " ").trim() : ""
+  }
+  function roleOf(el) {
+    var explicit = el.getAttribute("role")
+    if (explicit) return explicit.trim().split(/\s+/)[0]
+    var tag = el.tagName
+    if (HEADINGS[tag]) return "heading"
+    if (LANDMARKS[tag]) return LANDMARKS[tag]
+    if (tag === "A") return el.hasAttribute("href") ? "link" : "generic"
+    if (tag === "BUTTON" || tag === "SUMMARY") return "button"
+    if (tag === "SELECT") return el.hasAttribute("multiple") ? "listbox" : "combobox"
+    if (tag === "TEXTAREA") return "textbox"
+    if (tag === "IMG") return "img"
+    if (tag === "TABLE") return "table"
+    if (tag === "UL" || tag === "OL") return "list"
+    if (tag === "LI") return "listitem"
+    if (tag === "OPTION") return "option"
+    if (tag === "IFRAME") return "iframe"
+    if (tag === "INPUT") {
+      var type = (el.getAttribute("type") || "text").toLowerCase()
+      if (type === "hidden") return "hidden"
+      if (type === "checkbox") return "checkbox"
+      if (type === "radio") return "radio"
+      if (type === "submit" || type === "button" || type === "reset" || type === "image") return "button"
+      if (type === "search") return "searchbox"
+      if (type === "range") return "slider"
+      if (type === "number") return "spinbutton"
+      return "textbox"
+    }
+    if (el.isContentEditable) return "textbox"
+    if (el.hasAttribute("onclick")) return "button"
+    return "generic"
+  }
+  function labelFor(el) {
+    if (el.id) {
+      var escaped = window.CSS && window.CSS.escape ? window.CSS.escape(el.id) : el.id
+      var root = el.getRootNode ? el.getRootNode() : el.ownerDocument
+      var label = root.querySelector("label[for=" + JSON.stringify(escaped) + "]")
+      if (label) return label.innerText || label.textContent
+    }
+    var parent = el.closest ? el.closest("label") : null
+    return parent ? parent.innerText || parent.textContent : ""
+  }
+  function nameOf(el, role) {
+    var aria = el.getAttribute("aria-label")
+    if (aria) return clean(aria)
+    var labelledby = el.getAttribute("aria-labelledby")
+    if (labelledby) {
+      var root = el.getRootNode ? el.getRootNode() : el.ownerDocument
+      var parts = labelledby.split(/\s+/).map(function (id) {
+        var target = root.getElementById ? root.getElementById(id) : root.querySelector("#" + CSS.escape(id))
+        return target ? target.innerText || target.textContent || "" : ""
+      }).filter(Boolean)
+      if (parts.length) return clean(parts.join(" "))
+    }
+    if (role === "textbox" || role === "searchbox" || role === "combobox" || role === "spinbutton") {
+      return clean(labelFor(el) || el.getAttribute("placeholder") || el.getAttribute("name"))
+    }
+    if (el.tagName === "IMG") return clean(el.getAttribute("alt"))
+    if (el.tagName === "INPUT") return clean(el.getAttribute("value") || labelFor(el) || el.getAttribute("name"))
+    return clean(el.innerText || el.textContent || el.getAttribute("title"))
+  }
+  var candidates = []
+  for (var r = 0; r < scopes.length; r++) {
+    var elements = scopes[r].querySelectorAll(identity.tag)
+    for (var i = 0; i < elements.length; i++) {
+      var el = elements[i]
+      var role = roleOf(el)
+      if (role !== identity.role) continue
+      if (nameOf(el, role) !== identity.name) continue
+      if (clean(el.getAttribute("href")) !== identity.href) continue
+      if (clean(el.getAttribute("placeholder")) !== identity.placeholder) continue
+      // An anonymous control has too little semantic identity to follow if
+      // it also moved; its composed-tree position is the final safety check.
+      if (!identity.name && !identity.href && !identity.placeholder && positionOf(el) !== identity.position) continue
+      candidates.push(el)
+    }
+  }
+  if (candidates.length > 1) {
+    throw new Error("__OC_REF_ERROR__The old ref is gone and its identity matches more than one element, so it is unsafe to guess. Take a fresh browser_snapshot and use a new ref.")
+  }
+  return candidates[0] || null
+})`
+
+/** An element's box in the top page's viewport, adding up the frames it sits in. */
+const RECT = String.raw`(function (el) {
+  var r = el.getBoundingClientRect()
+  var x = r.x
+  var y = r.y
+  var view = el.ownerDocument.defaultView
+  while (view && view !== window && view.frameElement) {
+    var frame = view.frameElement
+    var box = frame.getBoundingClientRect()
+    var style = view.parent.getComputedStyle(frame)
+    x += box.x + frame.clientLeft + (parseFloat(style.paddingLeft) || 0)
+    y += box.y + frame.clientTop + (parseFloat(style.paddingTop) || 0)
+    view = view.parent
+  }
+  return { x: x, y: y, width: r.width, height: r.height }
+})`
+
+/** The visible text of a document and of the frames of the same site inside it. */
+const TEXT_IN_FRAMES = String.raw`(function text(doc) {
+  var body = doc.body
+  var out = body ? body.innerText || body.textContent || "" : ""
+  var frames = doc.querySelectorAll("iframe, frame")
+  for (var i = 0; i < frames.length; i++) {
+    var inner = null
+    try {
+      inner = frames[i].contentDocument
+    } catch (error) {}
+    if (inner) out += "\n" + text(inner)
+  }
+  return out
+})`
+
+/**
+ * The text a screenshot shows, in reading order: every text on screen, or on
+ * the whole page. Many models cannot see images, and a screenshot is often
+ * asked for precisely to read what is on the page.
+ */
+const VISIBLE_TEXT = String.raw`(function (whole, max) {
+  var out = []
+  var size = 0
+  function read(doc, dx, dy) {
+    var view = doc.defaultView
+    var walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT)
+    var node
+    while ((node = walker.nextNode()) && size < max) {
+      var text = node.nodeValue.replace(/\s+/g, " ").trim()
+      if (!text) continue
+      var el = node.parentElement
+      if (!el || /^(SCRIPT|STYLE|NOSCRIPT)$/.test(el.tagName)) continue
+      var style = view.getComputedStyle(el)
+      if (style.visibility === "hidden" || style.opacity === "0") continue
+      var range = doc.createRange()
+      range.selectNodeContents(node)
+      var r = range.getBoundingClientRect()
+      if (!r.width || !r.height) continue
+      var top = r.top + dy
+      var left = r.left + dx
+      if (!whole && (top + r.height < 0 || top > innerHeight || left + r.width < 0 || left > innerWidth)) continue
+      if (out.length && out[out.length - 1] === text) continue
+      out.push(text)
+      size += text.length + 1
+    }
+    var frames = doc.querySelectorAll("iframe, frame")
+    for (var i = 0; i < frames.length; i++) {
+      var inner = null
+      try {
+        inner = frames[i].contentDocument
+      } catch (error) {}
+      if (!inner || !inner.body) continue
+      var box = frames[i].getBoundingClientRect()
+      read(inner, dx + box.left, dy + box.top)
+    }
+  }
+  if (document.body) read(document, 0, 0)
+  var text = out.join("\n")
+  return text.length > max ? text.slice(0, max) + "\n…" : text
+})`
+
+/**
+ * The expression that finds `selector`, in the page or its frames. Exported so
+ * whatever else needs to look at the very element an action worked on reads it
+ * the same way the action did, frames included.
+ */
+export function find(selector: string, identity?: RefIdentity) {
+  return `(${FIND})(${JSON.stringify(selector)}, ${JSON.stringify(identity)})`
+}
 
 /** CDP wants a bitmask, and key events want a numeric code per key. */
 const MODIFIERS: Record<string, number> = { alt: 1, control: 2, ctrl: 2, meta: 4, cmd: 4, shift: 8 }
@@ -153,6 +476,20 @@ const KEYS: Record<string, { key: string; code: string; keyCode: number; text?: 
 
 const MOUSE_EVENT = { move: "mouseMoved", down: "mousePressed", up: "mouseReleased" } as const
 
+/** Keys that can be held while clicking or dragging. */
+export const MODIFIER_KEYS = ["Alt", "Control", "Meta", "Shift"] as const
+export type Modifier = (typeof MODIFIER_KEYS)[number]
+
+/** The bitmask the protocol wants for a set of held keys. */
+function mask(modifiers: readonly Modifier[]) {
+  let bits = 0
+  for (const name of modifiers) bits |= MODIFIERS[name.toLowerCase()] ?? 0
+  return bits
+}
+
+/** How many moves a drag is made of; enough for a page to follow the pointer. */
+const DRAG_STEPS = 8
+
 function push<T>(buffer: T[], entry: T) {
   buffer.push(entry)
   if (buffer.length > BUFFER_LIMIT) buffer.splice(0, buffer.length - BUFFER_LIMIT)
@@ -162,8 +499,77 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/** Splits typed text into as many chunks as fit in the typing budget, a tick apart. */
+function chunks<T>(items: T[]) {
+  const size = Math.max(1, Math.ceil(items.length / Math.floor(TYPE_BUDGET / TYPE_TICK)))
+  const result: T[][] = []
+  for (let index = 0; index < items.length; index += size) result.push(items.slice(index, index + size))
+  return result
+}
+
 function number(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0
+}
+
+/** Whether any of the scroll positions read before and after an action differ. */
+function moved(before: number[], after: number[]) {
+  if (before.length !== after.length) return true
+  return before.some((value, index) => value !== after[index])
+}
+
+/**
+ * Which key a character comes from on a US keyboard.
+ *
+ * A page that masks a phone number, completes an address or drives an editor
+ * reads `code` and `keyCode` off the event, and both are zero if a character is
+ * sent as text alone. Only the punctuation that turns up in what an agent
+ * types - addresses, dates, prices, paths - is listed; anything else, an
+ * accented letter or a character from another script, still carries its text,
+ * which is what puts it in the field.
+ */
+const PUNCTUATION: Record<string, { code: string; keyCode: number; shift?: boolean }> = {
+  " ": { code: "Space", keyCode: 32 },
+  "!": { code: "Digit1", keyCode: 49, shift: true },
+  "@": { code: "Digit2", keyCode: 50, shift: true },
+  "#": { code: "Digit3", keyCode: 51, shift: true },
+  $: { code: "Digit4", keyCode: 52, shift: true },
+  "%": { code: "Digit5", keyCode: 53, shift: true },
+  "&": { code: "Digit7", keyCode: 55, shift: true },
+  "*": { code: "Digit8", keyCode: 56, shift: true },
+  "(": { code: "Digit9", keyCode: 57, shift: true },
+  ")": { code: "Digit0", keyCode: 48, shift: true },
+  "-": { code: "Minus", keyCode: 189 },
+  _: { code: "Minus", keyCode: 189, shift: true },
+  "=": { code: "Equal", keyCode: 187 },
+  "+": { code: "Equal", keyCode: 187, shift: true },
+  "[": { code: "BracketLeft", keyCode: 219 },
+  "]": { code: "BracketRight", keyCode: 221 },
+  "\\": { code: "Backslash", keyCode: 220 },
+  ";": { code: "Semicolon", keyCode: 186 },
+  ":": { code: "Semicolon", keyCode: 186, shift: true },
+  "'": { code: "Quote", keyCode: 222 },
+  '"': { code: "Quote", keyCode: 222, shift: true },
+  ",": { code: "Comma", keyCode: 188 },
+  "<": { code: "Comma", keyCode: 188, shift: true },
+  ".": { code: "Period", keyCode: 190 },
+  ">": { code: "Period", keyCode: 190, shift: true },
+  "/": { code: "Slash", keyCode: 191 },
+  "?": { code: "Slash", keyCode: 191, shift: true },
+  "`": { code: "Backquote", keyCode: 192 },
+  "~": { code: "Backquote", keyCode: 192, shift: true },
+}
+
+/** One character as a key press: what to send so the page sees a person typing it. */
+function describeChar(char: string) {
+  if (/^[a-z]$/.test(char))
+    return { key: char, code: `Key${char.toUpperCase()}`, keyCode: char.toUpperCase().charCodeAt(0), shift: false }
+  if (/^[A-Z]$/.test(char)) return { key: char, code: `Key${char}`, keyCode: char.charCodeAt(0), shift: true }
+  if (/^[0-9]$/.test(char)) return { key: char, code: `Digit${char}`, keyCode: char.charCodeAt(0), shift: false }
+  const known = PUNCTUATION[char]
+  if (known) return { key: char, code: known.code, keyCode: known.keyCode, shift: known.shift === true }
+  // Anything else - an accented letter, another script, an emoji - has no key
+  // of its own on this layout. Its text is what matters and is still sent.
+  return { key: char, code: "", keyCode: 0, shift: false }
 }
 
 function describeKey(name: string) {
@@ -174,25 +580,62 @@ function describeKey(name: string) {
   const known = KEYS[last.toLowerCase()]
   if (known) return { ...known, modifiers }
   if (last.length === 1) {
-    const upper = last.toUpperCase()
+    const char = describeChar(last)
     return {
       key: last,
-      code: /[a-zA-Z]/.test(last) ? `Key${upper}` : `Digit${last}`,
-      keyCode: upper.charCodeAt(0),
-      // A modified key is a shortcut, not typed input, so it carries no text.
+      code: char.code,
+      keyCode: char.keyCode,
+      // A modified key is a shortcut, not typed input, so it carries no text,
+      // and "Control+A" means ctrl and A rather than ctrl, shift and A.
       text: modifiers === 0 ? last : undefined,
-      modifiers,
+      modifiers: modifiers === 0 && char.shift ? MODIFIERS["shift"]! : modifiers,
     }
   }
   return { key: last, code: last, keyCode: 0, text: undefined, modifiers }
 }
 
+/**
+ * Failures the page never saw.
+ *
+ * An element that could not be found, or that nothing could reach, fails before
+ * a single input event is dispatched, so the action provably did not happen.
+ * That is what makes it safe to look again and try once more, whatever the
+ * action was: retrying a "Delete" that was never sent deletes nothing. A
+ * failure after the press is not one of these and is never retried.
+ */
+export interface PreDispatchError extends Error {
+  readonly retryable: true
+}
+
+export function isPreDispatch(error: unknown): error is PreDispatchError {
+  return error instanceof Error && (error as { retryable?: unknown }).retryable === true
+}
+
 export class ElementNotFoundError extends Error {
-  constructor(target: string) {
+  readonly retryable = true as const
+  constructor(target: string, detail?: string) {
     super(
-      `No element matches ${target} on the current page. Refs are renumbered whenever the page changes, so take a fresh browser_snapshot and use a ref from it.`,
+      [
+        detail ?? `No element matches ${target} on the current page.`,
+        "The element is gone or the page changed, so take a fresh browser_snapshot and use a ref from it.",
+      ].join(" "),
     )
     this.name = "ElementNotFoundError"
+  }
+}
+
+/**
+ * The tab can no longer be driven. Through the extension this is what the
+ * browser does when a tab moves to a page extensions may not touch, such as
+ * its own PDF viewer or a settings page; the tab is still there for the
+ * person, just out of the agent's reach.
+ */
+export class TabGoneError extends Error {
+  constructor() {
+    super(
+      "This tab can no longer be controlled: it was closed, or it moved to a page the browser does not let extensions drive (its PDF viewer or a browser page). Call browser_navigate to continue; it takes another tab. To read a PDF, browser_navigate to its URL.",
+    )
+    this.name = "TabGoneError"
   }
 }
 
@@ -203,9 +646,177 @@ export class EvaluationError extends Error {
   }
 }
 
+/** What the page reports about an element, as {@link MEASURE} returns it. */
+interface Measured extends Rect {
+  name: string
+  checked: boolean
+  draggable: boolean
+  ox: number
+  oy: number
+  cover: string
+  view: { width: number; height: number; scrollX: number; scrollY: number; dpr: number }
+}
+
 interface Target {
   rect: Rect
+  /** Where a click reaches the element itself, in the top page's viewport: its middle unless something covers that. */
+  point: { x: number; y: number }
   name: string
+  /** How long the cursor takes to glide there; zero when nobody is watching. */
+  duration: number
+  checked: boolean
+  draggable: boolean
+  /** The page around the element when it was measured, for the trace. */
+  view: Measured["view"]
+}
+
+/** Points of an element tried in turn for one that a click would actually reach. */
+const SPOTS = [
+  [0.5, 0.5],
+  [0.25, 0.5],
+  [0.75, 0.5],
+  [0.5, 0.25],
+  [0.5, 0.75],
+  [0.15, 0.15],
+  [0.85, 0.85],
+]
+
+/**
+ * Measures an element inside the page: where it sits in the top page's
+ * viewport, where a click would really reach it, what it is called, and what
+ * the page looks like around it.
+ *
+ * It is its own function because it is run twice per action: once to aim, and
+ * once again just before the press, so the coordinates that reach the page
+ * describe where the element is *now* rather than where it was when the agent
+ * started moving towards it. Both measurements must be the same measurement,
+ * so there is one source for it.
+ */
+const MEASURE = String.raw`(function (el, spots) {
+  var rect = ${RECT}
+  // Coordinates in the top page, since that is where input events land, even
+  // for an element inside a frame.
+  var r = rect(el)
+  var own = el.getBoundingClientRect()
+  var view = el.ownerDocument.defaultView || window
+  // Only scroll when needed: jumping a visible element to the middle of the
+  // screen on every action is jarring to watch.
+  var inside = function (box, width, height) {
+    return box.top >= 0 && box.left >= 0 && box.bottom <= height && box.right <= width
+  }
+  var shown =
+    inside(own, view.innerWidth, view.innerHeight) &&
+    inside({ top: r.y, left: r.x, bottom: r.y + r.height, right: r.x + r.width }, innerWidth, innerHeight)
+  if (!shown) {
+    // From inside a frame this scrolls the pages around it too.
+    el.scrollIntoView({ block: "center", inline: "center", behavior: "instant" })
+    r = rect(el)
+  }
+  // What a click at a point of the element would really hit: a sticky banner,
+  // a popup or an ad can sit on top of it, and the click would land there. The
+  // element's own parts and its labels are fine.
+  var doc = el.ownerDocument
+  var deepest = function (x, y) {
+    var hit = doc.elementFromPoint(x, y)
+    while (hit && hit.shadowRoot) {
+      var inner = hit.shadowRoot.elementFromPoint(x, y)
+      if (!inner || inner === hit) break
+      hit = inner
+    }
+    return hit
+  }
+  var reaches = function (x, y) {
+    // Document hit-testing stops at a shadow host. Descending open roots keeps
+    // an internal target from looking falsely covered by its own host.
+    var hit = deepest(x, y)
+    if (!hit) return false
+    if (hit === el || el.contains(hit) || hit.contains(el)) return true
+    return !!(
+      el.labels &&
+      Array.prototype.some.call(el.labels, function (label) {
+        return label === hit || label.contains(hit)
+      })
+    )
+  }
+  var spot = function () {
+    var b = el.getBoundingClientRect()
+    for (var i = 0; i < spots.length; i++) {
+      var x = b.left + b.width * spots[i][0]
+      var y = b.top + b.height * spots[i][1]
+      if (x < 0 || y < 0 || x >= view.innerWidth || y >= view.innerHeight) continue
+      if (reaches(x, y)) return [x - b.left, y - b.top]
+    }
+    return null
+  }
+  var offset = spot()
+  if (!offset && shown) {
+    // Covered where it sits, as by a banner along an edge: bring it to the middle.
+    el.scrollIntoView({ block: "center", inline: "center", behavior: "instant" })
+    r = rect(el)
+    offset = spot()
+  }
+  var cover = ""
+  if (!offset) {
+    var b = el.getBoundingClientRect()
+    var hit = deepest(b.left + b.width / 2, b.top + b.height / 2)
+    if (hit) {
+      var text = String(hit.innerText || hit.getAttribute("aria-label") || hit.title || "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 60)
+      var ad =
+        /google_ads|aswift|doubleclick|safeframe/i.test(hit.id + " " + (hit.src || "")) ||
+        /publicidade|advertisement|an[uú]ncio/i.test(hit.title || "")
+      cover = ad
+        ? "an ad"
+        : "<" + hit.tagName.toLowerCase() + (hit.id ? "#" + hit.id : "") + ">" + (text ? ' "' + text + '"' : "")
+    }
+    offset = [b.width / 2, b.height / 2]
+  }
+  var clean = function (value) {
+    return value ? String(value).replace(/\s+/g, " ").trim() : ""
+  }
+  var field = el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT"
+  var buttonInput = el.tagName === "INPUT" && /^(submit|button|reset)$/i.test(el.type || "")
+  var label = el.labels && el.labels[0] ? el.labels[0].innerText : ""
+  var name =
+    clean(el.getAttribute("aria-label")) ||
+    clean(label) ||
+    clean(el.getAttribute("placeholder")) ||
+    (field ? "" : clean(el.innerText)) ||
+    (buttonInput ? clean(el.value) : "") ||
+    clean(el.getAttribute("title")) ||
+    clean(el.getAttribute("alt")) ||
+    clean(el.getAttribute("name"))
+  return {
+    x: r.x,
+    y: r.y,
+    width: r.width,
+    height: r.height,
+    name: name.slice(0, 48),
+    checked: el.checked === true || el.getAttribute("aria-checked") === "true",
+    draggable: el.draggable === true,
+    ox: offset[0],
+    oy: offset[1],
+    cover: cover,
+    view: {
+      width: innerWidth,
+      height: innerHeight,
+      scrollX: scrollX,
+      scrollY: scrollY,
+      dpr: devicePixelRatio || 1,
+    },
+  }
+})`
+
+export class CoveredError extends Error {
+  readonly retryable = true as const
+  constructor(target: string, cover: string) {
+    super(
+      `${target} is covered by ${cover}, so a click would land on that instead. Close or get past what covers it (a cookie banner, a popup or an ad, often with a close or "X" button), or scroll, then try again.`,
+    )
+    this.name = "CoveredError"
+  }
 }
 
 /**
@@ -215,25 +826,56 @@ interface Target {
  * rather than synthetic DOM clicks, so sites that listen for pointer events, or
  * frameworks that ignore programmatic value assignment, behave as they would
  * for a person. What actually reaches the page is the same whether or not
- * anyone is watching; watching only adds the visible cursor and the pauses.
+ * anyone is watching; watching only adds the visible cursor and short pauses.
  */
 export class Tab {
   readonly console: ConsoleEntry[] = []
   readonly network: NetworkEntry[] = []
+  /** Dialogs answered since the model was last told about them. */
+  private dialogs: Dialog[] = []
   /** The last top-level page response, which bot walls give away through. */
   document?: DocumentResponse
+  /** The last outline the model was given, so an action can report only what it changed. */
+  baseline?: SnapshotResult
   private inflight = new Set<string>()
   private requestIds = new Map<string, NetworkEntry>()
-  /** Where the agent's pointer last was, in viewport CSS pixels. */
-  private pointer = { x: 640, y: 400 }
+  /** Requests that end in a re-render, with the sequence number each started at. */
+  private pending = new Map<string, number>()
+  /**
+   * Where the agent's pointer last was, in viewport CSS pixels. It is put in
+   * the middle of the page as the tab is prepared, so the cursor's first glide
+   * starts from somewhere on screen.
+   */
+  private pointer = { x: 0, y: 0 }
   private stopCast?: () => void
+  /** Live-view input in flight, so events reach the page in the order the hand made them. */
+  private inputs: Promise<void> = Promise.resolve()
+  /** The main frame's id. It is the target id over a debugging port, but not through the extension. */
+  private mainFrame: string
+  /** Counted from events as they arrive, so a wait that starts late cannot miss one. */
+  private counts: Mark = { started: 0, stopped: 0, loaded: 0, complete: 0, request: 0 }
+  /** The highest ref handed out in this tab, so a new document continues the numbering. */
+  private refMax = 0
+  /** Last known identity for each ref, retained when a framework replaces its node. */
+  private refIdentities = new Map<string, RefIdentity>()
+  private refDocument?: string
+  /** When the agent last did something, for its cursor to follow it onto a new page. */
+  private acted = 0
+  /**
+   * Where the last action aimed and where it actually pressed, for whoever
+   * reports it. Only filled while `OPENCODE_BROWSER_TRACE` is on; otherwise it
+   * stays undefined and costs nothing.
+   */
+  trace?: BrowserTrace.Entry
 
   private constructor(
     readonly id: string,
     readonly targetId: string,
     private connection: CDPTransport,
     private hooks: TabHooks,
-  ) {}
+  ) {
+    this.mainFrame = targetId
+  }
 
   static async attach(id: string, targetId: string, wsUrl: string, hooks: TabHooks = IDLE) {
     const connection = new CDPConnection(wsUrl)
@@ -257,7 +899,27 @@ export class Tab {
       this.connection.send("Runtime.enable"),
       this.connection.send("Network.enable"),
       this.connection.send("Log.enable").catch(() => {}),
+      // A tab whose window is covered, as the person's own browser is behind
+      // opencode, counts as hidden: it stops painting, the live view gets no
+      // pictures, the window shows stale half-drawn content when uncovered,
+      // and every input waits seconds for a frame that never comes. Emulating
+      // focus keeps it rendering as if in front. Detaching undoes it.
+      this.connection.send("Emulation.setFocusEmulationEnabled", { enabled: true }).catch(() => {}),
     ])
+    const tree = await this.connection
+      .send<{ frameTree?: { frame?: { id?: string } } }>("Page.getFrameTree")
+      .catch(() => undefined)
+    if (tree?.frameTree?.frame?.id) this.mainFrame = tree.frameTree.frame.id
+
+    // The agent's pointer starts in the middle of this page's viewport, so its
+    // first move is a glide from somewhere on screen rather than from a corner
+    // of a window nobody has this size.
+    const view = await this.evaluate<{ width: number; height: number }>(
+      "({ width: innerWidth, height: innerHeight })",
+    ).catch(() => undefined)
+    if (view && view.width > 0 && view.height > 0) {
+      this.pointer = { x: Math.round(view.width / 2), y: Math.round(view.height / 2) }
+    }
 
     this.connection.on("Runtime.consoleAPICalled", (params) => {
       const args = Array.isArray(params["args"]) ? params["args"] : []
@@ -288,6 +950,7 @@ export class Tab {
       const id = asText(params["requestId"])
       this.requestIds.set(id, entry)
       this.inflight.add(id)
+      if (SETTLE_TYPES.has(asText(params["type"]))) this.pending.set(id, ++this.counts.request)
       push(this.network, entry)
     })
 
@@ -296,18 +959,24 @@ export class Tab {
       const response = asRecord(params["response"])
       const status = response["status"]
       if (entry && typeof status === "number") entry.status = status
-      // The top-level frame shares its id with the target; iframes do not.
-      if (asText(params["type"]) === "Document" && asText(params["frameId"]) === this.targetId) {
+      if (asText(params["type"]) === "Document" && asText(params["frameId"]) === this.mainFrame) {
         const headers: Record<string, string> = {}
         for (const [name, value] of Object.entries(asRecord(response["headers"]))) {
           headers[name.toLowerCase()] = asText(value)
         }
-        this.document = { url: asText(response["url"]), status: typeof status === "number" ? status : 0, headers }
+        this.document = {
+          url: asText(response["url"]),
+          status: typeof status === "number" ? status : 0,
+          headers,
+          mimeType: asText(response["mimeType"], headers["content-type"] ?? ""),
+        }
       }
     })
 
     this.connection.on("Network.loadingFinished", (params) => {
-      this.inflight.delete(asText(params["requestId"]))
+      const id = asText(params["requestId"])
+      this.inflight.delete(id)
+      this.pending.delete(id)
     })
 
     this.connection.on("Network.loadingFailed", (params) => {
@@ -315,17 +984,52 @@ export class Tab {
       const entry = this.requestIds.get(id)
       if (entry) entry.failure = asText(params["errorText"], "failed")
       this.inflight.delete(id)
+      this.pending.delete(id)
+    })
+
+    this.connection.on("Page.frameStartedLoading", (params) => {
+      if (asText(params["frameId"]) === this.mainFrame) this.counts.started++
+    })
+    this.connection.on("Page.frameStoppedLoading", (params) => {
+      if (asText(params["frameId"]) === this.mainFrame) this.counts.stopped++
     })
 
     // The owner keeps its address bar and tab titles current from these.
     this.connection.on("Page.frameNavigated", (params) => {
-      if (!asRecord(params["frame"])["parentId"]) this.hooks.changed()
+      const frame = asRecord(params["frame"])
+      if (frame["parentId"]) return
+      const id = asText(frame["id"])
+      if (id) this.mainFrame = id
+      // A page restored from the back/forward cache comes without a response,
+      // so the last one seen no longer describes what is on screen.
+      if (this.document && asText(frame["url"]) !== this.document.url) this.document = undefined
+      this.hooks.changed()
+    })
+    this.connection.on("Page.domContentEventFired", () => {
+      this.counts.loaded++
+      // A new document starts without the overlay. If the agent brought the
+      // page here, put its cursor back where it left it so the view does not
+      // lose track of it; a page the person opened themselves stays clear.
+      if (this.presenting && Date.now() - this.acted < CURSOR_CARRY) {
+        void this.cursor("place", `${this.pointer.x}, ${this.pointer.y}`)
+      }
     })
     this.connection.on("Page.loadEventFired", () => {
+      this.counts.complete++
       this.hooks.changed()
-      // A new document starts without the overlay; put the cursor back where
-      // the agent left it so the view does not lose track of it.
-      if (this.hooks.presenting()) void this.cursor("place", [this.pointer.x, this.pointer.y])
+    })
+
+    // While a page shows an alert, a confirm or a "leave this page?" dialog,
+    // the browser answers no command on the tab: reading, clicking and even
+    // reloading all hang until someone closes it. Nobody may be looking, so it
+    // is answered at once, the way the agent's own action meant it: alerts
+    // and confirms accepted, leaving allowed, prompts dismissed. The model is
+    // told what it said with the next result.
+    this.connection.on("Page.javascriptDialogOpening", (params) => {
+      const type = asText(params["type"], "alert")
+      const accepted = type !== "prompt"
+      push(this.dialogs, { type, message: asText(params["message"]).slice(0, 300), accepted })
+      void this.connection.send("Page.handleJavaScriptDialog", { accept: accepted }).catch(() => {})
     })
   }
 
@@ -333,9 +1037,42 @@ export class Tab {
     return this.connection.connected
   }
 
+  /** How many dialogs have been answered and not yet reported, without taking them. */
+  get dialogCount() {
+    return this.dialogs.length
+  }
+
+  /** The dialogs answered since the last call, which are then forgotten. */
+  takeDialogs() {
+    const dialogs = this.dialogs
+    this.dialogs = []
+    return dialogs
+  }
+
+  /** Whether the agent's cursor is being shown. */
+  private get presenting() {
+    return this.hooks.presenting()
+  }
+
   /** Reports what the agent is doing to whoever is watching. */
   announce(kind: ActivityKind, target?: string) {
-    this.hooks.activity({ kind, target: target || undefined, tab: this.id, at: Date.now() })
+    this.acted = Date.now()
+    this.hooks.activity({ kind, target: target || undefined, tab: this.id, at: this.acted })
+  }
+
+  /**
+   * Says that input has just reached the page, so whoever is watching should
+   * read where it ended up.
+   *
+   * A page that renames itself or moves within a single page app tells the
+   * browser through target events, and the browser is free to coalesce those
+   * while it is busy streaming frames: an action's effect on the address bar
+   * could otherwise be missed until some unrelated event came along. The owner
+   * debounces this and only reads anything while someone is subscribed, which
+   * also gives the page's own handlers time to run first.
+   */
+  private touched() {
+    this.hooks.changed()
   }
 
   async url() {
@@ -346,8 +1083,19 @@ export class Tab {
     return this.evaluate<string>("document.title").catch(() => "")
   }
 
+  /**
+   * The PDF this tab is showing, if it is showing one. Known from the response
+   * that served the page, so it holds even once the browser's PDF viewer has
+   * taken the tab out of reach.
+   */
+  get pdf() {
+    const document = this.document
+    return document && /application\/(x-)?pdf/i.test(document.mimeType) ? document.url : undefined
+  }
+
   /** Evaluates an expression in the page and returns its value. */
   async evaluate<T = unknown>(expression: string): Promise<T> {
+    if (!this.connection.connected) throw new TabGoneError()
     const result = await this.connection.send<EvaluateResult>("Runtime.evaluate", {
       expression,
       returnByValue: true,
@@ -356,7 +1104,13 @@ export class Tab {
     })
     if (result.exceptionDetails) {
       const details = result.exceptionDetails
-      throw new EvaluationError(details.exception?.description ?? details.text ?? "Evaluation failed")
+      const description = details.exception?.description ?? details.text ?? "Evaluation failed"
+      const marker = "__OC_REF_ERROR__"
+      const marked = description.indexOf(marker)
+      // Ref ambiguity is a user-actionable failure, not a page debugging
+      // failure, so its injected JavaScript stack would only obscure it.
+      if (marked >= 0) throw new EvaluationError(description.slice(marked + marker.length).split("\n")[0]!)
+      throw new EvaluationError(description)
     }
     return result.result?.value as T
   }
@@ -366,14 +1120,43 @@ export class Tab {
     return this.evaluate<T>(`(${source})(${JSON.stringify(argument)})`)
   }
 
-  /** Drives the in-page cursor overlay, installing it on first use. Never fails. */
-  private cursor(method: string, args: number[], from = this.pointer) {
-    const expression = `(${BrowserCursor.SCRIPT})(${from.x}, ${from.y}).${method}(${args.join(",")})`
-    return this.evaluate(expression).catch(() => {})
+  /** The in-page expression that resolves a selector, including a snapshotted ref's recovery identity. */
+  locate(selector: string) {
+    const ref = /^\[data-oc-ref="(ref_\d+)"\]$/.exec(selector)?.[1]
+    return find(selector, ref ? this.refIdentities.get(ref) : undefined)
   }
 
-  snapshot(options: SnapshotOptions = {}) {
-    return this.call<SnapshotResult>(BrowserSnapshot.SCRIPT, options)
+  /**
+   * An expression that drives the in-page cursor overlay, installing it on
+   * first use. `args` is a JavaScript argument list, so it can refer to values
+   * of a script it rides along in. It never throws, and a failure yields 0.
+   */
+  private cursorCall(method: string, args = "") {
+    const { x, y } = this.pointer
+    return `(() => { try { return (${BrowserCursor.SCRIPT})(${x}, ${y}).${method}(${args}) || 0 } catch (error) { return 0 } })()`
+  }
+
+  /** Drives the in-page cursor overlay on its own. Never fails. */
+  private cursor(method: string, args = "") {
+    return this.evaluate(this.cursorCall(method, args)).catch(() => {})
+  }
+
+  /**
+   * Reads the page outline. Refs already on the page are kept, and new ones
+   * continue from the highest this tab has handed out.
+   */
+  async snapshot(options: SnapshotOptions = {}) {
+    const result = await this.call<SnapshotResult>(BrowserSnapshot.SCRIPT, {
+      ...options,
+      refStart: this.refMax,
+      // So an element the page rebuilt keeps the ref the model already has.
+      known: Object.fromEntries(this.refIdentities),
+    })
+    this.refMax = Math.max(this.refMax, number(result.lastRef))
+    if (result.documentId && result.documentId !== this.refDocument) this.refIdentities.clear()
+    this.refDocument = result.documentId
+    for (const [ref, identity] of Object.entries(result.identities ?? {})) this.refIdentities.set(ref, identity)
+    return result
   }
 
   text() {
@@ -389,17 +1172,17 @@ export class Tab {
 
   async navigate(url: string, waitUntil: WaitUntil, timeout: number) {
     this.announce("navigate", url)
-    const settled = this.waitForLoad(waitUntil, timeout)
+    const mark = this.mark()
     const result = await this.connection.send<NavigateResult>("Page.navigate", { url })
     if (result?.errorText) throw new Error(`Could not open ${url}: ${result.errorText}`)
-    await settled
+    await this.arrived(mark, waitUntil, timeout)
   }
 
   async reload(waitUntil: WaitUntil, timeout: number) {
     this.announce("reload")
-    const settled = this.waitForLoad(waitUntil, timeout)
+    const mark = this.mark()
     await this.connection.send("Page.reload")
-    await settled
+    await this.arrived(mark, waitUntil, timeout)
   }
 
   /** Moves `delta` entries through history; negative goes back. */
@@ -410,9 +1193,9 @@ export class Tab {
       throw new Error(delta < 0 ? "No page to go back to." : "No page to go forward to.")
     }
     this.announce(delta < 0 ? "back" : "forward", entries[index].url)
-    const settled = this.waitForLoad(waitUntil, timeout)
+    const mark = this.mark()
     await this.connection.send("Page.navigateToHistoryEntry", { entryId: entries[index].id })
-    await settled
+    await this.arrived(mark, waitUntil, timeout)
   }
 
   /**
@@ -436,7 +1219,33 @@ export class Tab {
   }
 
   /**
-   * Waits for the page to settle. `networkidle` is the useful one for single
+   * Waits for a navigation that was just asked for to arrive.
+   *
+   * Counted from events rather than waited for as one. Waiting for the next
+   * `domContentEventFired` sounds right and is a trap: a page restored from the
+   * back/forward cache is shown again without firing it, a navigation to the
+   * same address with a different fragment never leaves the document, and a
+   * reload of a page that is already idle can be over before the wait is even
+   * installed. In each of those the wait ran to the tool's whole timeout — in
+   * real sessions, a median of 31 seconds for one "back", 20 for a reload.
+   * Here, the frame having stopped loading ends the wait just as well as the
+   * document event, and a navigation that never starts is noticed in
+   * {@link NAVIGATION_START} instead of costing the full timeout.
+   */
+  private async arrived(mark: Mark, waitUntil: WaitUntil, timeout: number) {
+    const deadline = Date.now() + Math.min(timeout, NAVIGATION_MAX)
+    const reached = () =>
+      (waitUntil === "domcontentloaded" ? this.counts.loaded > mark.loaded : this.counts.complete > mark.complete) ||
+      this.counts.stopped > mark.stopped
+    await this.until(() => this.navigatingSince(mark) || reached(), Math.min(deadline, Date.now() + NAVIGATION_START))
+    if (this.navigatingSince(mark) || reached()) await this.until(reached, deadline)
+    if (waitUntil === "networkidle") await this.waitForIdle(Math.max(0, deadline - Date.now()))
+    await this.quiet()
+  }
+
+  /**
+   * Waits for the page to settle, for a navigation this tab did not start, such
+   * as one the page itself made. `networkidle` is the useful one for single
    * page apps, which often render after the load event.
    */
   async waitForLoad(waitUntil: WaitUntil, timeout: number) {
@@ -459,106 +1268,483 @@ export class Tab {
     }
   }
 
+  /** Where the page's navigation counters stand, to measure an action against. */
+  mark(): Mark {
+    return { ...this.counts }
+  }
+
+  /** Whether a request that ends in a re-render started since the mark and is still running. */
+  private busySince(mark: Mark) {
+    for (const started of this.pending.values()) if (started > mark.request) return true
+    return false
+  }
+
+  private navigatingSince(mark: Mark) {
+    return this.counts.started > mark.started
+  }
+
+  /** Whether the page started loading another document since the mark. */
+  navigatedSince(mark: Mark) {
+    return this.navigatingSince(mark)
+  }
+
+  /** Polls until `done`, the deadline, or the tab being lost, which nothing would ever report. */
+  private async until(done: () => boolean, deadline: number) {
+    while (!done() && this.connected && Date.now() < deadline) await sleep(25)
+  }
+
   /**
-   * Finds an element, scrolls it into view and returns where it sits, which is
-   * what the input events need, plus a short name for the live view's caption.
-   * Field values are never used as the name, so a password cannot end up there.
+   * Waits until the page's DOM has been still for a moment, which is when a
+   * re-render is done, frames of the same site included, since that is where
+   * embedded activities answer. Resolves early if the page navigates away
+   * mid-wait. A tab in the background runs its timers late, so the wait is
+   * also capped from this side.
    */
-  private async target(selector: string): Promise<Target> {
-    const found = await this.evaluate<(Rect & { name: string }) | null>(
-      `(() => {
-        const el = document.querySelector(${JSON.stringify(selector)})
+  async quiet(quiet = QUIET, max = QUIET_MAX) {
+    if (!this.connected) return
+    const still = this.evaluate(
+      `new Promise((resolve) => {
+        const start = performance.now()
+        let last = start
+        const observer = new MutationObserver(() => { last = performance.now() })
+        const watch = (doc) => {
+          observer.observe(doc, { subtree: true, childList: true, attributes: true, characterData: true })
+          for (const frame of doc.querySelectorAll("iframe, frame")) {
+            try {
+              if (frame.contentDocument) watch(frame.contentDocument)
+            } catch (error) {}
+          }
+        }
+        watch(document)
+        const tick = () => {
+          const now = performance.now()
+          if (now - last >= ${quiet} || now - start >= ${max}) {
+            observer.disconnect()
+            resolve(true)
+          } else setTimeout(tick, 20)
+        }
+        setTimeout(tick, 20)
+      })`,
+    ).catch(() => {})
+    await Promise.race([still, sleep(max + 150)])
+  }
+
+  /**
+   * Waits for whatever an action set off to finish: a request to come back, a
+   * navigation to reach DOMContentLoaded, and the DOM to stop changing. A click
+   * that only toggles something is done in a fraction of a second, instead of
+   * waiting out a load event that never comes.
+   */
+  async settle(mark: Mark, timeout: number) {
+    const start = Date.now()
+    try {
+      // The DOM going still and a request going out are two different answers
+      // to "what did that do", and whichever comes first says what to wait for
+      // next. Waiting the DOM out first cost the wait for it on every click
+      // that sends something — an answer being marked, a form being posted —
+      // before the request it set off was even looked at.
+      await Promise.race([
+        this.quiet(),
+        this.until(() => this.busySince(mark) || this.navigatingSince(mark), start + QUIET_MAX),
+      ])
+      if (!this.navigatingSince(mark) && this.busySince(mark)) {
+        await this.until(() => !this.busySince(mark) || this.navigatingSince(mark), start + REQUEST_MAX)
+        if (!this.navigatingSince(mark)) await this.quiet()
+      }
+      if (!this.navigatingSince(mark)) return
+      // A navigation that turns into a download stops without ever loading.
+      await this.until(
+        () => this.counts.loaded > mark.loaded || this.counts.stopped > mark.stopped,
+        start + Math.min(timeout, NAVIGATION_MAX),
+      )
+      await this.quiet()
+    } finally {
+      // The page has stopped moving, so whoever is watching should see where
+      // it ended up. Title and address changes otherwise only reach the live
+      // view through target events, and the browser is free to coalesce those
+      // while it is busy streaming frames: an action that renamed the page or
+      // took it somewhere could leave a stale address bar behind until the
+      // next unrelated event. Reading it here costs nothing, since the owner
+      // debounces and only reads at all while someone is subscribed.
+      this.hooks.changed()
+    }
+  }
+
+  /**
+   * Finds an element and measures it: where it sits, where a click reaches it,
+   * and a short name for the live view's caption. Field values are never used
+   * as the name, so a password cannot end up there. While someone watches, the
+   * cursor sets off for it in the same round trip, and `duration` says how long
+   * that takes.
+   */
+  private async target(
+    selector: string,
+    options: { glide?: boolean; reach?: boolean; after?: number } = {},
+  ): Promise<Target> {
+    const glide = options.glide ?? true
+    const cursor =
+      glide && this.presenting ? this.cursorCall("glide", "f.x + f.ox, f.y + f.oy, f.x, f.y, f.width, f.height") : "0"
+    // A wait before measuring is spent inside the page rather than here, so it
+    // overlaps the round trip instead of following it. Through the extension,
+    // where every command is a trip out to the browser and back, that is the
+    // difference between the cursor's glide costing its own time and costing
+    // nothing at all.
+    const after = Math.max(0, Math.round(options.after ?? 0))
+    const found = await this.evaluate<(Measured & { duration: number }) | null>(
+      `(async () => {
+        ${after > 0 ? `await new Promise((resolve) => setTimeout(resolve, ${after}))` : ""}
+        const el = ${this.locate(selector)}
         if (!el) return null
-        el.scrollIntoView({ block: "center", inline: "center" })
-        const r = el.getBoundingClientRect()
-        const clean = (value) => (value ? String(value).replace(/\\s+/g, " ").trim() : "")
-        const field = el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT"
-        const buttonInput = el.tagName === "INPUT" && /^(submit|button|reset)$/i.test(el.type || "")
-        const label = el.labels && el.labels[0] ? el.labels[0].innerText : ""
-        const name =
-          clean(el.getAttribute("aria-label")) ||
-          clean(label) ||
-          clean(el.getAttribute("placeholder")) ||
-          (field ? "" : clean(el.innerText)) ||
-          (buttonInput ? clean(el.value) : "") ||
-          clean(el.getAttribute("title")) ||
-          clean(el.getAttribute("alt")) ||
-          clean(el.getAttribute("name"))
-        return { x: r.x, y: r.y, width: r.width, height: r.height, name: name.slice(0, 48) }
+        const f = (${MEASURE})(el, ${JSON.stringify(SPOTS)})
+        f.duration = ${cursor}
+        return f
       })()`,
     )
     if (!found) throw new ElementNotFoundError(selector)
-    const { name, ...rect } = found
-    return { rect, name }
+    const { name, checked, draggable, duration, ox, oy, cover, view, ...rect } = found
+    if (cover && (options.reach ?? true)) throw new CoveredError(name ? `"${name}"` : selector, cover)
+    return {
+      rect,
+      point: { x: rect.x + ox, y: rect.y + oy },
+      name,
+      checked,
+      draggable,
+      duration: number(duration),
+      view,
+    }
   }
 
   async exists(selector: string) {
-    return this.evaluate<boolean>(`document.querySelector(${JSON.stringify(selector)}) !== null`)
+    return this.evaluate<boolean>(`${this.locate(selector)} !== null`)
   }
 
   /**
-   * Brings the pointer to the middle of a target. For an audience the cursor
-   * glides there and outlines the element first; the page itself only ever
-   * sees one move, so behaviour does not depend on being watched.
+   * Brings the pointer onto a target and says where the press must land.
+   *
+   * The rect measured before the cursor set off is only a guess by the time it
+   * arrives: in between, the page can re-render, animate, scroll, collapse a
+   * sticky header, or drop the element entirely. So the element is measured
+   * again here, and it is that second measurement the press uses. A page that
+   * moved under the agent is clicked where it is now; one that took the element
+   * away fails before a single input event is sent, rather than clicking
+   * whatever slid into the old spot.
+   *
+   * The page still only ever sees one move, so behaviour does not depend on
+   * being watched. The cursor is corrected towards the final point without
+   * being waited for: it is a drawing, and precision never waits on it.
    */
-  private async point(target: Target) {
-    const x = target.rect.x + target.rect.width / 2
-    const y = target.rect.y + target.rect.height / 2
-    const from = this.pointer
+  private async point(selector: string, target: Target, options: { reach?: boolean } = {}) {
+    const fresh = await this.target(selector, {
+      glide: false,
+      reach: options.reach,
+      after: target.duration,
+    }).catch((error: unknown) => {
+      if (error instanceof ElementNotFoundError) {
+        throw new ElementNotFoundError(
+          selector,
+          `${target.name ? `"${target.name}"` : selector} was on the page when the action started, but was gone before the click could land, so nothing was clicked.`,
+        )
+      }
+      throw error
+    })
+    const { x, y } = fresh.point
+    const drift = Math.hypot(x - target.point.x, y - target.point.y)
     this.pointer = { x, y }
-    if (this.hooks.presenting()) {
-      const distance = Math.hypot(x - from.x, y - from.y)
-      const duration = Math.round(Math.min(GLIDE_MAX, Math.max(GLIDE_MIN, GLIDE_MIN + distance * GLIDE_PER_PIXEL)))
-      const { rect } = target
-      await this.cursor("highlight", [rect.x, rect.y, rect.width, rect.height], from)
-      await this.cursor("move", [x, y, duration], from)
-      await sleep(duration)
+    // The element moved after the cursor set off for it, so the drawing is
+    // sent after it, outline and all. Not waited for: the press has the right
+    // coordinates either way, and precision never waits on a picture.
+    if (drift > CURSOR_DRIFT && this.presenting) {
+      const box = fresh.rect
+      void this.cursor("glide", `${x}, ${y}, ${box.x}, ${box.y}, ${box.width}, ${box.height}`)
     }
     await this.connection.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, button: "none" })
-    return { x, y }
+    if (BrowserTrace.enabled) {
+      this.trace = {
+        requested: this.trace?.requested ?? selector,
+        element: fresh.name || undefined,
+        initial: target.rect,
+        cursor: target.duration,
+        revalidated: fresh.rect,
+        final: { x, y },
+        drift,
+        viewport: { width: fresh.view.width, height: fresh.view.height },
+        scroll: { x: fresh.view.scrollX, y: fresh.view.scrollY },
+        dpr: fresh.view.dpr,
+        cdp: "Input.dispatchMouseEvent",
+      }
+    }
+    return { x, y, target: fresh }
   }
 
-  private async pressAt(x: number, y: number, button: "left" | "right", clickCount: number) {
-    const presenting = this.hooks.presenting()
-    if (presenting) await this.cursor("click", [])
-    await this.connection.send("Input.dispatchMouseEvent", {
-      type: "mousePressed",
-      x,
-      y,
-      button,
-      clickCount,
-      buttons: button === "right" ? 2 : 1,
-    })
-    await this.connection.send("Input.dispatchMouseEvent", {
-      type: "mouseReleased",
-      x,
-      y,
-      button,
-      clickCount,
-      buttons: 0,
-    })
+  private async pressAt(
+    x: number,
+    y: number,
+    button: "left" | "right",
+    clickCount: number,
+    modifiers: readonly Modifier[] = [],
+  ) {
+    const presenting = this.presenting
+    // Commands on one tab run in order, so the ripple is under way before the
+    // press without the press having to wait for it.
+    if (presenting) void this.cursor("click")
+    const held = mask(modifiers)
+    await Promise.all([
+      this.connection.send("Input.dispatchMouseEvent", {
+        type: "mousePressed",
+        x,
+        y,
+        button,
+        clickCount,
+        buttons: button === "right" ? 2 : 1,
+        modifiers: held,
+      }),
+      this.connection.send("Input.dispatchMouseEvent", {
+        type: "mouseReleased",
+        x,
+        y,
+        button,
+        clickCount,
+        buttons: 0,
+        modifiers: held,
+      }),
+    ])
+    this.touched()
     if (presenting) await sleep(CLICK_SETTLE)
   }
 
-  async click(selector: string, button: "left" | "right" = "left", clickCount = 1) {
+  /**
+   * Clicks an element, optionally with keys held.
+   *
+   * The modifiers ride on the mouse event itself rather than being pressed and
+   * released around it, because that is how the browser is told about them: a
+   * dispatched key press leaves no state behind for a later event to pick up.
+   * So a control-click is one event that says control was down.
+   */
+  async click(
+    selector: string,
+    button: "left" | "right" = "left",
+    clickCount = 1,
+    modifiers: readonly Modifier[] = [],
+  ) {
     const target = await this.target(selector)
     this.announce(clickCount > 1 ? "double_click" : button === "right" ? "right_click" : "click", target.name)
-    const { x, y } = await this.point(target)
-    await this.pressAt(x, y, button, clickCount)
+    const { x, y } = await this.point(selector, target)
+    await this.pressAt(x, y, button, clickCount, modifiers)
+  }
+
+  /**
+   * Presses the button over an element and leaves it down, for a gesture put
+   * together by hand. Whatever follows happens with the button held, and
+   * nothing releases it but `mouseUp`.
+   */
+  async mouseDown(
+    selector: string | undefined,
+    button: "left" | "right" = "left",
+    modifiers: readonly Modifier[] = [],
+  ) {
+    const target = selector ? await this.target(selector) : undefined
+    this.announce("drag", target?.name)
+    const point = selector && target ? await this.point(selector, target) : this.pointer
+    await this.connection.send("Input.dispatchMouseEvent", {
+      type: "mousePressed",
+      x: point.x,
+      y: point.y,
+      button,
+      clickCount: 1,
+      buttons: button === "right" ? 2 : 1,
+      modifiers: mask(modifiers),
+    })
+    this.pointer = { x: point.x, y: point.y }
+    this.touched()
+  }
+
+  /** Lets the button go, where the pointer is or over another element. */
+  async mouseUp(selector: string | undefined, button: "left" | "right" = "left", modifiers: readonly Modifier[] = []) {
+    const target = selector ? await this.target(selector, { reach: false }) : undefined
+    this.announce("drag", target?.name)
+    const point = selector && target ? await this.point(selector, target, { reach: false }) : this.pointer
+    await this.connection.send("Input.dispatchMouseEvent", {
+      type: "mouseReleased",
+      x: point.x,
+      y: point.y,
+      button,
+      clickCount: 1,
+      buttons: 0,
+      modifiers: mask(modifiers),
+    })
+    this.pointer = { x: point.x, y: point.y }
+    this.touched()
+  }
+
+  /**
+   * Drags one element onto another with the button held down, moving in steps
+   * so that a page watching the pointer sees a drag rather than a jump.
+   */
+  async drag(from: string, to: string) {
+    const source = await this.target(from)
+    this.announce("drag", source.name)
+    const start = await this.point(from, source)
+    if (source.draggable) {
+      const supported = await this.connection.send("Input.setInterceptDrags", { enabled: true }).then(
+        () => true,
+        () => false,
+      )
+      if (supported) {
+        const native = await this.dragNative(start, to).then(
+          () => true,
+          () => false,
+        )
+        if (native) return
+      }
+    }
+    await this.dragMouse(start, to)
+  }
+
+  /** Native HTML drag and drop carries browser-created DragData to the destination. */
+  private async dragNative(start: { x: number; y: number }, to: string) {
+    let destination: Target | undefined
+    try {
+      await this.connection.send("Input.dispatchMouseEvent", {
+        type: "mousePressed",
+        x: start.x,
+        y: start.y,
+        button: "left",
+        clickCount: 1,
+        buttons: 1,
+      })
+      // Picking a sortable item up can reflow the list, so the destination
+      // must be measured only after the page has seen the press.
+      destination = await this.target(to, { glide: false, reach: false })
+      const intercepted = this.connection.once("Input.dragIntercepted", 2000)
+      await this.connection.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x: destination.point.x,
+        y: destination.point.y,
+        button: "left",
+        buttons: 1,
+      })
+      const event = await intercepted
+      const data = event["data"]
+      if (!data || typeof data !== "object") throw new Error("The browser did not provide drag data for this element.")
+      for (const type of ["dragEnter", "dragOver", "drop"]) {
+        await this.connection.send("Input.dispatchDragEvent", {
+          type,
+          x: destination.point.x,
+          y: destination.point.y,
+          data,
+        })
+      }
+    } finally {
+      const end = destination?.point ?? start
+      await Promise.all([
+        this.connection.send("Input.dispatchMouseEvent", {
+          type: "mouseReleased",
+          x: end.x,
+          y: end.y,
+          button: "left",
+          buttons: 0,
+          clickCount: 1,
+        }),
+        this.connection.send("Input.setInterceptDrags", { enabled: false }),
+      ])
+    }
+    if (!destination) return
+    this.pointer = { ...destination.point }
+    this.touched()
+  }
+
+  /** Mouse movement remains the right protocol for sortables, sliders, canvases and maps. */
+  private async dragMouse(start: { x: number; y: number }, to: string) {
+    await this.connection.send("Input.dispatchMouseEvent", {
+      type: "mousePressed",
+      x: start.x,
+      y: start.y,
+      button: "left",
+      clickCount: 1,
+      buttons: 1,
+    })
+    // Picking a sortable item up can reflow the list, so the destination
+    // must be measured only after the page has seen the press.
+    const destination = await this.target(to, { glide: false, reach: false }).catch(async (error: unknown) => {
+      await this.connection.send("Input.dispatchMouseEvent", {
+        type: "mouseReleased",
+        x: start.x,
+        y: start.y,
+        button: "left",
+        buttons: 0,
+        clickCount: 1,
+      })
+      throw error
+    })
+    const presenting = this.presenting
+    for (let step = 1; step <= DRAG_STEPS; step++) {
+      const x = start.x + ((destination.point.x - start.x) * step) / DRAG_STEPS
+      const y = start.y + ((destination.point.y - start.y) * step) / DRAG_STEPS
+      await this.connection.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x,
+        y,
+        button: "left",
+        buttons: 1,
+      })
+      if (presenting) {
+        this.pointer = { x, y }
+        void this.cursor("place", `${x}, ${y}`)
+        await sleep(TYPE_TICK)
+      }
+    }
+    await this.connection.send("Input.dispatchMouseEvent", {
+      type: "mouseReleased",
+      x: destination.point.x,
+      y: destination.point.y,
+      button: "left",
+      buttons: 0,
+      clickCount: 1,
+    })
+    this.pointer = { ...destination.point }
+    this.touched()
+  }
+
+  /**
+   * Puts a file into a file input.
+   *
+   * There is no way to type a path into one: the browser fills it itself from
+   * what the person picked, and this is the protocol's way of saying what that
+   * was. The page is told the same way it would be by a person choosing it,
+   * so whatever it does on change happens.
+   */
+  async upload(selector: string, files: string[]) {
+    const target = await this.target(selector, { glide: false, reach: false })
+    this.announce("upload", target.name)
+    await this.connection.send("DOM.enable").catch(() => {})
+    const handle = await this.connection.send<{ result?: { objectId?: string } }>("Runtime.evaluate", {
+      expression: this.locate(selector),
+      returnByValue: false,
+    })
+    const objectId = handle.result?.objectId
+    if (!objectId) throw new ElementNotFoundError(selector)
+    try {
+      await this.connection.send("DOM.setFileInputFiles", { files, objectId })
+    } finally {
+      await this.connection.send("Runtime.releaseObject", { objectId }).catch(() => {})
+    }
+    this.touched()
   }
 
   async hover(selector: string) {
     const target = await this.target(selector)
     this.announce("hover", target.name)
-    await this.point(target)
+    await this.point(selector, target)
   }
 
+  /** Focuses an element unless it or something inside it already has focus. Focusing scrolls it into view. */
   async focus(selector: string) {
     const ok = await this.evaluate<boolean>(
       `(() => {
-        const el = document.querySelector(${JSON.stringify(selector)})
+        const el = ${this.locate(selector)}
         if (!el) return false
-        el.scrollIntoView({ block: "center", inline: "center" })
+        const active = el.ownerDocument.activeElement
+        if (active && (active === el || el.contains(active))) return true
         el.focus()
         return true
       })()`,
@@ -568,46 +1754,141 @@ export class Tab {
 
   /**
    * Inserts text at the caret. Watched, it arrives a few characters at a time
-   * so typing is visible; a long text finishes in one go once the pause budget
-   * is spent, so nobody waits on a paragraph being typed out.
+   * so typing is visible, but never takes longer than the typing budget, so
+   * nobody waits on a paragraph being typed out.
    */
   private async insert(text: string) {
-    if (!this.hooks.presenting()) {
+    if (!this.presenting) {
       await this.connection.send("Input.insertText", { text })
       return
     }
-    const chars = Array.from(text)
-    const paced = Math.min(chars.length, Math.floor(TYPE_BUDGET / TYPE_DELAY))
-    for (const char of chars.slice(0, paced)) {
-      await this.connection.send("Input.insertText", { text: char })
-      await sleep(TYPE_DELAY)
+    // Sent without waiting on each reply: they run in order anyway, and the
+    // pause between chunks is what makes the typing visible.
+    const sent: Promise<unknown>[] = []
+    for (const chunk of chunks(Array.from(text))) {
+      sent.push(this.connection.send("Input.insertText", { text: chunk.join("") }))
+      await sleep(TYPE_TICK)
     }
-    const rest = chars.slice(paced).join("")
-    if (rest) await this.connection.send("Input.insertText", { text: rest })
+    await Promise.all(sent)
   }
 
   /**
-   * Replaces a field's value. The existing text is selected and typed over
-   * rather than assigned, because assigning `value` directly does not notify
-   * frameworks like React.
+   * Replaces a field's value.
+   *
+   * The fast way is to select what is there and insert the new text in one go,
+   * which is what this does. It is not always enough: inserting text fires no
+   * key events, and a field that masks a phone number or rewrites what it is
+   * given as it is typed hears nothing and either ignores the insert or keeps
+   * the raw text. Those fields say so in their markup, and are typed into key
+   * by key instead; a field that quietly swallowed the insert is typed into on
+   * a second pass, once, which is the case a framework's controlled input
+   * produces. The text is never assigned to `value` directly, because that
+   * notifies nothing at all.
    */
   async fill(selector: string, text: string) {
     const target = await this.target(selector)
     this.announce("fill", target.name)
-    const { x, y } = await this.point(target)
+    const { x, y } = await this.point(selector, target)
     await this.pressAt(x, y, "left", 1)
-    await this.focus(selector)
-    await this.key("Control+a")
-    await this.key("Delete")
-    if (text) await this.insert(text)
-    await this.evaluate(
+    // The click normally focused the field. In one round trip, make sure of it
+    // and select what is there, so the insert below replaces it. A ref on a
+    // wrapper whose field is inside it selects in that field.
+    const found = await this.evaluate<{ selected: boolean; masked: boolean } | null>(
       `(() => {
-        const el = document.querySelector(${JSON.stringify(selector)})
+        const el = ${this.locate(selector)}
+        if (!el) return null
+        // A field inside a frame has focus in its own document.
+        const doc = el.ownerDocument
+        let field = doc.activeElement
+        if (!field || (field !== el && !el.contains(field))) {
+          el.focus()
+          field = doc.activeElement
+        }
+        if (!field) return { selected: false, masked: false }
+        // What a field that rewrites what it is given looks like from outside.
+        const attr = (name) => (field.getAttribute ? field.getAttribute(name) : null)
+        const masked =
+          /^(numeric|tel|decimal)$/i.test(attr("inputmode") || "") ||
+          /^(tel)$/i.test(attr("type") || "") ||
+          attr("pattern") !== null ||
+          attr("data-mask") !== null ||
+          attr("data-imask") !== null ||
+          /mask/i.test(field.className || "")
+        if (field.tagName === "INPUT" || field.tagName === "TEXTAREA") {
+          if (typeof field.select !== "function") return { selected: false, masked: masked }
+          field.select()
+          return { selected: true, masked: masked }
+        }
+        if (field.isContentEditable) {
+          const range = document.createRange()
+          range.selectNodeContents(field)
+          const selection = doc.defaultView.getSelection()
+          selection.removeAllRanges()
+          selection.addRange(range)
+          return { selected: true, masked: masked }
+        }
+        return { selected: false, masked: masked }
+      })()`,
+    )
+    if (found === null) throw new ElementNotFoundError(selector)
+    if (!found.selected) await this.key("Control+a")
+
+    if (!text) {
+      await this.key("Delete")
+      await this.notifyInput(selector)
+      return { typed: false }
+    }
+    if (found.masked) {
+      // It said it rewrites what it is given, so give it keys from the start.
+      // Real keys notify the page by themselves; a synthetic input event on top
+      // of them is one the page never asked for, and a controlled field can
+      // take it for a change it did not make.
+      await this.key("Delete")
+      await this.typeText(text)
+      return { typed: true }
+    }
+
+    await this.insert(text)
+    await this.notifyInput(selector)
+    // A controlled input that only trusts key events throws the insert away.
+    // It has cost one round trip to find out, and typing it is the answer.
+    if (await this.isEmpty(selector)) {
+      await this.key("Control+a")
+      await this.typeText(text)
+      return { typed: true }
+    }
+    return { typed: false }
+  }
+
+  /** Tells the page its field changed, for anything listening on the wrapper rather than the field. */
+  private notifyInput(selector: string) {
+    return this.evaluate(
+      `(() => {
+        const el = ${this.locate(selector)}
         if (!el) return
         el.dispatchEvent(new Event("input", { bubbles: true }))
         el.dispatchEvent(new Event("change", { bubbles: true }))
       })()`,
-    )
+    ).catch(() => {})
+  }
+
+  /**
+   * Whether the field came out empty. Only its emptiness is read back, never
+   * its text, so a password can be known to have been refused without leaving
+   * the page.
+   */
+  private isEmpty(selector: string) {
+    return this.evaluate<boolean>(
+      `(() => {
+        const el = ${this.locate(selector)}
+        if (!el) return false
+        const doc = el.ownerDocument
+        let field = doc.activeElement
+        if (!field || (field !== el && !el.contains(field))) field = el
+        const value = typeof field.value === "string" ? field.value : field.isContentEditable ? field.innerText : ""
+        return String(value).trim().length === 0
+      })()`,
+    ).catch(() => false)
   }
 
   /** Types character by character, which is what triggers autocomplete. */
@@ -615,59 +1896,96 @@ export class Tab {
     if (selector) {
       const target = await this.target(selector)
       this.announce("type", target.name)
-      const { x, y } = await this.point(target)
+      const { x, y } = await this.point(selector, target)
       await this.pressAt(x, y, "left", 1)
       await this.focus(selector)
-    } else this.announce("type")
-
-    const presenting = this.hooks.presenting()
-    let budget = TYPE_BUDGET
-    for (const char of text) {
-      await this.connection.send("Input.dispatchKeyEvent", { type: "keyDown", text: char, key: char })
-      await this.connection.send("Input.dispatchKeyEvent", { type: "keyUp", key: char })
-      if (presenting && budget > 0) {
-        budget -= TYPE_DELAY
-        await sleep(TYPE_DELAY)
-      }
+    } else {
+      this.announce("type")
+      if (this.presenting) void this.cursor("busy")
     }
+
+    await this.typeText(text)
+  }
+
+  /**
+   * Sends text one key at a time, as a person's keyboard would.
+   *
+   * Each character goes as the key it comes from, with its `code` and virtual
+   * key code, because that is what a mask, an autocomplete or an editor reads
+   * off the event. Sent as bare text they all arrive with an empty code and a
+   * key code of zero, and those pages do nothing with them.
+   */
+  private async typeText(text: string) {
+    const presenting = this.presenting
+    const chars = Array.from(text)
+    // Keys are sent without waiting on each reply; they are delivered in order.
+    const sent: Promise<unknown>[] = []
+    for (const chunk of presenting ? chunks(chars) : [chars]) {
+      for (const char of chunk) {
+        const key = describeChar(char)
+        const common = {
+          key: key.key,
+          code: key.code,
+          windowsVirtualKeyCode: key.keyCode,
+          nativeVirtualKeyCode: key.keyCode,
+          modifiers: key.shift ? MODIFIERS["shift"]! : 0,
+        }
+        sent.push(
+          this.connection.send("Input.dispatchKeyEvent", {
+            ...common,
+            type: "keyDown",
+            text: char,
+            unmodifiedText: char,
+          }),
+        )
+        sent.push(this.connection.send("Input.dispatchKeyEvent", { ...common, type: "keyUp" }))
+      }
+      if (presenting) await sleep(TYPE_TICK)
+    }
+    await Promise.all(sent)
+    this.touched()
   }
 
   async press(name: string, selector?: string) {
     this.announce("press", name)
     if (selector) await this.focus(selector)
+    else if (this.presenting) void this.cursor("busy")
     await this.key(name)
   }
 
   /** Sends one key or shortcut, without reporting it as an action of its own. */
   private async key(name: string) {
     const key = describeKey(name)
-    await this.connection.send("Input.dispatchKeyEvent", {
-      type: key.text ? "keyDown" : "rawKeyDown",
-      key: key.key,
-      code: key.code,
-      windowsVirtualKeyCode: key.keyCode,
-      nativeVirtualKeyCode: key.keyCode,
-      modifiers: key.modifiers,
-      ...(key.text ? { text: key.text } : {}),
-    })
-    await this.connection.send("Input.dispatchKeyEvent", {
-      type: "keyUp",
-      key: key.key,
-      code: key.code,
-      windowsVirtualKeyCode: key.keyCode,
-      nativeVirtualKeyCode: key.keyCode,
-      modifiers: key.modifiers,
-    })
+    await Promise.all([
+      this.connection.send("Input.dispatchKeyEvent", {
+        type: key.text ? "keyDown" : "rawKeyDown",
+        key: key.key,
+        code: key.code,
+        windowsVirtualKeyCode: key.keyCode,
+        nativeVirtualKeyCode: key.keyCode,
+        modifiers: key.modifiers,
+        ...(key.text ? { text: key.text } : {}),
+      }),
+      this.connection.send("Input.dispatchKeyEvent", {
+        type: "keyUp",
+        key: key.key,
+        code: key.code,
+        windowsVirtualKeyCode: key.keyCode,
+        nativeVirtualKeyCode: key.keyCode,
+        modifiers: key.modifiers,
+      }),
+    ])
+    this.touched()
   }
 
   async select(selector: string, value: string) {
     const target = await this.target(selector)
     this.announce("select", target.name)
-    await this.point(target)
-    if (this.hooks.presenting()) await this.cursor("click", [])
+    await this.point(selector, target)
+    if (this.presenting) void this.cursor("click")
     const ok = await this.evaluate<boolean>(
       `(() => {
-        const el = document.querySelector(${JSON.stringify(selector)})
+        const el = ${this.locate(selector)}
         if (!el) return false
         const wanted = ${JSON.stringify(value)}
         const option = Array.from(el.options || []).find(
@@ -684,34 +2002,121 @@ export class Tab {
   }
 
   async setChecked(selector: string, checked: boolean) {
-    const current = await this.evaluate<boolean | null>(
-      `(() => {
-        const el = document.querySelector(${JSON.stringify(selector)})
-        if (!el) return null
-        return el.checked === true || el.getAttribute("aria-checked") === "true"
-      })()`,
-    )
-    if (current === null) throw new ElementNotFoundError(selector)
-    if (current === checked) return
     const target = await this.target(selector)
+    if (target.checked === checked) return
     this.announce(checked ? "check" : "uncheck", target.name)
-    const { x, y } = await this.point(target)
+    const { x, y } = await this.point(selector, target)
     await this.pressAt(x, y, "left", 1)
   }
 
+  /**
+   * Scrolls, the way a wheel does.
+   *
+   * A script `scrollBy` moves the scrollbar and tells nobody: pages that take
+   * the wheel over themselves - smooth scrolling libraries, virtualised lists,
+   * carousels, maps - never hear about it and do not move, while the tool
+   * reported success. So the wheel is turned where the pointer is, which is
+   * what a person does and what those pages listen for, and the script is kept
+   * only for when the wheel moved nothing.
+   *
+   * Either way the scroll positions are read before and after, so "nothing
+   * moved" is something the model is told rather than something it has to
+   * guess from an unchanged outline.
+   */
   async scroll(selector: string | undefined, x: number, y: number) {
     this.announce("scroll")
-    // Watched, the page glides instead of jumping, and the view waits for it.
-    const behavior = this.hooks.presenting() ? "smooth" : "auto"
-    if (selector) {
+    const where = await this.wheelPoint(selector)
+    if (!where) throw new ElementNotFoundError(selector!)
+    if (this.presenting) {
+      this.pointer = where.point
+      void this.cursor("move", `${where.point.x}, ${where.point.y}, ${CURSOR_CATCHUP}`)
+    }
+
+    const before = await this.scrollState(selector, where.point)
+    await this.connection.send("Input.dispatchMouseEvent", {
+      type: "mouseWheel",
+      x: where.point.x,
+      y: where.point.y,
+      deltaX: x,
+      deltaY: y,
+    })
+    await this.scrollSettled()
+    let after = await this.scrollState(selector, where.point)
+    let method: "wheel" | "script" = "wheel"
+
+    if (!moved(before, after)) {
+      // Nothing under the pointer took the wheel. An element that scrolls only
+      // through its own API, or one the pointer cannot reach, still moves this
+      // way, so it is worth one try before reporting that nothing happened.
+      method = "script"
       await this.evaluate(
         `(() => {
-          const el = document.querySelector(${JSON.stringify(selector)})
-          if (el) el.scrollBy({ left: ${x}, top: ${y}, behavior: "${behavior}" })
+          const el = ${selector ? this.locate(selector) : "window"}
+          if (el) el.scrollBy({ left: ${x}, top: ${y}, behavior: "auto" })
         })()`,
-      )
-    } else await this.evaluate(`window.scrollBy({ left: ${x}, top: ${y}, behavior: "${behavior}" })`)
-    if (behavior === "smooth") await sleep(SCROLL_SETTLE)
+      ).catch(() => {})
+      await this.scrollSettled()
+      after = await this.scrollState(selector, where.point)
+    }
+
+    return { moved: moved(before, after), method }
+  }
+
+  /** Where to turn the wheel: over the element, or over the middle of the page. */
+  private async wheelPoint(selector: string | undefined) {
+    if (!selector) {
+      const view = await this.viewport()
+      return { point: { x: Math.round(view.width / 2), y: Math.round(view.height / 2) } }
+    }
+    // Reaching past a cover does not matter for a wheel; being on screen does.
+    const target = await this.target(selector, { glide: false, reach: false }).catch(() => undefined)
+    if (!target) return undefined
+    return { point: target.point }
+  }
+
+  /**
+   * Enough of where the page stands to tell whether it moved: the window's
+   * scroll, each ancestor's up from the element, since the scroll may belong to
+   * a box around it rather than to the page, and where two things actually sit
+   * on screen, because a page that hijacks the wheel moves its content with a
+   * transform and never touches a scroll position at all.
+   */
+  private scrollState(selector: string | undefined, point: { x: number; y: number }) {
+    return this.evaluate<number[]>(
+      `(() => {
+        const out = [scrollX, scrollY]
+        let node = ${selector ? this.locate(selector) : "document.scrollingElement"}
+        while (node && node.nodeType === 1) {
+          out.push(node.scrollLeft, node.scrollTop)
+          node = node.parentElement
+        }
+        const at = (el) => {
+          if (!el || !el.getBoundingClientRect) return out.push(0, 0)
+          const r = el.getBoundingClientRect()
+          out.push(Math.round(r.top * 10), Math.round(r.left * 10))
+        }
+        at(document.body)
+        at(document.elementFromPoint(${point.x}, ${point.y}))
+        return out
+      })()`,
+    ).catch(() => [])
+  }
+
+  /** Waits for the page to stop scrolling, and never for long. */
+  private async scrollSettled() {
+    const stopped = this.evaluate(
+      `new Promise((resolve) => {
+        let done = false
+        const finish = () => {
+          if (done) return
+          done = true
+          resolve(true)
+        }
+        addEventListener("scrollend", finish, { once: true })
+        setTimeout(finish, ${SCROLL_SETTLE})
+      })`,
+    ).catch(() => {})
+    await Promise.race([stopped, sleep(SCROLL_SETTLE + 150)])
   }
 
   /** Polls until an element is visible, or until `text` appears on the page. */
@@ -720,12 +2125,12 @@ export class Tab {
     const deadline = Date.now() + timeout
     const condition = input.selector
       ? `(() => {
-          const el = document.querySelector(${JSON.stringify(input.selector)})
+          const el = ${this.locate(input.selector)}
           if (!el) return false
           const r = el.getBoundingClientRect()
           return r.width > 0 && r.height > 0
         })()`
-      : `document.body && document.body.innerText.includes(${JSON.stringify(input.text ?? "")})`
+      : `(${TEXT_IN_FRAMES})(document).includes(${JSON.stringify(input.text ?? "")})`
 
     while (Date.now() < deadline) {
       if (await this.evaluate<boolean>(condition).catch(() => false)) return
@@ -738,30 +2143,72 @@ export class Tab {
     )
   }
 
-  /** A PNG for the model. The cursor overlay is hidden so the model sees only the page. */
+  /**
+   * Where the page is scrolled to and how big its viewport is, in CSS pixels,
+   * with the screen's pixel density. Read fresh every time, because anything
+   * that measures an element may have scrolled the page to reach it.
+   */
+  private viewport() {
+    return this.evaluate<{ x: number; y: number; width: number; height: number; ratio: number }>(
+      `(() => {
+        const v = window.visualViewport
+        return {
+          x: v ? v.pageLeft : scrollX,
+          y: v ? v.pageTop : scrollY,
+          width: v ? v.width : innerWidth,
+          height: v ? v.height : innerHeight,
+          ratio: devicePixelRatio || 1,
+        }
+      })()`,
+    )
+  }
+
+  /**
+   * A JPEG for the model, in CSS pixels whatever the screen's density, which
+   * keeps it small on its way through the extension and to the model. The
+   * cursor overlay is hidden so the model sees only the page.
+   */
   async screenshot(options: { selector?: string; fullPage?: boolean } = {}) {
-    let clip: (Rect & { scale: number }) | undefined
+    const view = await this.viewport()
+    const scale = 1 / (view.ratio || 1)
+    let clip: Rect & { scale: number } = { x: view.x, y: view.y, width: view.width, height: view.height, scale }
+    let beyond = false
 
     if (options.selector) {
-      const { rect } = await this.target(options.selector)
-      const origin = await this.evaluate<{ x: number; y: number }>(`({ x: window.scrollX, y: window.scrollY })`)
-      clip = { x: rect.x + origin.x, y: rect.y + origin.y, width: rect.width, height: rect.height, scale: 1 }
+      const { rect } = await this.target(options.selector, { glide: false, reach: false })
+      // A clip is in document coordinates, so it needs the scroll offset to go
+      // with the rect. Measuring may have scrolled the element into view, which
+      // moves both, so the offset is read again here: pairing a fresh rect with
+      // the offset from before the scroll would capture the wrong strip of page.
+      const after = await this.viewport()
+      clip = { x: rect.x + after.x, y: rect.y + after.y, width: rect.width, height: rect.height, scale }
+      beyond = true
     } else if (options.fullPage) {
       const metrics = await this.connection.send<LayoutMetrics>("Page.getLayoutMetrics")
       const size = metrics.cssContentSize ?? metrics.contentSize
-      clip = { x: 0, y: 0, width: size.width, height: size.height, scale: 1 }
+      clip = { x: 0, y: 0, width: size.width, height: size.height, scale }
+      beyond = true
     }
 
-    await this.cursor("hide", [1])
+    await this.cursor("hide", "1")
     try {
       const result = await this.connection.send<ScreenshotResult>("Page.captureScreenshot", {
-        format: "png",
-        ...(clip ? { clip, captureBeyondViewport: true } : {}),
+        format: "jpeg",
+        quality: 80,
+        clip,
+        ...(beyond ? { captureBeyondViewport: true } : {}),
       })
       return Buffer.from(result.data, "base64")
     } finally {
-      await this.cursor("hide", [0])
+      await this.cursor("hide", "0")
     }
+  }
+
+  /** The text on screen, or on the whole page, as a screenshot of it would show. */
+  visibleText(options: { fullPage?: boolean; max?: number } = {}) {
+    return this.evaluate<string>(`(${VISIBLE_TEXT})(${options.fullPage === true}, ${options.max ?? 6000})`).catch(
+      () => "",
+    )
   }
 
   /** A JPEG of the viewport as a person would see it, cursor included. */
@@ -778,24 +2225,47 @@ export class Tab {
   /**
    * Streams the tab as it repaints. Chromium only sends a frame when something
    * changed, and waits for each acknowledgement before sending the next, so an
-   * idle page costs nothing.
+   * idle page costs nothing. `size` caps the pictures at what the view shows.
    */
-  async startScreencast(onFrame: (frame: Frame) => void) {
+  async startScreencast(onFrame: (frame: Frame) => void, size?: { width: number; height: number }) {
     this.stopCast?.()
-    this.stopCast = this.connection.on("Page.screencastFrame", (params) => {
-      void this.connection.send("Page.screencastFrameAck", { sessionId: params["sessionId"] }).catch(() => {})
+    // The picture goes out at once; only the acknowledgement waits, so the view
+    // is never behind what happened, and the browser is asked for a new picture
+    // at most every CAST_INTERVAL.
+    let acked = 0
+    let session: unknown
+    let timer: ReturnType<typeof setTimeout> | undefined
+    // One acknowledgement is owed at a time, for the newest frame seen: a
+    // second one would hand the browser another slot and the pace would be back
+    // to whatever the page animates at.
+    const ack = () => {
+      acked = Date.now()
+      timer = undefined
+      void this.connection.send("Page.screencastFrameAck", { sessionId: session }).catch(() => {})
+    }
+    const off = this.connection.on("Page.screencastFrame", (params) => {
+      session = params["sessionId"]
       const metadata = asRecord(params["metadata"])
       onFrame({
         data: asText(params["data"]),
         width: number(metadata["deviceWidth"]),
         height: number(metadata["deviceHeight"]),
       })
+      if (timer) return
+      const wait = CAST_INTERVAL - (Date.now() - acked)
+      if (wait <= 0) ack()
+      else timer = setTimeout(ack, wait)
     })
+    this.stopCast = () => {
+      if (timer) clearTimeout(timer)
+      timer = undefined
+      off()
+    }
     await this.connection.send("Page.startScreencast", {
       format: "jpeg",
-      quality: 72,
-      maxWidth: 1600,
-      maxHeight: 1200,
+      quality: 60,
+      maxWidth: size ? size.width : 1600,
+      maxHeight: size ? size.height : 1200,
       everyNthFrame: 1,
     })
   }
@@ -806,8 +2276,26 @@ export class Tab {
     await this.connection.send("Page.stopScreencast").catch(() => {})
   }
 
-  /** Forwards what the person watching does in the live view. */
+  /**
+   * Forwards what the person watching does in the live view.
+   *
+   * Pointer moves and wheel ticks come in many times a second, and the pane
+   * sends them one at a time so a mouse-up can never overtake its mouse-down.
+   * Waiting for the browser to confirm each one before letting the next leave
+   * the pane is what makes dragging and scrolling trail behind the hand, worst of
+   * all through the extension, where the confirmation queues behind whatever
+   * else is on the socket. So they are chained here instead, kept in order and
+   * answered at once; a click or a keystroke, which the pane may follow with
+   * something that depends on it, is still waited for.
+   */
   async input(event: UserInput) {
+    const eager = event.type === "wheel" || (event.type === "mouse" && event.action === "move")
+    const sent = this.inputs.catch(() => {}).then(() => this.dispatch(event))
+    this.inputs = sent.catch(() => {})
+    if (!eager) await sent
+  }
+
+  private async dispatch(event: UserInput) {
     if (event.type === "mouse") {
       this.pointer = { x: event.x, y: event.y }
       const moving = event.action === "move"
@@ -850,18 +2338,21 @@ export class Tab {
   }
 
   /**
-   * Lays the page out at a given viewport size, so it fills the live view the
-   * way a real browser window fills its frame. The agent works at the same
-   * size, so what it sees and what is shown are one and the same.
+   * Makes sure the page lays out at its own window's size.
+   *
+   * There is deliberately no counterpart that sets a size. An earlier version
+   * laid every page out at the size of the pane watching it, through
+   * `Emulation.setDeviceMetricsOverride`, which meant a site reflowed to a
+   * narrower layout because someone dragged a panel edge, possibly while the
+   * agent was aiming at something. Worse, a page under that override stops
+   * reporting title and address changes through `Target.targetInfoChanged`, so
+   * the live view quietly fell behind on single page apps. The browser is
+   * opened at the configured viewport instead, once, and the pane scales the
+   * pictures it receives. This only undoes an override an older version, or a
+   * browser we reconnected to, may have left behind.
    */
-  async resize(width: number, height: number) {
-    await this.connection.send("Emulation.setDeviceMetricsOverride", {
-      width,
-      height,
-      // Zero keeps the machine's own pixel density rather than faking one.
-      deviceScaleFactor: 0,
-      mobile: false,
-    })
+  async clearResize() {
+    await this.connection.send("Emulation.clearDeviceMetricsOverride").catch(() => {})
   }
 
   async bringToFront() {

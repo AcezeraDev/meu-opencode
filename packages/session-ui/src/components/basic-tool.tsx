@@ -5,9 +5,12 @@ import { createStore } from "solid-js/store"
 import { Collapsible } from "@opencode-ai/ui/collapsible"
 import type { IconProps } from "@opencode-ai/ui/icon"
 import { TextShimmer } from "@opencode-ai/ui/text-shimmer"
+import { ToolStatusTitle } from "./tool-status-title"
 
 export type TriggerTitle = {
   title: string
+  activeTitle?: string
+  doneTitle?: string
   titleClass?: string
   subtitle?: string
   subtitleClass?: string
@@ -185,10 +188,12 @@ export function BasicTool(props: BasicToolProps) {
   const trigger = () => (
     <div
       data-component="tool-trigger"
+      data-activity-state={pending() ? "active" : props.status === "error" ? "error" : "complete"}
       data-clickable={props.clickable ? "true" : undefined}
       data-hide-details={props.hideDetails ? "true" : undefined}
     >
       <div data-slot="basic-tool-tool-trigger-content">
+        <span data-slot="basic-tool-activity-indicator" aria-hidden="true" />
         <div data-slot="basic-tool-tool-info">
           <Switch>
             <Match when={dynamicTrigger !== undefined}>{dynamicTrigger}</Match>
@@ -202,7 +207,16 @@ export function BasicTool(props: BasicToolProps) {
                         [title().titleClass ?? ""]: !!title().titleClass,
                       }}
                     >
-                      <TextShimmer text={title().title} active={pending()} />
+                      <Show
+                        when={title().activeTitle && title().doneTitle}
+                        fallback={<TextShimmer text={title().title} active={pending()} />}
+                      >
+                        <ToolStatusTitle
+                          active={pending()}
+                          activeText={title().activeTitle!}
+                          doneText={title().doneTitle!}
+                        />
+                      </Show>
                     </span>
                     <Show when={!pending() || title().subtitle || title().args?.length}>
                       <Show when={title().subtitle}>
@@ -334,6 +348,8 @@ export function GenericTool(props: {
       status={props.status}
       trigger={{
         title: i18n.t("ui.basicTool.called", { tool: props.tool }),
+        activeTitle: i18n.t("ui.tool.activity.running", { tool: props.tool }),
+        doneTitle: i18n.t("ui.tool.activity.ran", { tool: props.tool }),
         subtitle: label(props.input),
         args: args(props.input),
       }}

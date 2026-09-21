@@ -397,6 +397,19 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                     aria-pressed={layout.route().type === "home"}
                   />
                 </TooltipV2>
+                <TooltipV2 placement="bottom" value={language.t("agents.open")} class="shrink-0">
+                  <IconButtonV2
+                    type="button"
+                    variant="ghost-muted"
+                    size="large"
+                    class="!w-9 shrink-0"
+                    icon={<IconV2 name="brain" />}
+                    state={location.pathname === "/agents" ? "pressed" : undefined}
+                    onClick={() => navigate("/agents")}
+                    aria-label={language.t("agents.open")}
+                    aria-pressed={location.pathname === "/agents"}
+                  />
+                </TooltipV2>
 
                 <TitlebarTabStrip
                   tabs={tabsStore}

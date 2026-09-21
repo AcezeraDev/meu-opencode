@@ -73,6 +73,23 @@ const UsageSpend = Schema.Struct({
   messages: Schema.Number,
 }).annotate({ identifier: "UsageSpend" })
 
+// How long the request in progress should still take, from the person's own
+// history and the agent's todo list. Times are in milliseconds.
+export const UsageEtaQuery = Schema.Struct({
+  ...WorkspaceRoutingQueryFields,
+  sessionID: Schema.String,
+})
+const UsageEta = Schema.Struct({
+  elapsed: Schema.Number,
+  remaining: Schema.optional(Schema.Number),
+  basis: Schema.optional(Schema.Literals(["plan", "history"])),
+  /** How long requests with this model usually take. */
+  typical: Schema.optional(Schema.Number),
+  /** Past requests the figures come from. */
+  runs: Schema.Number,
+  todos: Schema.optional(Schema.Struct({ total: Schema.Number, done: Schema.Number })),
+}).annotate({ identifier: "UsageEta" })
+
 // Capability data comes from NanoGPT's catalog and is shaped by
 // @opencode-ai/core/web-video; the API key itself is never part of any response.
 const WebVideoCatalog = Schema.Struct({
@@ -187,6 +204,7 @@ export const ExperimentalPaths = {
   resource: "/experimental/resource",
   webVideoModels: "/experimental/web-video/models",
   usageSpend: "/experimental/usage/spend",
+  usageEta: "/experimental/usage/eta",
   webVideoSettings: "/experimental/web-video/settings",
   browserStatus: "/experimental/browser/status",
   browserFrame: "/experimental/browser/frame",
@@ -357,6 +375,17 @@ export const ExperimentalApi = HttpApi.make("experimental")
             identifier: "experimental.usage.spend",
             summary: "Get model spend",
             description: "Sum the cost of assistant messages created since `since` (ms), across all sessions.",
+          }),
+        ),
+        HttpApiEndpoint.get("usageEta", ExperimentalPaths.usageEta, {
+          query: UsageEtaQuery,
+          success: described(UsageEta, "Estimated time left for the request in progress"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.usage.eta",
+            summary: "Estimate time left",
+            description:
+              "Estimate how long the session's request in progress will still take, from past requests and the agent's todo list.",
           }),
         ),
         HttpApiEndpoint.get("webVideoModels", ExperimentalPaths.webVideoModels, {

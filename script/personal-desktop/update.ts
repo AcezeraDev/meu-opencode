@@ -11,6 +11,9 @@
  * The app's update button runs it with `--from-app --installed=<source time>`:
  * then the build is skipped when the staged installer, or the running app when
  * nothing is staged, already has the latest changes.
+ *
+ * On a PC set up by instalar.ps1 it first pulls what was published to GitHub
+ * (see FOLLOW in shared.ts), so the button and the watcher update from there.
  */
 import { $ } from "bun"
 import { copyFile, mkdir } from "node:fs/promises"
@@ -23,10 +26,12 @@ import {
   ROOT,
   acquireLock,
   appRunning,
+  following,
   installPending,
   log,
   newestSourceTime,
   notify,
+  pullPublished,
   readState,
   releaseLock,
   writeState,
@@ -119,7 +124,23 @@ if (!(await acquireLock(BUILD_LOCK))) {
   while (!(await acquireLock(BUILD_LOCK))) await Bun.sleep(2000)
 }
 
-const result = await build().finally(() => releaseLock(BUILD_LOCK))
+// A PC that follows the published code gets its changes from GitHub; once they
+// are in, the files they touched are newer than the last build, like edits.
+const follow = await following()
+const pulled = follow
+  ? await pullPublished(follow).then(
+      () => true,
+      async (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error)
+        await writeState({ ...(await readState()), lastError: message })
+        await log(`ERRO ao atualizar do GitHub: ${message}`)
+        return false
+      },
+    )
+  : true
+
+const result = pulled ? await build().finally(() => releaseLock(BUILD_LOCK)) : "failed"
+if (!pulled) await releaseLock(BUILD_LOCK)
 if (result === "failed") process.exitCode = 1
 if (result === "built" && fromApp) await log("Nova versão pronta: reinicie pelo botão de atualizar do app.")
 if (result === "built" && !fromApp && !(await installPending()) && (await appRunning())) {

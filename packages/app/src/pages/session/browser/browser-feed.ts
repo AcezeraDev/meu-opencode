@@ -63,6 +63,22 @@ type ServerEvent =
 const RETRY_MS = 1500
 
 /**
+ * The payload of one server-sent event.
+ *
+ * Nearly every event is a single `data:` line, which gets its own path:
+ * splitting a frame's few hundred kilobytes into lines only to join them back
+ * costs more than the event it carries.
+ */
+function eventData(chunk: string) {
+  if (chunk.startsWith("data:") && !chunk.includes("\n")) return chunk.slice(5).trimStart()
+  return chunk
+    .split("\n")
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart())
+    .join("\n")
+}
+
+/**
  * The live connection to the server's browser.
  *
  * While `enabled` it holds an SSE stream open: status and agent activity land
@@ -118,19 +134,20 @@ export function createBrowserFeed(input: { directory: Accessor<string | undefine
           setConnected(true)
           const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
           let buffer = ""
+          // Where the search for the next event's end left off. A frame is a
+          // few hundred kilobytes and arrives in pieces, so starting the search
+          // at the front on every piece would read the same text over and over.
+          let scanned = 0
           while (!stopped) {
             const { value, done } = await reader.read()
             if (done) break
             buffer += value
-            let boundary = buffer.indexOf("\n\n")
+            let boundary = buffer.indexOf("\n\n", scanned)
             while (boundary >= 0) {
               const chunk = buffer.slice(0, boundary)
               buffer = buffer.slice(boundary + 2)
-              const data = chunk
-                .split("\n")
-                .filter((line) => line.startsWith("data:"))
-                .map((line) => line.slice(5).trimStart())
-                .join("\n")
+              scanned = 0
+              const data = eventData(chunk)
               if (data) {
                 try {
                   handle(JSON.parse(data) as ServerEvent)
@@ -140,6 +157,9 @@ export function createBrowserFeed(input: { directory: Accessor<string | undefine
               }
               boundary = buffer.indexOf("\n\n")
             }
+            // A boundary is two characters, so only the last one can be split
+            // across the pieces still to come.
+            scanned = Math.max(0, buffer.length - 1)
           }
         } catch {
           // Dropped or refused; retried below unless the view went away.

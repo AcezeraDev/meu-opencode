@@ -91,6 +91,9 @@ export function ToolStatusTitle(props: {
       data-ready={animating() ? "true" : "false"}
       data-mode={suffix() ? "suffix" : "swap"}
       class={props.class}
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
       aria-label={active() ? props.activeText : props.doneText}
     >
       <Show

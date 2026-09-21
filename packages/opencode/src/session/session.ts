@@ -54,6 +54,27 @@ export function isDefaultTitle(title: string) {
   ).test(title)
 }
 
+/** Hellos in the ways people open a chat, Portuguese first, alone or strung together. */
+const GREETING =
+  /^(?:(?:o+i+e*|(?:oi)+|ola+|opa+|e+a+[ei]?|e ai|ea[eí]|iae|iai|salve|fala+|eai|hey|hi|hello|yo|bom dia|boa tarde|boa noite|tudo (?:bem|bom|certo|joia)|td (?:bem|bom)|beleza|blz|suave|como vai|como voce esta|tranquilo|mano|cara|amigo|parceiro|chefe)\s*)+$/
+
+/**
+ * Whether a message only says hello. Such a message says nothing about what a
+ * session is for, so the title waits for the first real request.
+ */
+export function isGreeting(text: string) {
+  const plain = text
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+  if (plain.length <= 2) return true
+  // Anything longer than a greeting is a request; this also keeps the pattern off long text.
+  return plain.length <= 40 && GREETING.test(plain)
+}
+
 type SessionRow = typeof SessionTable.$inferSelect
 
 export function fromRow(row: SessionRow): Info {

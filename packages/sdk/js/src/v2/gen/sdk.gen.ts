@@ -3,9 +3,22 @@
 import { client } from "./client.gen.js"
 import { buildClientParams, type Client, type Options as Options2, type TDataShape } from "./client/index.js"
 import type {
+  AgentGenerateInput,
   AgentPartInput,
+  AgentRuntimeUpdateInput,
+  AgentWriteInput,
+  AppAgentDeleteErrors,
+  AppAgentDeleteResponses,
+  AppAgentGenerateErrors,
+  AppAgentGenerateResponses,
+  AppAgentRuntimeErrors,
+  AppAgentRuntimeResponses,
+  AppAgentRuntimeUpdateErrors,
+  AppAgentRuntimeUpdateResponses,
   AppAgentsErrors,
   AppAgentsResponses,
+  AppAgentUpdateErrors,
+  AppAgentUpdateResponses,
   AppLogErrors,
   AppLogResponses,
   AppSkillsErrors,
@@ -15,6 +28,10 @@ import type {
   AuthRemoveResponses,
   AuthSetErrors,
   AuthSetResponses,
+  BrowserCommand,
+  BrowserExtensionConnectErrors,
+  BrowserExtensionConnectResponses,
+  BrowserInput,
   CommandListErrors,
   CommandListResponses,
   Config as Config3,
@@ -29,6 +46,16 @@ import type {
   EventTuiPromptAppend,
   EventTuiSessionSelect,
   EventTuiToastShow,
+  ExperimentalBrowserControlErrors,
+  ExperimentalBrowserControlResponses,
+  ExperimentalBrowserFrameErrors,
+  ExperimentalBrowserFrameResponses,
+  ExperimentalBrowserInputErrors,
+  ExperimentalBrowserInputResponses,
+  ExperimentalBrowserStatusErrors,
+  ExperimentalBrowserStatusResponses,
+  ExperimentalBrowserStreamErrors,
+  ExperimentalBrowserStreamResponses,
   ExperimentalCapabilitiesGetErrors,
   ExperimentalCapabilitiesGetResponses,
   ExperimentalConsoleGetErrors,
@@ -46,6 +73,16 @@ import type {
   ExperimentalSessionBackgroundResponses,
   ExperimentalSessionListErrors,
   ExperimentalSessionListResponses,
+  ExperimentalUsageEtaErrors,
+  ExperimentalUsageEtaResponses,
+  ExperimentalUsageSpendErrors,
+  ExperimentalUsageSpendResponses,
+  ExperimentalWebVideoModelsErrors,
+  ExperimentalWebVideoModelsResponses,
+  ExperimentalWebVideoSettingsErrors,
+  ExperimentalWebVideoSettingsResponses,
+  ExperimentalWebVideoSettingsUpdateErrors,
+  ExperimentalWebVideoSettingsUpdateResponses,
   ExperimentalWorkspaceAdapterListErrors,
   ExperimentalWorkspaceAdapterListResponses,
   ExperimentalWorkspaceCreateErrors,
@@ -395,6 +432,7 @@ import type {
   VcsGetResponses,
   VcsStatusErrors,
   VcsStatusResponses,
+  WebVideoDefaults,
   WorktreeCreateErrors,
   WorktreeCreateInput,
   WorktreeCreateResponses,
@@ -580,6 +618,187 @@ export class App extends HeyApiClient {
       url: "/agent",
       ...options,
       ...params,
+    })
+  }
+
+  /**
+   * Generate agent draft
+   *
+   * Generate an editable agent description and system prompt from a natural-language request.
+   */
+  public agentGenerate<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      agentGenerateInput?: AgentGenerateInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { key: "agentGenerateInput", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<AppAgentGenerateResponses, AppAgentGenerateErrors, ThrowOnError>({
+      url: "/agent/generate",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * List continuous agents
+   *
+   * List live continuous-agent execution state for the current workspace.
+   */
+  public agentRuntime<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<AppAgentRuntimeResponses, AppAgentRuntimeErrors, ThrowOnError>({
+      url: "/agent/runtime",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Start or stop continuous agent
+   *
+   * Start or stop the supervised continuous execution loop for an agent.
+   */
+  public agentRuntimeUpdate<ThrowOnError extends boolean = false>(
+    parameters: {
+      name: string
+      directory?: string
+      workspace?: string
+      agentRuntimeUpdateInput?: AgentRuntimeUpdateInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { key: "agentRuntimeUpdateInput", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<
+      AppAgentRuntimeUpdateResponses,
+      AppAgentRuntimeUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/agent/{name}/runtime",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Delete agent
+   *
+   * Delete a user-defined AI agent from the global configuration directory.
+   */
+  public agentDelete<ThrowOnError extends boolean = false>(
+    parameters: {
+      name: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<AppAgentDeleteResponses, AppAgentDeleteErrors, ThrowOnError>({
+      url: "/agent/{name}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create or update agent
+   *
+   * Create or overwrite a user-defined AI agent in the global configuration directory.
+   */
+  public agentUpdate<ThrowOnError extends boolean = false>(
+    parameters: {
+      name: string
+      directory?: string
+      workspace?: string
+      agentWriteInput?: AgentWriteInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "name" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { key: "agentWriteInput", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<AppAgentUpdateResponses, AppAgentUpdateErrors, ThrowOnError>({
+      url: "/agent/{name}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 
@@ -918,6 +1137,384 @@ export class Resource extends HeyApiClient {
       url: "/experimental/resource",
       ...options,
       ...params,
+    })
+  }
+}
+
+export class Usage extends HeyApiClient {
+  /**
+   * Get model spend
+   *
+   * Sum the cost of assistant messages created since `since` (ms), across all sessions.
+   */
+  public spend<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      since?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "since" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalUsageSpendResponses,
+      ExperimentalUsageSpendErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/usage/spend",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Estimate time left
+   *
+   * Estimate how long the session's request in progress will still take, from past requests and the agent's todo list.
+   */
+  public eta<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      sessionID: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "sessionID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalUsageEtaResponses,
+      ExperimentalUsageEtaErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/usage/eta",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Settings extends HeyApiClient {
+  /**
+   * Update web video defaults
+   *
+   * Update the defaults the generate_web_video tool uses when options are omitted.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      webVideoDefaults?: WebVideoDefaults
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { key: "webVideoDefaults", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<
+      ExperimentalWebVideoSettingsUpdateResponses,
+      ExperimentalWebVideoSettingsUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/web-video/settings",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class WebVideo extends HeyApiClient {
+  /**
+   * List web video models
+   *
+   * List NanoGPT video models with parsed capabilities, and whether a NanoGPT API key is configured on the server.
+   */
+  public models<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalWebVideoModelsResponses,
+      ExperimentalWebVideoModelsErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/web-video/models",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get web video defaults
+   *
+   * Get the defaults the generate_web_video tool uses when options are omitted.
+   */
+  public settings<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalWebVideoSettingsResponses,
+      ExperimentalWebVideoSettingsErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/web-video/settings",
+      ...options,
+      ...params,
+    })
+  }
+
+  private _settings?: Settings
+  get settings2(): Settings {
+    return (this._settings ??= new Settings({ client: this.client }))
+  }
+}
+
+export class Browser extends HeyApiClient {
+  /**
+   * Get browser status
+   *
+   * Report whether the built-in browser is running, and which pages it has open.
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalBrowserStatusResponses,
+      ExperimentalBrowserStatusErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/browser/status",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get the current browser frame
+   *
+   * Screenshot the active tab of the built-in browser, for the live panel. Never starts the browser.
+   */
+  public frame<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalBrowserFrameResponses,
+      ExperimentalBrowserFrameErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/browser/frame",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Stream the built-in browser
+   *
+   * Server-sent events with the browser's status, live frames of the active tab and what the agent is doing. The agent acts at a visible pace while this is open.
+   */
+  public stream<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).sse.get<
+      ExperimentalBrowserStreamResponses,
+      ExperimentalBrowserStreamErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/browser/stream",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Send input to the browser
+   *
+   * Forward a mouse, wheel, key or text event from the live view to the active tab.
+   */
+  public input<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      browserInput?: BrowserInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { key: "browserInput", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperimentalBrowserInputResponses,
+      ExperimentalBrowserInputErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/browser/input",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Control the browser
+   *
+   * Navigate, go back or forward, reload, open, switch and close tabs, or open the current page in your own browser, as from a browser toolbar. Starts the browser if needed.
+   */
+  public control<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      browserCommand?: BrowserCommand
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { key: "browserCommand", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperimentalBrowserControlResponses,
+      ExperimentalBrowserControlErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/browser/control",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
     })
   }
 }
@@ -1264,6 +1861,21 @@ export class Experimental extends HeyApiClient {
   private _resource?: Resource
   get resource(): Resource {
     return (this._resource ??= new Resource({ client: this.client }))
+  }
+
+  private _usage?: Usage
+  get usage(): Usage {
+    return (this._usage ??= new Usage({ client: this.client }))
+  }
+
+  private _webVideo?: WebVideo
+  get webVideo(): WebVideo {
+    return (this._webVideo ??= new WebVideo({ client: this.client }))
+  }
+
+  private _browser?: Browser
+  get browser(): Browser {
+    return (this._browser ??= new Browser({ client: this.client }))
   }
 
   private _projectCopy?: ProjectCopy
@@ -7074,6 +7686,28 @@ export class V2 extends HeyApiClient {
   }
 }
 
+export class Extension extends HeyApiClient {
+  /**
+   * Connect the browser extension
+   *
+   * WebSocket the OpenCode Browser Bridge extension connects to so the agent can drive the user's own browser. Gated by the browser.extensionToken secret, which the extension sends as its first message.
+   */
+  public connect<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<
+      BrowserExtensionConnectResponses,
+      BrowserExtensionConnectErrors,
+      ThrowOnError
+    >({ url: "/experimental/browser/extension", ...options })
+  }
+}
+
+export class Browser2 extends HeyApiClient {
+  private _extension?: Extension
+  get extension(): Extension {
+    return (this._extension ??= new Extension({ client: this.client }))
+  }
+}
+
 export class OpencodeClient extends HeyApiClient {
   public static readonly __registry = new HeyApiRegistry<OpencodeClient>()
 
@@ -7215,5 +7849,10 @@ export class OpencodeClient extends HeyApiClient {
   private _v2?: V2
   get v2(): V2 {
     return (this._v2 ??= new V2({ client: this.client }))
+  }
+
+  private _browser?: Browser2
+  get browser(): Browser2 {
+    return (this._browser ??= new Browser2({ client: this.client }))
   }
 }

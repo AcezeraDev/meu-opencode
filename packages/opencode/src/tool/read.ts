@@ -9,6 +9,7 @@ import { InstanceState } from "@/effect/instance-state"
 import { assertExternalDirectoryEffect } from "./external-directory"
 import { Instruction } from "../session/instruction"
 import { isPdfAttachment, sniffAttachmentMime } from "@/util/media"
+import { Docx } from "@/util/docx"
 
 const DEFAULT_READ_LIMIT = 2000
 const MAX_LINE_LENGTH = 2000
@@ -231,6 +232,15 @@ export const ReadTool = Tool.define<
       ctx: Tool.Context<Metadata>,
     ) {
       const instance = yield* InstanceState.context
+      // A web address is not a file, though models reach for this tool with one,
+      // typically a PDF they saw while browsing.
+      if (/^https?:\/\//i.test(params.filePath)) {
+        return yield* Effect.fail(
+          new Error(
+            `${params.filePath} is a web address, not a file. Use webfetch to read it (a PDF comes back as its text), or browser_navigate when it needs the user's login.`,
+          ),
+        )
+      }
       let filepath = params.filePath
       if (!path.isAbsolute(filepath)) {
         filepath = path.resolve(instance.directory, filepath)
@@ -321,6 +331,19 @@ export const ReadTool = Tool.define<
               url: `data:${mime};base64,${Buffer.from(bytes).toString("base64")}`,
             },
           ],
+        }
+      }
+
+      // A Word document is a zip; its text is what anyone reading it wants.
+      if (/\.docx$/i.test(filepath)) {
+        const text = Docx.docxText(new Uint8Array(yield* fs.readFile(filepath)))
+        if (text !== undefined) {
+          const output = [`<path>${filepath}</path>`, `<type>docx</type>`, "<content>", text, "</content>"].join("\n")
+          return {
+            title,
+            output,
+            metadata: { preview: text.slice(0, 500), truncated: false, loaded: loaded.map((item) => item.filepath) },
+          }
         }
       }
 

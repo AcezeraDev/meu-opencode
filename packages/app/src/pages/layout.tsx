@@ -2234,6 +2234,8 @@ export default function LegacyLayout(props: ParentProps) {
       openProjectKeybind={() => command.keybind("project.open")}
       onOpenProject={chooseProject}
       renderProjectOverlay={projectOverlay}
+      agentsLabel={() => language.t("agents.open")}
+      onOpenAgents={() => navigate("/agents")}
       settingsLabel={() => language.t("sidebar.settings")}
       settingsKeybind={() => command.keybind("settings.open")}
       onOpenSettings={openSettings}

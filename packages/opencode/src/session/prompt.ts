@@ -95,6 +95,13 @@ function formatMcpResourceBytes(value: number) {
   return `${Math.ceil(value / (1024 * 1024))} MB`
 }
 
+/** Whether a user message only says hello: a file, an agent or any request makes it more than that. */
+function isGreeting(message: SessionV1.WithParts) {
+  const own = message.parts.filter((part) => !("synthetic" in part && part.synthetic))
+  if (own.some((part) => part.type !== "text")) return false
+  return Session.isGreeting(own.map((part) => (part.type === "text" ? part.text : "")).join(" "))
+}
+
 function isOrphanedInterruptedTool(part: SessionV1.ToolPart) {
   // cleanup() marks abandoned tool_use blocks this way after retries/aborts.
   // They are not pending work and must not trigger an assistant-prefill request.
@@ -219,12 +226,17 @@ const layer = Layer.effect(
 
       const real = (m: SessionV1.WithParts) =>
         m.info.role === "user" && !m.parts.every((p) => "synthetic" in p && p.synthetic)
-      const idx = input.history.findIndex(real)
-      if (idx === -1) return
-      if (input.history.filter(real).length !== 1) return
+      const reals = input.history.filter(real)
+      // Named after the first message that asks for something: a session opened
+      // with a bare "oi" would otherwise be called "Saudação inicial" for good.
+      // Until then the title stays the default one, so a later message still gets to name it.
+      const ask = reals.findIndex((m) => !isGreeting(m))
+      if (ask === -1 || ask !== reals.length - 1) return
+      const idx = input.history.indexOf(reals[ask]!)
 
-      const context = input.history.slice(0, idx + 1)
-      const firstUser = context[idx]
+      // After greetings, only the request itself says what the session is about.
+      const context = ask === 0 ? input.history.slice(0, idx + 1) : input.history.slice(idx, idx + 1)
+      const firstUser = context.at(-1)
       if (!firstUser || firstUser.info.role !== "user") return
       const firstInfo = firstUser.info
 

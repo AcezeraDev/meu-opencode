@@ -16,8 +16,9 @@ import { Worktree } from "@/worktree"
 import { nanoGPT, resolveApiKey, toWebVideoError } from "@/web-video/provider"
 import { WebVideoSettings } from "@/web-video/settings"
 import { Database } from "@opencode-ai/core/database/database"
-import { MessageTable } from "@opencode-ai/core/session/sql"
-import { and, gte, sql } from "drizzle-orm"
+import { MessageTable, PartTable, TodoTable } from "@opencode-ai/core/session/sql"
+import { SessionPace } from "@/session/pace"
+import { and, desc, eq, gte, sql } from "drizzle-orm"
 import { Effect, Option, Queue } from "effect"
 import * as Stream from "effect/Stream"
 import * as Sse from "effect/unstable/encoding/Sse"
@@ -30,6 +31,7 @@ import {
   ConsoleSwitchPayload,
   SessionListQuery,
   ToolListQuery,
+  UsageEtaQuery,
   UsageSpendQuery,
   WebVideoDefaults,
   WorktreeApiError,
@@ -194,6 +196,119 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       return { total: Number(rows[0]?.total ?? 0), messages: Number(rows[0]?.messages ?? 0) }
     })
 
+    /** Past requests over this window teach how long work takes. */
+    const PACE_WINDOW = 60 * 24 * 60 * 60 * 1000
+    /** The history changes slowly; reading it on every poll would be waste. */
+    const PACE_CACHE_MS = 60_000
+    let history: { at: number; runs: SessionPace.Run[]; steps: { model: string; ms: number }[] } | undefined
+
+    const loadHistory = Effect.fn("ExperimentalHttpApi.paceHistory")(function* () {
+      if (history && Date.now() - history.at < PACE_CACHE_MS) return history
+      const since = Date.now() - PACE_WINDOW
+      const assistants = yield* db
+        .select({
+          id: MessageTable.id,
+          created: MessageTable.time_created,
+          parent: sql<string | null>`json_extract(${MessageTable.data}, '$.parentID')`,
+          model: sql<string | null>`json_extract(${MessageTable.data}, '$.modelID')`,
+          completed: sql<number | null>`json_extract(${MessageTable.data}, '$.time.completed')`,
+        })
+        .from(MessageTable)
+        .where(
+          and(gte(MessageTable.time_created, since), sql`json_extract(${MessageTable.data}, '$.role') = 'assistant'`),
+        )
+        .all()
+        .pipe(Effect.orDie)
+      const users = yield* db
+        .select({ id: MessageTable.id, created: MessageTable.time_created })
+        .from(MessageTable)
+        .where(and(gte(MessageTable.time_created, since), sql`json_extract(${MessageTable.data}, '$.role') = 'user'`))
+        .all()
+        .pipe(Effect.orDie)
+      const plans = yield* db
+        .select({
+          message: PartTable.message_id,
+          todos: sql<number | null>`json_array_length(json_extract(${PartTable.data}, '$.state.input.todos'))`,
+        })
+        .from(PartTable)
+        .where(and(gte(PartTable.time_created, since), sql`json_extract(${PartTable.data}, '$.tool') = 'todowrite'`))
+        .all()
+        .pipe(Effect.orDie)
+      const started = new Map<string, number>(users.map((user) => [user.id, user.created]))
+      const todosByMessage = new Map<string, number>()
+      for (const plan of plans) {
+        todosByMessage.set(plan.message, Math.max(todosByMessage.get(plan.message) ?? 0, Number(plan.todos ?? 0)))
+      }
+      const runs = new Map<string, SessionPace.Run>()
+      const steps: { model: string; ms: number }[] = []
+      for (const message of assistants) {
+        const model = message.model ?? ""
+        if (message.completed) steps.push({ model, ms: message.completed - message.created })
+        const start = message.parent ? started.get(message.parent) : undefined
+        if (!message.parent || start === undefined) continue
+        const run = runs.get(message.parent) ?? { model, start, end: start, steps: 0, todos: 0 }
+        run.steps++
+        run.end = Math.max(run.end, message.completed ?? message.created)
+        run.todos = Math.max(run.todos, todosByMessage.get(message.id) ?? 0)
+        runs.set(message.parent, run)
+      }
+      history = { at: Date.now(), runs: [...runs.values()], steps }
+      return history
+    })
+
+    const usageEta = Effect.fn("ExperimentalHttpApi.usageEta")(function* (ctx: {
+      query: typeof UsageEtaQuery.Type
+    }) {
+      const now = Date.now()
+      const sessionID = ctx.query.sessionID as SessionID
+      const last = yield* db
+        .select({
+          created: MessageTable.time_created,
+          model: sql<string | null>`json_extract(${MessageTable.data}, '$.model.modelID')`,
+        })
+        .from(MessageTable)
+        .where(and(eq(MessageTable.session_id, sessionID), sql`json_extract(${MessageTable.data}, '$.role') = 'user'`))
+        .orderBy(desc(MessageTable.time_created))
+        .limit(1)
+        .all()
+        .pipe(Effect.orDie)
+      const current = last[0]
+      if (!current) return { elapsed: 0, runs: 0 }
+      const past = yield* loadHistory()
+      const pace = SessionPace.summarize({
+        // The request in progress is not history yet.
+        runs: past.runs.filter((run) => run.start !== current.created),
+        steps: past.steps,
+        model: current.model ?? undefined,
+      })
+      // A todo list survives from one request to the next; only one this
+      // request has touched says anything about it.
+      const todos = yield* db
+        .select({ status: TodoTable.status })
+        .from(TodoTable)
+        .where(and(eq(TodoTable.session_id, sessionID), gte(TodoTable.time_updated, current.created)))
+        .all()
+        .pipe(Effect.orDie)
+      const plan =
+        todos.length > 0
+          ? {
+              total: todos.filter((todo) => todo.status !== "cancelled").length,
+              done: todos.filter((todo) => todo.status === "completed").length,
+              active: todos.filter((todo) => todo.status === "in_progress").length,
+            }
+          : undefined
+      const elapsed = Math.max(0, now - current.created)
+      const result = SessionPace.estimate({ elapsed, todos: plan }, pace)
+      return toJson({
+        elapsed,
+        remaining: result?.remaining,
+        basis: result?.basis,
+        typical: pace.runMedianMs,
+        runs: pace.runs,
+        todos: plan ? { total: plan.total, done: plan.done } : undefined,
+      }) as { elapsed: number; runs: number }
+    })
+
     const capabilities = Effect.fn("ExperimentalHttpApi.capabilities")(function* () {
       return { backgroundSubagents: flags.experimentalBackgroundSubagents }
     })
@@ -348,6 +463,7 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       .handle("sessionBackground", sessionBackground)
       .handle("resource", resource)
       .handle("usageSpend", usageSpend)
+      .handle("usageEta", usageEta)
       .handle("webVideoModels", webVideoModels)
       .handle("webVideoSettings", webVideoSettings)
       .handle("webVideoSettingsUpdate", webVideoSettingsUpdate)

@@ -14,6 +14,10 @@ import {
   WorkspaceRoutingQueryFields,
 } from "../middleware/workspace-routing"
 import { described } from "./metadata"
+import { AVAILABLE_AGENT_PERMISSIONS } from "../agent-file"
+import { ProviderV2 } from "@opencode-ai/core/provider"
+import { ModelV2 } from "@opencode-ai/core/model"
+import { AgentRuntime } from "@/agent/runtime"
 
 const PathInfo = Schema.Struct({
   home: Schema.String,
@@ -40,6 +44,85 @@ export class ApiVcsApplyError extends Schema.ErrorClass<ApiVcsApplyError>("VcsAp
   { httpApiStatus: 400 },
 ) {}
 
+export const AgentWriteInput = Schema.Struct({
+  description: Schema.optional(Schema.String),
+  mode: Schema.Literals(["all", "primary", "subagent"]),
+  model: Schema.optional(
+    Schema.Struct({
+      providerID: ProviderV2.ID,
+      modelID: ModelV2.ID,
+    }),
+  ),
+  variant: Schema.optional(Schema.String),
+  prompt: Schema.String,
+  temperature: Schema.optional(Schema.Finite),
+  topP: Schema.optional(Schema.Finite),
+  color: Schema.optional(
+    Schema.Union([
+      Schema.String.check(Schema.isPattern(/^#[0-9a-fA-F]{6}$/)),
+      Schema.Literals(["primary", "secondary", "accent", "success", "warning", "error", "info"]),
+    ]),
+  ),
+  options: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
+  steps: Schema.optional(Schema.Finite.check(Schema.isInt(), Schema.isGreaterThan(0))),
+  permissions: Schema.Array(Schema.Literals(AVAILABLE_AGENT_PERMISSIONS)),
+}).annotate({ identifier: "AgentWriteInput" })
+
+export const AgentGenerateInput = Schema.Struct({
+  description: Schema.String.check(Schema.isMinLength(1)),
+  model: Schema.optional(
+    Schema.Struct({
+      providerID: ProviderV2.ID,
+      modelID: ModelV2.ID,
+    }),
+  ),
+}).annotate({ identifier: "AgentGenerateInput" })
+
+export const AgentGenerated = Schema.Struct({
+  identifier: Schema.String,
+  whenToUse: Schema.String,
+  systemPrompt: Schema.String,
+}).annotate({ identifier: "AgentGenerated" })
+
+export const AgentRuntimeUpdateInput = Schema.Struct({
+  enabled: Schema.Boolean,
+}).annotate({ identifier: "AgentRuntimeUpdateInput" })
+
+export class ApiAgentMutationError extends Schema.ErrorClass<ApiAgentMutationError>("AgentMutationError")(
+  {
+    name: Schema.Literal("AgentMutationError"),
+    data: Schema.Struct({
+      message: Schema.String,
+      reason: Schema.Literals(["invalid-name", "native"]),
+    }),
+  },
+  { httpApiStatus: 400 },
+) {}
+
+export class ApiAgentFileError extends Schema.ErrorClass<ApiAgentFileError>("AgentFileError")(
+  {
+    name: Schema.Literal("AgentFileError"),
+    data: Schema.Struct({ message: Schema.String }),
+  },
+  { httpApiStatus: 500 },
+) {}
+
+export class ApiAgentGenerateError extends Schema.ErrorClass<ApiAgentGenerateError>("AgentGenerateError")(
+  {
+    name: Schema.Literal("AgentGenerateError"),
+    data: Schema.Struct({ message: Schema.String }),
+  },
+  { httpApiStatus: 400 },
+) {}
+
+export class ApiAgentRuntimeError extends Schema.ErrorClass<ApiAgentRuntimeError>("AgentRuntimeError")(
+  {
+    name: Schema.Literal("AgentRuntimeError"),
+    data: Schema.Struct({ message: Schema.String }),
+  },
+  { httpApiStatus: 400 },
+) {}
+
 export const InstancePaths = {
   dispose: "/instance/dispose",
   path: "/path",
@@ -50,6 +133,10 @@ export const InstancePaths = {
   vcsApply: "/vcs/apply",
   command: "/command",
   agent: "/agent",
+  agentGenerate: "/agent/generate",
+  agentRuntime: "/agent/runtime",
+  agentRuntimeByName: "/agent/:name/runtime",
+  agentByName: "/agent/:name",
   skill: "/skill",
   lsp: "/lsp",
   formatter: "/formatter",
@@ -154,6 +241,66 @@ export const InstanceApi = HttpApi.make("instance")
             identifier: "app.agents",
             summary: "List agents",
             description: "Get a list of all available AI agents in the OpenCode system.",
+          }),
+        ),
+        HttpApiEndpoint.post("agentGenerate", InstancePaths.agentGenerate, {
+          query: WorkspaceRoutingQuery,
+          payload: AgentGenerateInput,
+          success: described(AgentGenerated, "Generated agent draft"),
+          error: ApiAgentGenerateError,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "app.agentGenerate",
+            summary: "Generate agent draft",
+            description: "Generate an editable agent description and system prompt from a natural-language request.",
+          }),
+        ),
+        HttpApiEndpoint.get("agentRuntime", InstancePaths.agentRuntime, {
+          query: WorkspaceRoutingQuery,
+          success: described(Schema.Array(AgentRuntime.Info), "Continuous agent runtimes"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "app.agentRuntime",
+            summary: "List continuous agents",
+            description: "List live continuous-agent execution state for the current workspace.",
+          }),
+        ),
+        HttpApiEndpoint.put("agentRuntimeUpdate", InstancePaths.agentRuntimeByName, {
+          params: { name: Schema.String },
+          query: WorkspaceRoutingQuery,
+          payload: AgentRuntimeUpdateInput,
+          success: described(AgentRuntime.Info, "Continuous agent runtime"),
+          error: ApiAgentRuntimeError,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "app.agentRuntimeUpdate",
+            summary: "Start or stop continuous agent",
+            description: "Start or stop the supervised continuous execution loop for an agent.",
+          }),
+        ),
+        HttpApiEndpoint.put("agentUpdate", InstancePaths.agentByName, {
+          params: { name: Schema.String },
+          query: WorkspaceRoutingQuery,
+          payload: AgentWriteInput,
+          success: described(Agent.Info, "Saved agent"),
+          error: [ApiAgentMutationError, ApiAgentFileError],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "app.agentUpdate",
+            summary: "Create or update agent",
+            description: "Create or overwrite a user-defined AI agent in the global configuration directory.",
+          }),
+        ),
+        HttpApiEndpoint.delete("agentDelete", InstancePaths.agentByName, {
+          params: { name: Schema.String },
+          query: WorkspaceRoutingQuery,
+          success: described(Schema.Boolean, "Agent deleted"),
+          error: [ApiAgentMutationError, ApiAgentFileError],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "app.agentDelete",
+            summary: "Delete agent",
+            description: "Delete a user-defined AI agent from the global configuration directory.",
           }),
         ),
         HttpApiEndpoint.get("skill", InstancePaths.skill, {

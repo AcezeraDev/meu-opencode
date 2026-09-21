@@ -260,3 +260,63 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/*
+ * While the agent drives the page, the screen is framed in the live colour,
+ * the way Claude's and Codex's browsers mark the tab they are using.
+ */
+.browser-pane-screen[data-agent]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--chroma, var(--scope-ch-edit)) 70%, transparent),
+    inset 0 0 24px 2px color-mix(in srgb, var(--chroma, var(--scope-ch-edit)) 24%, transparent);
+  animation: browser-pane-agent-in 220ms ease-out both;
+}
+
+@keyframes browser-pane-agent-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.browser-pane-stop {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  margin-left: auto;
+  padding: 0 9px;
+  border: 1px solid var(--scope-bezel-line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--v2-text-text-base);
+  font-size: 11px;
+  font-weight: 530;
+  cursor: pointer;
+}
+
+.browser-pane-stop:hover {
+  background: var(--v2-background-bg-layer-02);
+}
+
+.browser-pane-stop:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--v2-border-border-focus);
+}
+
+.browser-pane-stop-square {
+  width: 7px;
+  height: 7px;
+  border-radius: 1.5px;
+  background: currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browser-pane-screen[data-agent]::after {
+    animation: none;
+  }
+}
