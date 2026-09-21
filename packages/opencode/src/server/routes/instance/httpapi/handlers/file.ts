@@ -70,6 +70,10 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
           const fs = yield* FileSystem.Service
           const raw = yield* FSUtil.Service
           const location = yield* Location.Service
+          // A conversation brought over from another PC keeps pointing at that
+          // PC's folder. There is simply nothing to list, which is not a
+          // server failure worth an error on screen every time it opens.
+          if (!(yield* raw.existsSafe(path.resolve(location.directory, ctx.query.path)))) return []
           const ignored = ignore()
           const gitignore = yield* raw
             .readFileString(path.join(location.project.directory, ".gitignore"))

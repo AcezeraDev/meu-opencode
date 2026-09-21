@@ -523,6 +523,10 @@ describe("HttpApi SDK", () => {
         const providers = yield* capture(() => sdk.config.providers())
         const file = yield* capture(() => sdk.file.read({ path: "hello.txt" }))
         const files = yield* capture(() => sdk.file.list({ path: "." }))
+        // A folder that is not on this PC, as a conversation from another PC points at.
+        const missingFiles = yield* capture(() => sdk.file.list({ path: "pasta-que-nao-existe" }))
+        expect(missingFiles.status).toBe(200)
+        expect(missingFiles.data).toEqual([])
         const fileStatus = yield* capture(() => sdk.file.status())
         const findFiles = yield* capture(() => sdk.find.files({ query: "hello", limit: 10 }))
         const findText = yield* capture(() => sdk.find.text({ pattern: "sdk-parity" }))
@@ -542,6 +546,7 @@ describe("HttpApi SDK", () => {
             providers,
             file,
             files,
+            missingFiles,
             fileStatus,
             findFiles,
             findText,
@@ -559,6 +564,7 @@ describe("HttpApi SDK", () => {
           foundFile: JSON.stringify(findFiles.data).includes("hello.txt"),
           foundText: JSON.stringify(findText.data ?? null).includes("sdk-parity"),
           listedFile: JSON.stringify(files.data).includes("hello.txt"),
+          missingIsEmpty: array(missingFiles.data).length === 0,
           vcs: { hasBranch: typeof record(vcs.data).branch === "string" },
         }
       }),
