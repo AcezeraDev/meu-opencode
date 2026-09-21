@@ -24,7 +24,17 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
       )
     })
 
+    /**
+     * Whether the project's folder is on this PC at all. A conversation brought
+     * over from another PC keeps pointing at that PC's folders; there is then
+     * nothing to list or search, which is not a server failure worth an error
+     * on screen each time. Checked before the project's services are built,
+     * since building them resolves the folder and fails when it is missing.
+     */
+    const present = (file: string) => FSUtil.Service.use((fs) => fs.existsSafe(file))
+
     const findText = Effect.fn("FileHttpApi.findText")(function* (ctx: { query: { pattern: string } }) {
+      if (!(yield* present((yield* InstanceState.context).directory))) return []
       return (yield* ripgrep
         .grep({ cwd: (yield* InstanceState.context).directory, pattern: ctx.query.pattern, limit: 10 })
         .pipe(Effect.orDie)).map((match) => ({
@@ -44,6 +54,7 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
       query: { query: string; dirs?: "true" | "false"; type?: "file" | "directory"; limit?: number }
     }) {
       const directory = (yield* InstanceState.context).directory
+      if (!(yield* present(directory))) return []
       const limit = ctx.query.limit ?? 10
       const type = ctx.query.type ?? (ctx.query.dirs === "false" ? "file" : undefined)
       const started = performance.now()
@@ -65,15 +76,12 @@ export const fileHandlers = HttpApiBuilder.group(InstanceHttpApi, "file", (handl
 
     const list = Effect.fn("FileHttpApi.list")(function* (ctx: { query: { path: string } }) {
       const directory = (yield* InstanceState.context).directory
+      if (!(yield* present(path.resolve(directory, ctx.query.path)))) return []
       return yield* filesystem(
         Effect.gen(function* () {
           const fs = yield* FileSystem.Service
           const raw = yield* FSUtil.Service
           const location = yield* Location.Service
-          // A conversation brought over from another PC keeps pointing at that
-          // PC's folder. There is simply nothing to list, which is not a
-          // server failure worth an error on screen every time it opens.
-          if (!(yield* raw.existsSafe(path.resolve(location.directory, ctx.query.path)))) return []
           const ignored = ignore()
           const gitignore = yield* raw
             .readFileString(path.join(location.project.directory, ".gitignore"))

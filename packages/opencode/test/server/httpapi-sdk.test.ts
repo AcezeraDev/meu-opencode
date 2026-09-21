@@ -571,6 +571,21 @@ describe("HttpApi SDK", () => {
     ),
   )
 
+  serverPathParity("a project folder that is not on this PC lists and searches as empty", (serverPath) =>
+    Effect.gen(function* () {
+      // What a conversation brought over from another PC points at.
+      const parent = yield* tmpdirScoped({ git: false, config: { formatter: false, lsp: false } })
+      const sdk = yield* client(serverPath, path.join(parent, "pasta-do-outro-pc"))
+      const listed = yield* capture(() => sdk.file.list({ path: "." }))
+      const found = yield* capture(() => sdk.find.files({ query: "hello", limit: 10 }))
+      const searched = yield* capture(() => sdk.find.text({ pattern: "hello" }))
+      for (const result of [listed, found, searched]) {
+        expect(result.status).toBe(200)
+        expect(result.data).toEqual([])
+      }
+    }),
+  )
+
   serverPathParity("matches generated SDK session lifecycle routes", (serverPath) =>
     withStandardProject(serverPath, ({ sdk }) =>
       Effect.gen(function* () {
