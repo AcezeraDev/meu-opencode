@@ -20,11 +20,11 @@
  */
 import { $ } from "bun"
 import { existsSync, readFileSync, statSync } from "node:fs"
-import { mkdir, writeFile } from "node:fs/promises"
+import { copyFile, mkdir, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { ENV, PLACES } from "./places"
-import { DESKTOP, PENDING, ROOT } from "./shared"
+import { DESKTOP, PENDING, ROOT, newestSourceTime, readState } from "./shared"
 
 const TAG = "personal-latest"
 const REPO = "AcezeraDev/meu-opencode"
@@ -75,6 +75,17 @@ const installer = existsSync(PENDING) ? PENDING : path.join(DESKTOP, "dist", "op
 if (!existsSync(installer)) {
   console.error(`Não achei o instalador. Rode o app com o botão Atualizar (ou o vigia) para gerar um build, depois publique.`)
   console.error(`Procurei em:\n  ${PENDING}\n  ${path.join(DESKTOP, "dist", "opencode-personal-win-x64.exe")}`)
+  process.exit(1)
+}
+
+// Refuse to ship a build older than the code: that is how a Release once went
+// out without the bundled extension. The build stamps the source time it was
+// made from into state.json (see update.ts), the same check the app uses.
+const builtFrom = (await readState()).sourceTime ?? 0
+const newest = await newestSourceTime()
+if (builtFrom < newest) {
+  console.error("O app ainda não recompilou com as últimas mudanças, então o instalador está velho.")
+  console.error("Clique em Atualizar na barra de título (e depois Reiniciar), ou espere o vigia, e rode de novo.")
   process.exit(1)
 }
 
@@ -133,8 +144,13 @@ if (exists) {
   }
 }
 
+// gh's `file#label` only sets a display label, not the download filename, so the
+// installer is copied to the name instalar.ps1 fetches and uploaded as itself.
+const setup = path.join(dist, "OpenCodePersonalSetup.exe")
+await copyFile(installer, setup)
+
 console.log("Enviando os arquivos (o instalador tem ~130 MB, pode demorar)...")
-const uploaded = await $`gh release upload ${TAG} -R ${REPO} --clobber ${installer}#OpenCodePersonalSetup.exe ${importer}#opencode-import.exe ${updater}#opencode-atualizar.exe ${marker}#version.json`.nothrow()
+const uploaded = await $`gh release upload ${TAG} -R ${REPO} --clobber ${setup} ${importer} ${updater} ${marker}`.nothrow()
 if (uploaded.exitCode !== 0) {
   console.error("Falha ao enviar os arquivos:\n" + uploaded.stderr.toString().slice(-1500))
   process.exit(1)
