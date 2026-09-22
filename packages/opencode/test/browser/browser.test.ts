@@ -477,4 +477,53 @@ describeBrowser("browser over CDP", () => {
     const text = await BrowserPdf.read(`${webUrl}/private.pdf`, tab)
     expect(text).toContain("Material da aula")
   })
+
+  const DND = `<!doctype html><html><body>
+    <div style="cursor:default"><div id="w" style="cursor:grab">Banana</div></div>
+    <div id="zone" class="dropzone" style="min-height:30px;padding:8px">Solte aqui</div>
+    <div id="sq" style="width:40px;height:40px;background:rgb(22,163,74);cursor:pointer"></div>
+    <div id="dbl" ondblclick="void 0" style="padding:4px">dobre</div>
+    <input id="d" type="date">
+    <input id="r" type="range" min="0" max="100" value="10">
+  </body></html>`
+
+  test("drag words, drop zones, coloured squares and double-click boxes get refs", async () => {
+    await tab.navigate(`data:text/html,${encodeURIComponent(DND)}`, "load", 20_000)
+    const outline = (await tab.snapshot()).outline
+    expect(outline).toContain('draggable "Banana"')
+    expect(outline).toContain('dropzone "Solte aqui"')
+    expect(outline).toMatch(/clickable \[ref_\d+ color=verde\]/)
+    expect(outline).toContain("dblclick")
+  })
+
+  test("a date field takes dd/mm/yyyy and a range takes a number", async () => {
+    await tab.navigate(`data:text/html,${encodeURIComponent(DND)}`, "load", 20_000)
+    await tab.fill("#d", "15/03/2008")
+    expect(await tab.evaluate<string>("document.getElementById('d').value")).toBe("2008-03-15")
+    await tab.fill("#r", "75")
+    expect(await tab.evaluate<string>("document.getElementById('r').value")).toBe("75")
+  })
+
+  test("actions on one tab run one at a time, not interleaved", async () => {
+    const order: string[] = []
+    const slow = tab.serialize(async () => {
+      order.push("a-start")
+      await new Promise((resolve) => setTimeout(resolve, 60))
+      order.push("a-end")
+    })
+    const quick = tab.serialize(async () => {
+      order.push("b-start")
+      order.push("b-end")
+    })
+    await Promise.all([slow, quick])
+    expect(order).toEqual(["a-start", "a-end", "b-start", "b-end"])
+  })
+
+  test("wait_for a ref that is gone fails fast, not after the full timeout", async () => {
+    await tab.navigate(`data:text/html,${encodeURIComponent(DND)}`, "load", 20_000)
+    const started = Date.now()
+    const message = await failure(tab.waitFor({ selector: '[data-oc-ref="ref_99999"]' }, 30_000))
+    expect(message).toContain("not on the page")
+    expect(Date.now() - started).toBeLessThan(6_000)
+  })
 })

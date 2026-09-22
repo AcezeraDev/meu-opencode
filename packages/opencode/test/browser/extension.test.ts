@@ -131,6 +131,56 @@ describe("browser service in extension mode", () => {
   )
 
   it.instance(
+    "a command that finds the tab unattached re-attaches and tries once more",
+    () =>
+      Effect.gen(function* () {
+        BrowserBridge.reset()
+        const bridge = BrowserBridge.instance()
+        bridge.configure(TOKEN)
+        const sent: any[] = []
+        let attaches = 0
+        let refused = false
+        const answer = (message: any) => {
+          const reply = (result: unknown) => bridge.receive(JSON.stringify({ id: message.id, type: "result", result }))
+          const fail = (error: string) => bridge.receive(JSON.stringify({ id: message.id, type: "error", error }))
+          if (message.type === "listTargets")
+            return reply({ targets: [{ targetId: "7", url: "https://example.com/", title: "Example", active: true }] })
+          if (message.type === "attach") {
+            attaches++
+            return reply({})
+          }
+          if (message.type !== "command") return reply({})
+          // The tab's debugger was thrown off once; the first command after that
+          // bounces, and only a fresh attach lets the retry through.
+          if (!refused && message.method === "Runtime.evaluate") {
+            refused = true
+            return fail("Debugger is not attached to the tab with id: 7")
+          }
+          if (message.method === "Page.getFrameTree") return reply({ frameTree: { frame: { id: "main" } } })
+          return reply({ result: { value: "https://example.com/" } })
+        }
+        bridge.accept(
+          (message) => {
+            sent.push(message)
+            queueMicrotask(() => answer(message))
+          },
+          () => {},
+        )
+        bridge.receive(JSON.stringify({ type: "auth", token: TOKEN }))
+
+        const browser = yield* Browser.Service
+        const tab = yield* browser.tab()
+        // The url read bounces on the stale tab, then goes through after a re-attach.
+        const url = yield* Effect.promise(() => tab.url())
+        expect(url).toBe("https://example.com/")
+        expect(attaches).toBeGreaterThan(1)
+
+        yield* browser.shutdown()
+      }),
+    30_000,
+  )
+
+  it.instance(
     "a tab showing a PDF does not leave the agent stuck",
     () =>
       Effect.gen(function* () {

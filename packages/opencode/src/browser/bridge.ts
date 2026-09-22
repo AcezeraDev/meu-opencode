@@ -45,6 +45,22 @@ const CALL_TIMEOUT = 30_000
 const RECONNECT_WAIT = 5000
 
 /**
+ * Whether a failed command is one that re-attaching the debugger to the tab
+ * could fix: the extension's worker restarted, or the tab was detached without
+ * the event reaching us yet. A one-shot retry after a fresh attach clears these
+ * where a bare failure would cost the agent a whole step.
+ */
+function isReattachable(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  // Only the debugger's own attachment errors, never a page's benign ones (a
+  // cross-origin frame read, an evaluate that raced a navigation): matching
+  // those would re-attach and retry on ordinary calls and slow everything down.
+  return /Debugger is not attached|is already attached|No tab with given id|No target with given id|Detached while handling command/i.test(
+    message,
+  )
+}
+
+/**
  * One tab's slice of the relay, shaped like a {@link CDPTransport} so a Tab
  * cannot tell it apart from a direct DevTools socket.
  */
@@ -84,7 +100,22 @@ class BridgeConnection implements CDPTransport {
       if (this.closed) throw new CDPError(method, "not connected")
       await this.connect()
     }
-    return this.bridge.request<T>("command", { targetId: this.targetId, method, params })
+    try {
+      return await this.bridge.request<T>("command", { targetId: this.targetId, method, params })
+    } catch (error) {
+      // The extension lost the debugger for this tab — its service worker
+      // restarted, or the tab was detached (a PDF viewer, a chrome page) and
+      // the event that says so has not arrived yet — so the command bounced off
+      // a tab it thinks is unattached. Re-attaching and trying once more is
+      // exactly what a person clicking again would get, instead of a dead step.
+      if (this.closed || !isReattachable(error)) throw error
+      if (!this.bridge.connected)
+        await this.bridge.whenConnected(RECONNECT_WAIT).catch(() => {
+          throw error
+        })
+      await this.connect()
+      return this.bridge.request<T>("command", { targetId: this.targetId, method, params })
+    }
   }
 
   on(method: string, handler: Handler) {

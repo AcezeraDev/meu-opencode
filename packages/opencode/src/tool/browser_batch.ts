@@ -81,7 +81,7 @@ export const BrowserBatchTool = Tool.define(
             })
             const before = tab.pdf
             const outcome = yield* Effect.promise(() =>
-              BrowserPage.perform(tab, step, timeout).then(
+              tab.serialize(() => BrowserPage.perform(tab, step, timeout)).then(
                 (verdict: Verdict) => ({ verdict }),
                 (error: unknown) => ({ failure: error instanceof Error ? error : new Error(String(error)) }),
               ),

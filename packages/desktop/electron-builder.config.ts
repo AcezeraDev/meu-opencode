@@ -74,6 +74,14 @@ const getBase = (appId: string): Configuration => ({
       to: "native/",
       filter: ["index.js", "index.d.ts", "build/Release/mac_window.node", "swift-build/**"],
     },
+    // The browser extension the person loads into their own Brave. Shipping it
+    // inside the app means a PC that installed from a Release (no repository)
+    // still has it to load, and it always matches the app's version.
+    {
+      from: "../../browser-extension/",
+      to: "browser-extension/",
+      filter: ["**/*", "!test/**", "!*.md"],
+    },
   ],
   mac: {
     category: "public.app-category.developer-tools",

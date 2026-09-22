@@ -98,6 +98,45 @@ describe("browser bridge", () => {
     await expect(bad).rejects.toThrow(/boom/)
   })
 
+  test("a command that finds the tab unattached re-attaches and tries once more", async () => {
+    const tick = async (pred: () => boolean) => {
+      for (let i = 0; i < 100; i++) {
+        if (pred()) return
+        await new Promise((r) => setTimeout(r, 2))
+      }
+      throw new Error("condition never held")
+    }
+    const h = harness()
+    h.auth()
+    const tab = h.bridge.connection("7")
+
+    const done = tab.send("Runtime.evaluate", { expression: "1+1" })
+    const first = h.last()
+    expect(first).toMatchObject({ type: "command", targetId: "7", method: "Runtime.evaluate" })
+    // The extension's worker restarted and lost the debugger for this tab.
+    h.fail(first.id, "Debugger is not attached to the tab with id: 7")
+
+    await tick(() => h.last()?.type === "attach")
+    const attach = h.last()
+    expect(attach).toMatchObject({ type: "attach", targetId: "7" })
+    h.reply(attach.id, {})
+
+    await tick(() => h.last()?.type === "command" && h.last().id !== first.id)
+    h.reply(h.last().id, { result: { value: 2 } })
+    expect(await done).toEqual({ result: { value: 2 } })
+  })
+
+  test("a command that fails for another reason is not retried", async () => {
+    const h = harness()
+    h.auth()
+    const tab = h.bridge.connection("8")
+
+    const done = tab.send("Page.navigate", { url: "x" })
+    h.fail(h.last().id, "net::ERR_ABORTED")
+    await expect(done).rejects.toThrow(/ERR_ABORTED/)
+    expect(h.sent.filter((message) => message.type === "attach")).toHaveLength(0)
+  })
+
   test("routes CDP events to the right tab", () => {
     const h = harness()
     h.auth()

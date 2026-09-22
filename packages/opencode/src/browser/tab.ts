@@ -511,6 +511,23 @@ function number(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0
 }
 
+/**
+ * Turns what the model wrote into the value a structured input expects. Date
+ * fields want yyyy-mm-dd; a Brazilian model often writes dd/mm/yyyy, so that
+ * one common case is converted. Everything else is passed through untouched.
+ */
+function normalizeFieldValue(type: string, text: string) {
+  const value = text.trim()
+  if ((type === "date" || type === "datetime-local" || type === "month" || type === "week") && /^\d{1,2}[/-]\d{1,2}[/-]\d{4}/.test(value)) {
+    const parts = value.split(/[/-]/)
+    const day = parts[0].padStart(2, "0")
+    const month = parts[1].padStart(2, "0")
+    const year = parts[2].slice(0, 4)
+    return `${year}-${month}-${day}`
+  }
+  return value
+}
+
 /** Whether any of the scroll positions read before and after an action differ. */
 function moved(before: number[], after: number[]) {
   if (before.length !== after.length) return true
@@ -850,6 +867,8 @@ export class Tab {
   private stopCast?: () => void
   /** Live-view input in flight, so events reach the page in the order the hand made them. */
   private inputs: Promise<void> = Promise.resolve()
+  /** The action running now, so two tool calls that arrive together do not interleave their input. */
+  private actionChain: Promise<unknown> = Promise.resolve()
   /** The main frame's id. It is the target id over a debugging port, but not through the extension. */
   private mainFrame: string
   /** Counted from events as they arrive, so a wait that starts late cannot miss one. */
@@ -1330,6 +1349,22 @@ export class Tab {
   }
 
   /**
+   * Runs page actions one at a time for this tab. When a model emits several
+   * tool calls together the harness runs them at once, and without this their
+   * mouse and key events interleave: a click lands where a scroll just moved
+   * the page, or a verdict is read off the wrong action. Reads (snapshots) are
+   * left free; only the acting is queued.
+   */
+  serialize<T>(fn: () => Promise<T>): Promise<T> {
+    const result = this.actionChain.then(fn, fn)
+    this.actionChain = result.then(
+      () => {},
+      () => {},
+    )
+    return result
+  }
+
+  /**
    * Waits for whatever an action set off to finish: a request to come back, a
    * navigation to reach DOMContentLoaded, and the DOM to stop changing. A click
    * that only toggles something is done in a fraction of a second, instead of
@@ -1793,7 +1828,7 @@ export class Tab {
     // The click normally focused the field. In one round trip, make sure of it
     // and select what is there, so the insert below replaces it. A ref on a
     // wrapper whose field is inside it selects in that field.
-    const found = await this.evaluate<{ selected: boolean; masked: boolean } | null>(
+    const found = await this.evaluate<{ selected: boolean; masked: boolean; type: string } | null>(
       `(() => {
         const el = ${this.locate(selector)}
         if (!el) return null
@@ -1804,20 +1839,21 @@ export class Tab {
           el.focus()
           field = doc.activeElement
         }
-        if (!field) return { selected: false, masked: false }
+        if (!field) return { selected: false, masked: false, type: "" }
         // What a field that rewrites what it is given looks like from outside.
         const attr = (name) => (field.getAttribute ? field.getAttribute(name) : null)
+        const type = field.tagName === "INPUT" ? (attr("type") || "text").toLowerCase() : ""
         const masked =
           /^(numeric|tel|decimal)$/i.test(attr("inputmode") || "") ||
-          /^(tel)$/i.test(attr("type") || "") ||
+          /^(tel)$/i.test(type) ||
           attr("pattern") !== null ||
           attr("data-mask") !== null ||
           attr("data-imask") !== null ||
           /mask/i.test(field.className || "")
         if (field.tagName === "INPUT" || field.tagName === "TEXTAREA") {
-          if (typeof field.select !== "function") return { selected: false, masked: masked }
+          if (typeof field.select !== "function") return { selected: false, masked: masked, type: type }
           field.select()
-          return { selected: true, masked: masked }
+          return { selected: true, masked: masked, type: type }
         }
         if (field.isContentEditable) {
           const range = document.createRange()
@@ -1825,12 +1861,22 @@ export class Tab {
           const selection = doc.defaultView.getSelection()
           selection.removeAllRanges()
           selection.addRange(range)
-          return { selected: true, masked: masked }
+          return { selected: true, masked: masked, type: "" }
         }
-        return { selected: false, masked: masked }
+        return { selected: false, masked: masked, type: type }
       })()`,
     )
     if (found === null) throw new ElementNotFoundError(selector)
+
+    // A date, time, range or colour picker takes no free text: typing into it
+    // leaves it empty. Its value is set directly, the one way that works, and
+    // the model's dd/mm/yyyy is turned into the yyyy-mm-dd the field wants.
+    if (text && /^(date|datetime-local|month|week|time|range|color)$/.test(found.type)) {
+      const value = normalizeFieldValue(found.type, text)
+      if (await this.setValueDirect(selector, value)) return { typed: false }
+      // It refused the value; fall through and let the normal path try.
+    }
+
     if (!found.selected) await this.key("Control+a")
 
     if (!text) {
@@ -1858,6 +1904,32 @@ export class Tab {
       return { typed: true }
     }
     return { typed: false }
+  }
+
+  /**
+   * Sets a field's value the way a script would, through the prototype's value
+   * setter so a framework's controlled input notices, then fires input and
+   * change. This is the only thing a date or range picker accepts, since they
+   * cannot be typed into. Returns whether the value stuck.
+   */
+  private setValueDirect(selector: string, value: string) {
+    return this.evaluate<boolean>(
+      `(() => {
+        const el = ${this.locate(selector)}
+        if (!el) return false
+        const doc = el.ownerDocument
+        let field = doc.activeElement
+        if (!field || (field !== el && !el.contains(field))) field = el
+        const view = doc.defaultView || window
+        const proto = field.tagName === "TEXTAREA" ? view.HTMLTextAreaElement.prototype : view.HTMLInputElement.prototype
+        const setter = Object.getOwnPropertyDescriptor(proto, "value")
+        if (setter && setter.set) setter.set.call(field, ${JSON.stringify(value)})
+        else field.value = ${JSON.stringify(value)}
+        field.dispatchEvent(new Event("input", { bubbles: true }))
+        field.dispatchEvent(new Event("change", { bubbles: true }))
+        return String(field.value).length > 0
+      })()`,
+    ).catch(() => false)
   }
 
   /** Tells the page its field changed, for anything listening on the wrapper rather than the field. */
@@ -2122,23 +2194,37 @@ export class Tab {
   /** Polls until an element is visible, or until `text` appears on the page. */
   async waitFor(input: { selector?: string; text?: string }, timeout: number) {
     this.announce("wait", input.text)
-    const deadline = Date.now() + timeout
-    const condition = input.selector
+    const start = Date.now()
+    const deadline = start + timeout
+    // 0: not on the page, 1: there but not yet visible, 2: visible.
+    const probe = input.selector
       ? `(() => {
           const el = ${this.locate(input.selector)}
-          if (!el) return false
+          if (!el) return 0
           const r = el.getBoundingClientRect()
-          return r.width > 0 && r.height > 0
+          return (r.width > 0 && r.height > 0) ? 2 : 1
         })()`
-      : `(${TEXT_IN_FRAMES})(document).includes(${JSON.stringify(input.text ?? "")})`
+      : `((${TEXT_IN_FRAMES})(document).includes(${JSON.stringify(input.text ?? "")}) ? 2 : 0)`
 
+    // A ref that has not shown up within the grace period is not coming: the
+    // page renumbered it, so it will never match again, and waiting the whole
+    // timeout out is dead time. A plain CSS selector or text may still appear
+    // as the page loads, so those keep waiting the full timeout.
+    const isRef = /^\[data-oc-ref="ref_\d+"\]$/.test(input.selector ?? "")
+    const grace = Math.min(timeout, 2500)
+    let everExisted = false
     while (Date.now() < deadline) {
-      if (await this.evaluate<boolean>(condition).catch(() => false)) return
+      const state = await this.evaluate<number>(probe).catch(() => 0)
+      if (state === 2) return
+      if (state >= 1) everExisted = true
+      if (isRef && !everExisted && Date.now() - start >= grace) break
       await sleep(150)
     }
     throw new Error(
       input.selector
-        ? `${input.selector} did not become visible within ${timeout}ms`
+        ? isRef && !everExisted
+          ? `${input.selector} is not on the page`
+          : `${input.selector} did not become visible within ${timeout}ms`
         : `"${input.text}" did not appear within ${timeout}ms`,
     )
   }

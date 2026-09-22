@@ -101,7 +101,7 @@ export const BrowserActTool = Tool.define(
           const timeout = yield* browser.timeout()
           const before = tab.pdf
           const outcome = yield* Effect.promise(() =>
-            BrowserPage.perform(tab, params, timeout).then(
+            tab.serialize(() => BrowserPage.perform(tab, params, timeout)).then(
               (verdict: Verdict) => ({ verdict }),
               (error: unknown) => ({ failure: error instanceof Error ? error : new Error(String(error)) }),
             ),

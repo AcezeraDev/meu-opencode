@@ -1,173 +1,149 @@
-﻿# Instala o OpenCode Personal num PC novo, com as suas configurações.
+﻿# Instala o OpenCode Personal num PC novo, baixando o app JÁ PRONTO.
 #
 # Num PowerShell comum (não precisa de administrador):
 #
 #   irm https://raw.githubusercontent.com/AcezeraDev/meu-opencode/dev/script/personal-desktop/instalar.ps1 | iex
 #
 # O que ele faz, na ordem:
-#   1. instala o Git e o Bun, se faltarem (pelo winget)
-#   2. baixa o código do GitHub para %USERPROFILE%\opencode
-#   3. instala as dependências
-#   4. restaura o arquivo de configurações (.ocpack) que você exportou no outro PC
-#   5. compila e instala o app (uns 10 minutos na primeira vez)
-#   6. deixa o app se atualizando sozinho a partir do GitHub
-#   7. abre o app e mostra como ligar a extensão do Brave
+#   1. baixa da GitHub Release o instalador pronto e duas ferramentas pequenas
+#   2. instala o app (segundos, não compila nada)
+#   3. restaura o arquivo de configurações (.ocpack) que você exportou no outro PC
+#   4. agenda a atualização automática (baixa a Release nova quando aparecer)
+#   5. abre o app e mostra como ligar a extensão do Brave
 #
-# Pode rodar de novo quando quiser: o que já estiver pronto é pulado.
+# NÃO precisa de Git, Bun, compilador nem do código-fonte. Pode rodar de novo
+# quando quiser: reinstala por cima com a versão mais nova.
 #
-# Para mudar a pasta ou já apontar o arquivo de configurações, defina antes:
-#   $env:OPENCODE_PASTA = "D:\opencode"
+# Para já apontar o arquivo de configurações, defina antes:
 #   $env:OPENCODE_PACOTE = "C:\Users\voce\Desktop\OpenCode-configuracoes.ocpack"
 #
 # (Sem bloco param: rodado por "irm | iex" ele chega com um BOM na frente, que o
-# param não aceita, e sem o BOM o PowerShell 5.1 estraga os acentos ao abrir o
-# arquivo. Variáveis servem aos dois jeitos.)
+# param não aceita, e sem o BOM o PowerShell 5.1 estraga os acentos ao abrir.)
 
-$Pasta = if ($env:OPENCODE_PASTA) { $env:OPENCODE_PASTA } else { Join-Path $env:USERPROFILE "opencode" }
+$Repo = "AcezeraDev/meu-opencode"
+$Tag = "personal-latest"
+$Base = "https://github.com/$Repo/releases/download/$Tag"
+$Casa = Join-Path $env:LOCALAPPDATA "OpenCodePersonal"
+$AppExe = Join-Path $env:LOCALAPPDATA "Programs\opencode-personal\OpenCode Personal.exe"
 $Pacote = if ($env:OPENCODE_PACOTE) { $env:OPENCODE_PACOTE } else { "" }
-$Repositorio = "https://github.com/AcezeraDev/meu-opencode.git"
-$Branch = "dev"
 
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $OutputEncoding = [Text.Encoding]::UTF8
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocol]::Tls12 } catch {}
 
-function Etapa([string]$texto) { Write-Host ""; Write-Host "==> $texto" -ForegroundColor Cyan }
-function Aviso([string]$texto) { Write-Host "    $texto" -ForegroundColor Yellow }
-function Ok([string]$texto) { Write-Host "    $texto" -ForegroundColor Green }
-
-function Falha([string]$texto) {
-  Write-Host ""
-  Write-Host "ERRO: $texto" -ForegroundColor Red
-  Write-Host "Nada foi desfeito; corrija e rode o instalador de novo, ele continua de onde parou." -ForegroundColor Red
-  throw $texto
+function Etapa([string]$t) { Write-Host ""; Write-Host "==> $t" -ForegroundColor Cyan }
+function Aviso([string]$t) { Write-Host "    $t" -ForegroundColor Yellow }
+function Ok([string]$t) { Write-Host "    $t" -ForegroundColor Green }
+function Falha([string]$t) {
+  Write-Host ""; Write-Host "ERRO: $t" -ForegroundColor Red
+  Write-Host "Nada foi desfeito; corrija e rode o instalador de novo." -ForegroundColor Red
+  throw $t
 }
 
-# Programas instalados agora só aparecem no PATH de terminais novos; este lê de novo.
-function Atualizar-Path {
-  $maquina = [Environment]::GetEnvironmentVariable("Path", "Machine")
-  $usuario = [Environment]::GetEnvironmentVariable("Path", "User")
-  $env:Path = "$maquina;$usuario;$env:USERPROFILE\.bun\bin"
-}
-
-function Rodar([string]$programa, [string[]]$argumentos, [string]$onde = $PWD.Path) {
-  Push-Location $onde
+function Baixar([string]$url, [string]$destino) {
+  Write-Host "    baixando $(Split-Path $destino -Leaf)..."
+  $tmp = "$destino.part"
   try {
-    & $programa @argumentos
-    if ($LASTEXITCODE -ne 0) { Falha "'$programa $($argumentos -join ' ')' terminou com código $LASTEXITCODE." }
-  } finally { Pop-Location }
-}
-
-function Tem([string]$programa) { return [bool](Get-Command $programa -ErrorAction SilentlyContinue) }
-
-function Instalar-Com-Winget([string]$id, [string]$nome) {
-  if (-not (Tem "winget")) {
-    Falha "Não achei o winget para instalar o $nome. Instale o 'Instalador de Aplicativo' pela Microsoft Store e rode de novo."
+    $wc = New-Object Net.WebClient
+    $wc.DownloadFile($url, $tmp)
+  } catch {
+    # Alguns ambientes bloqueiam o WebClient; tenta o Invoke-WebRequest.
+    Invoke-WebRequest -Uri $url -OutFile $tmp -UseBasicParsing
   }
-  Write-Host "    instalando o $nome..."
-  & winget install --id $id -e --silent --accept-source-agreements --accept-package-agreements | Out-Host
-  Atualizar-Path
+  if (-not (Test-Path $tmp) -or (Get-Item $tmp).Length -eq 0) { Falha "Download vazio: $url" }
+  Move-Item -Force $tmp $destino
 }
 
-# ------------------------------------------------------------------ 1. programas
-Etapa "Conferindo Git e Bun"
-Atualizar-Path
-if (Tem "git") { Ok "Git já instalado." } else { Instalar-Com-Winget "Git.Git" "Git" }
-if (-not (Tem "git")) { Falha "O Git não ficou disponível. Feche este PowerShell, abra outro e rode de novo." }
+New-Item -ItemType Directory -Force $Casa | Out-Null
 
-if (Tem "bun") { Ok "Bun já instalado." } else {
-  Instalar-Com-Winget "Oven-sh.Bun" "Bun"
-  if (-not (Tem "bun")) {
-    Aviso "O winget não deixou o Bun no PATH; usando o instalador oficial."
-    Invoke-RestMethod "https://bun.sh/install.ps1" | Invoke-Expression
-    Atualizar-Path
-  }
+# ------------------------------------------------------------------ 1. baixar
+Etapa "Baixando o OpenCode Personal (instalador pronto, ~130 MB)"
+$Setup = Join-Path $Casa "OpenCodePersonalSetup.exe"
+$Importador = Join-Path $Casa "opencode-import.exe"
+$Atualizador = Join-Path $Casa "opencode-atualizar.exe"
+$Versao = Join-Path $Casa "version.json"
+Baixar "$Base/OpenCodePersonalSetup.exe" $Setup
+Baixar "$Base/opencode-import.exe" $Importador
+Baixar "$Base/opencode-atualizar.exe" $Atualizador
+Baixar "$Base/version.json" $Versao
+Ok "Baixado."
+
+# ------------------------------------------------------------------ 2. instalar
+Etapa "Instalando (segundos)"
+Get-Process "OpenCode Personal" -ErrorAction SilentlyContinue | ForEach-Object {
+  Aviso "Fechando o app aberto para instalar..."
+  $_.CloseMainWindow() | Out-Null; Start-Sleep -Seconds 3
 }
-if (-not (Tem "bun")) { Falha "O Bun não ficou disponível. Feche este PowerShell, abra outro e rode de novo." }
-$Bun = (Get-Command bun).Source
+# /S = silencioso; sem --force-run, para não abrir o app antes de importar.
+& $Setup /S | Out-Host
+$fim = (Get-Date).AddMinutes(2)
+while (-not (Test-Path $AppExe) -and (Get-Date) -lt $fim) { Start-Sleep -Seconds 2 }
+if (-not (Test-Path $AppExe)) { Falha "O instalador rodou mas o app não apareceu em $AppExe." }
+Ok "Instalado."
 
-# ------------------------------------------------------------------ 2. código
-Etapa "Baixando o código"
-# O gerador do instalador (NSIS) não abre caminhos com mais de 260 letras, e o
-# mais fundo das dependências tem ~140 além da pasta do código.
-if ($Pasta.Length -gt 100) {
-  Falha "A pasta $Pasta tem um caminho longo demais para compilar. Use uma mais curta, como C:\opencode (defina `$env:OPENCODE_PASTA)."
-}
-if (Test-Path (Join-Path $Pasta ".git")) {
-  Ok "Já existe em $Pasta; mantendo (as atualizações vêm depois, pelo próprio app)."
-} else {
-  if ((Test-Path $Pasta) -and (Get-ChildItem $Pasta -Force | Select-Object -First 1)) {
-    Falha "A pasta $Pasta já existe e não está vazia. Use outra: -Pasta C:\algum\lugar"
-  }
-  Rodar "git" @("clone", "--branch", $Branch, $Repositorio, $Pasta)
-}
-
-# ------------------------------------------------------------------ 3. dependências
-Etapa "Instalando dependências (alguns minutos)"
-Rodar $Bun @("install") $Pasta
-Rodar $Bun @("script/personal-desktop/links.ts") $Pasta
-
-# ------------------------------------------------------------------ 4. configurações
+# ------------------------------------------------------------------ 3. configurações
 Etapa "Suas configurações"
 if (-not $Pacote) {
-  $resposta = Read-Host "    Você tem o arquivo de configurações (.ocpack) exportado do outro PC? (S/n)"
+  $resposta = Read-Host "    Você tem o arquivo de configurações (.ocpack) do outro PC? (S/n)"
   if ($resposta -notmatch "^[nN]") {
     Add-Type -AssemblyName System.Windows.Forms
     $dialogo = New-Object System.Windows.Forms.OpenFileDialog
     $dialogo.Title = "Escolha o arquivo de configurações do OpenCode"
     $dialogo.Filter = "Configurações do OpenCode (*.ocpack)|*.ocpack|Todos os arquivos (*.*)|*.*"
     $dialogo.InitialDirectory = [Environment]::GetFolderPath("Desktop")
-    if ($dialogo.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $Pacote = $dialogo.FileName }
+    if ($dialogo.ShowDialog() -eq [Windows.Forms.DialogResult]::OK) { $Pacote = $dialogo.FileName }
   }
 }
 if ($Pacote) {
   if (-not (Test-Path $Pacote)) { Falha "Arquivo não encontrado: $Pacote" }
   $importado = $false
-  for ($tentativa = 1; $tentativa -le 3 -and -not $importado; $tentativa++) {
+  for ($t = 1; $t -le 3 -and -not $importado; $t++) {
     $segura = Read-Host "    Senha do arquivo" -AsSecureString
     $env:OPENCODE_PACK_SENHA = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
       [Runtime.InteropServices.Marshal]::SecureStringToBSTR($segura))
-    Push-Location $Pasta
-    try { & $Bun "script/personal-desktop/import.ts" $Pacote | Out-Host; $importado = ($LASTEXITCODE -eq 0) }
-    finally { Pop-Location; Remove-Item Env:OPENCODE_PACK_SENHA -ErrorAction SilentlyContinue }
-    if (-not $importado -and $tentativa -lt 3) { Aviso "Não deu certo; tente a senha de novo." }
+    try { & $Importador $Pacote | Out-Host; $importado = ($LASTEXITCODE -eq 0) }
+    finally { Remove-Item Env:OPENCODE_PACK_SENHA -ErrorAction SilentlyContinue }
+    if (-not $importado -and $t -lt 3) { Aviso "Não deu certo; tente a senha de novo." }
   }
   if (-not $importado) { Falha "Não consegui abrir o arquivo de configurações." }
-  Atualizar-Path
+  Ok "Configurações importadas."
 } else {
-  Aviso "Sem arquivo: o app vai começar com as configurações padrão. Dá para importar depois com:"
-  Aviso "  cd $Pasta; bun script/personal-desktop/import.ts <arquivo.ocpack>"
+  Aviso "Sem arquivo: o app começa com o padrão. Dá para importar depois com:"
+  Aviso "  $Importador <arquivo.ocpack>"
 }
 
-# ------------------------------------------------------------------ 5. seguir o GitHub
-# Este PC recebe as mudanças que forem publicadas no GitHub, em vez de ser onde
-# elas são feitas: o vigia e o botão Atualizar do app puxam de lá.
-$estado = Join-Path $env:LOCALAPPDATA "OpenCodePersonal"
-New-Item -ItemType Directory -Force $estado | Out-Null
-$seguir = Join-Path $estado "follow.json"
-[IO.File]::WriteAllText($seguir, (@{ remote = "origin"; branch = $Branch } | ConvertTo-Json))
-
-# ------------------------------------------------------------------ 6. compilar e instalar
-Etapa "Compilando e instalando o OpenCode Personal (uns 10 minutos na primeira vez)"
-$app = Join-Path $env:LOCALAPPDATA "Programs\opencode-personal\OpenCode Personal.exe"
-Get-Process "OpenCode Personal" -ErrorAction SilentlyContinue | ForEach-Object {
-  Aviso "Fechando o OpenCode Personal para instalar a versão nova..."
-  $_.CloseMainWindow() | Out-Null
-  Start-Sleep -Seconds 3
-}
-Rodar $Bun @("script/personal-desktop/update.ts", "--force") $Pasta
-if (-not (Test-Path $app)) { Falha "A compilação terminou, mas o app não apareceu em $app. Veja $estado\update.log" }
-Ok "Instalado."
-
-# ------------------------------------------------------------------ 7. atualizações automáticas
+# ------------------------------------------------------------------ 4. atualização automática
+# Este PC segue as Releases: um atualizador leve confere o GitHub e, quando há
+# versão nova, baixa e instala (só com o app fechado). Sem código, sem compilar.
 Etapa "Deixando o app se atualizar sozinho"
-Rodar $Bun @("script/personal-desktop/startup.ts") $Pasta
-Ok "A cada 20 minutos, e sempre que o Windows iniciar, ele confere o GitHub."
-Ok "O botão Atualizar do app também puxa de lá."
+try {
+  $commit = (Get-Content $Versao -Raw | ConvertFrom-Json).commit
+  $versaoTxt = (Get-Content $Versao -Raw | ConvertFrom-Json).version
+} catch { $commit = ""; $versaoTxt = "" }
+$marcador = @{ commit = $commit; version = $versaoTxt; installedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() }
+[IO.File]::WriteAllText((Join-Path $Casa "release.json"), ($marcador | ConvertTo-Json))
 
-# ------------------------------------------------------------------ 8. abrir e ligar o Brave
+# Um lançador .vbs roda o atualizador escondido (sem piscar janela de console).
+$vbs = Join-Path $Casa "atualizar.vbs"
+$conteudoVbs = 'Set s = CreateObject("WScript.Shell")' + "`r`n" + 's.Run Chr(34) & "' + $Atualizador + '" & Chr(34), 0, False'
+[IO.File]::WriteAllText($vbs, $conteudoVbs, [Text.Encoding]::ASCII)
+$nomeTarefa = "OpenCode Personal - Atualizar"
+try {
+  $acao = New-ScheduledTaskAction -Execute "wscript.exe" -Argument ('"' + $vbs + '"')
+  $gLogon = New-ScheduledTaskTrigger -AtLogOn
+  $gPeriodo = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Hours 6)
+  Register-ScheduledTask -TaskName $nomeTarefa -Action $acao -Trigger $gLogon, $gPeriodo -Force | Out-Null
+  Ok "Confere o GitHub ao ligar o PC e a cada 6 horas."
+} catch {
+  # Fallback para o schtasks se o módulo ScheduledTasks não estiver disponível.
+  & schtasks /Create /TN $nomeTarefa /TR "wscript.exe `"$vbs`"" /SC ONLOGON /F | Out-Null
+  Ok "Confere o GitHub ao ligar o PC."
+}
+
+# ------------------------------------------------------------------ 5. abrir + Brave
 Etapa "Abrindo o OpenCode Personal"
-Start-Process $app
+Start-Process $AppExe
 
 $brave = @(
   "$env:ProgramFiles\BraveSoftware\Brave-Browser\Application\brave.exe",
@@ -178,22 +154,21 @@ $brave = @(
 Etapa "Extensão do Brave (para a IA mexer no seu navegador)"
 if (-not $brave) {
   $resposta = Read-Host "    O Brave não está instalado. Instalar agora? (S/n)"
-  if ($resposta -notmatch "^[nN]") {
-    Instalar-Com-Winget "Brave.Brave" "Brave"
-    $brave = "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\Application\brave.exe"
-    if (-not (Test-Path $brave)) { $brave = "$env:ProgramFiles\BraveSoftware\Brave-Browser\Application\brave.exe" }
+  if (($resposta -notmatch "^[nN]") -and (Get-Command winget -ErrorAction SilentlyContinue)) {
+    & winget install --id Brave.Brave -e --silent --accept-source-agreements --accept-package-agreements | Out-Host
+    $brave = "$env:ProgramFiles\BraveSoftware\Brave-Browser\Application\brave.exe"
   }
 }
-$extensao = Join-Path $Pasta "browser-extension"
-Write-Host "    O Brave só aceita extensões assim por um clique seu:"
+$extensao = Join-Path $env:LOCALAPPDATA "Programs\opencode-personal\resources\browser-extension"
+Write-Host "    A extensão vem dentro do app. Para ligar:"
 Write-Host "      1. Em brave://extensions, ligue 'Modo do desenvolvedor' (canto de cima)."
-Write-Host "      2. Clique em 'Carregar sem compactação' e escolha a pasta:"
+Write-Host "      2. 'Carregar sem compactação' e escolha a pasta:"
 Write-Host "         $extensao" -ForegroundColor White
-Write-Host "      3. No OpenCode, abra o painel do navegador (ícone do globo): ele mostra a porta"
-Write-Host "         e o código. Coloque os dois no ícone da extensão, no Brave."
+Write-Host "      3. No OpenCode, abra o painel do navegador (ícone do globo): ele mostra a"
+Write-Host "         porta e o código; coloque os dois no ícone da extensão, no Brave."
 if ($brave -and (Test-Path $brave)) { Start-Process $brave "brave://extensions" }
-Start-Process explorer.exe $extensao
+if (Test-Path $extensao) { Start-Process explorer.exe $extensao }
 
 Write-Host ""
-Write-Host "Pronto! O OpenCode Personal está instalado em $app" -ForegroundColor Green
-Write-Host "Código em $Pasta; registro das atualizações em $estado\update.log" -ForegroundColor Green
+Write-Host "Pronto! O OpenCode Personal está instalado em $AppExe" -ForegroundColor Green
+Write-Host "Atualizações e registro em $Casa" -ForegroundColor Green
