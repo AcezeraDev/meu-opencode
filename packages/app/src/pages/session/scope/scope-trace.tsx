@@ -103,7 +103,8 @@ export function ScopeTrace(props: { active: boolean }) {
   let reveal: Animation | undefined
   let stopTimer: ReturnType<typeof setTimeout> | undefined
 
-  const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  const reducedMotion = () =>
+    document.documentElement.hasAttribute("data-lite") || window.matchMedia("(prefers-reduced-motion: reduce)").matches
 
   /** Lays the frame and the beam on the current panel size; `progress` is the head's place in the lap (0–1). */
   const run = (progress: number, revealing: boolean) => {

@@ -44,7 +44,6 @@ import { isScrollKeyTarget, scrollKey, scrollKeyOwner, ScrollView } from "@openc
 import { StickyAccordionHeader } from "@opencode-ai/ui/sticky-accordion-header"
 import { TextField } from "@opencode-ai/ui/text-field"
 import { TextReveal } from "@opencode-ai/ui/text-reveal"
-import { TextShimmer } from "@opencode-ai/ui/text-shimmer"
 import type {
   AssistantMessage,
   Message as MessageType,
@@ -78,7 +77,6 @@ import { createTimelineProjection } from "./projection"
 import { MessageComment, SummaryDiff, TimelineRow, TimelineRowMap } from "./rows"
 import { filterVirtualIndexes } from "./virtual-items"
 import { OverviewBar, type OverviewMarker } from "../scope/overview-bar"
-import { ScopeSignal } from "../scope/scope-signal"
 import { toolTarget } from "../scope/turn-meter"
 import { TurnStats } from "../scope/turn-stats"
 
@@ -135,14 +133,16 @@ const markBoundaryGesture = (input: {
 
 function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean }) {
   const language = useLanguage()
-  const settings = useSettings()
 
   return (
     <div data-slot="session-turn-thinking">
-      <Show when={settings.general.newLayoutDesigns()}>
-        <ScopeSignal />
-      </Show>
-      <TextShimmer text={language.t("ui.sessionTurn.status.thinking")} />
+      <span class="session-thinking-indicator" data-chroma aria-hidden="true">
+        <span />
+        <span />
+        <span />
+        <span />
+      </span>
+      <span>{language.t("ui.sessionTurn.status.thinking")}</span>
       <Show when={!props.showReasoningSummaries}>
         <TextReveal text={props.reasoningHeading} class="session-turn-thinking-heading" travel={25} duration={700} />
       </Show>

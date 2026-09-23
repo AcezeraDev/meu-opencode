@@ -14,6 +14,9 @@
 [data-component="session-workspace"] [data-component="tool-part-wrapper"] {
   position: relative;
   width: 100%;
+}
+
+[data-component="session-workspace"] [data-scope-live] [data-component="tool-part-wrapper"][data-activity-state="active"] {
   animation: session-activity-enter 240ms var(--ease-out-expo, ease-out) both;
 }
 
@@ -59,9 +62,10 @@
 }
 
 [data-component="session-workspace"]
+  [data-scope-live]
   [data-component="tool-part-wrapper"][data-activity-state="complete"]
-  [data-component="tool-trigger"] {
-  animation: session-activity-confirm 520ms var(--ease-out-expo, ease-out) both;
+  [data-slot="basic-tool-activity-indicator"] {
+  animation: session-activity-confirm 300ms var(--ease-out-expo, ease-out) both;
 }
 
 [data-component="session-workspace"]
@@ -121,7 +125,13 @@
   transform: translateY(-1px) rotate(-45deg);
   transform-origin: center;
   opacity: 0.9;
-  animation: session-check-draw 320ms var(--ease-out-expo, ease-out) both;
+}
+
+[data-component="session-workspace"]
+  [data-scope-live]
+  [data-component="tool-part-wrapper"][data-activity-state="complete"]
+  [data-slot="basic-tool-activity-indicator"]::after {
+  animation: session-check-draw 280ms var(--ease-out-expo, ease-out) both;
 }
 
 [data-component="session-workspace"]
@@ -182,6 +192,9 @@
 
 [data-component="session-workspace"] [data-slot="session-turn-thinking"] {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
   width: fit-content;
   max-width: 100%;
   min-height: 34px;
@@ -191,48 +204,66 @@
   border-radius: 9px;
   background: color-mix(in srgb, var(--activity-accent) 4%, var(--activity-surface));
   box-shadow: 0 8px 24px -22px color-mix(in srgb, var(--activity-accent) 70%, transparent);
-  background-image: linear-gradient(
-    100deg,
-    transparent 0%,
-    color-mix(in srgb, var(--activity-accent) 4%, transparent) 42%,
-    color-mix(in srgb, var(--activity-accent) 9%, transparent) 50%,
-    color-mix(in srgb, var(--activity-accent) 4%, transparent) 58%,
-    transparent 100%
-  );
-  background-size: 220% 100%;
-  animation:
-    session-activity-enter 300ms var(--ease-out-expo, ease-out) both,
-    session-thinking-scan 2.8s ease-in-out 300ms infinite;
+  animation: session-activity-enter 280ms var(--ease-out-expo, ease-out) both;
 }
 
-[data-component="session-workspace"] [data-slot="session-turn-thinking"]::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  flex: 0 0 7px;
-  border-radius: 999px;
-  background: var(--activity-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--activity-accent) 12%, transparent);
-  animation: session-thinking-breathe 1.8s ease-in-out infinite;
+[data-component="session-workspace"] .session-thinking-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 30px;
+  height: 18px;
+  flex: 0 0 30px;
+  color: var(--chroma);
 }
 
-[data-component="session-workspace"] [data-slot="session-turn-thinking"] [data-component="scope-signal"] {
-  display: none;
+[data-component="session-workspace"] .session-thinking-indicator > span {
+  --thinking-delay: 0ms;
+  width: 2px;
+  height: 12px;
+  border-radius: 1px;
+  background: currentColor;
+  transform: scaleY(0.45);
+  opacity: 0.35;
+  animation: session-thinking-tick 960ms ease-in-out infinite;
+  animation-delay: var(--thinking-delay);
 }
 
-[data-component="session-workspace"] [data-component="text-part"] {
-  animation: session-answer-enter 440ms var(--ease-out-expo, ease-out) both;
+[data-component="session-workspace"] .session-thinking-indicator > :nth-child(2) {
+  --thinking-delay: -720ms;
+  height: 16px;
+}
+
+[data-component="session-workspace"] .session-thinking-indicator > :nth-child(3) {
+  --thinking-delay: -480ms;
+  height: 14px;
+}
+
+[data-component="session-workspace"] .session-thinking-indicator > :nth-child(4) {
+  --thinking-delay: -240ms;
+  height: 9px;
+}
+
+[data-component="session-workspace"] [data-scope-live] {
+  animation: none;
+}
+
+[data-component="session-workspace"] [data-scope-live] [data-component="text-part"] {
+  animation: session-answer-enter 340ms var(--ease-out-expo, ease-out) both;
 }
 
 [data-component="session-workspace"]
+  [data-scope-live]
   [data-component="text-part"]
   [data-slot="text-part-body"]
   > [data-component="markdown"]
-  > * {
-  animation: session-answer-line 380ms var(--ease-out-expo, ease-out) both;
+  > :nth-child(-n + 3) {
+  animation: session-answer-line 300ms var(--ease-out-expo, ease-out) both;
 }
 
 [data-component="session-workspace"]
+  [data-scope-live]
   [data-component="text-part"]
   [data-slot="text-part-body"]
   > [data-component="markdown"]
@@ -241,19 +272,12 @@
 }
 
 [data-component="session-workspace"]
+  [data-scope-live]
   [data-component="text-part"]
   [data-slot="text-part-body"]
   > [data-component="markdown"]
   > :nth-child(3) {
   animation-delay: 90ms;
-}
-
-[data-component="session-workspace"]
-  [data-component="text-part"]
-  [data-slot="text-part-body"]
-  > [data-component="markdown"]
-  > :nth-child(n + 4) {
-  animation-delay: 130ms;
 }
 
 @keyframes session-activity-enter {
@@ -300,16 +324,9 @@
 }
 
 @keyframes session-activity-confirm {
-  0% {
-    border-color: color-mix(in srgb, var(--activity-accent) 28%, transparent);
-    background-color: color-mix(in srgb, var(--activity-accent) 10%, var(--activity-surface));
-    transform: translateX(2px);
-  }
-
-  100% {
-    border-color: transparent;
-    background-color: transparent;
-    transform: translateX(0);
+  from {
+    opacity: 0.45;
+    transform: translateY(2px) scale(0.82);
   }
 }
 
@@ -322,17 +339,6 @@
   to {
     opacity: 0.9;
     transform: translateY(-1px) rotate(-45deg) scale(1);
-  }
-}
-
-@keyframes session-thinking-scan {
-  0%,
-  100% {
-    background-position: 120% 0;
-  }
-
-  50% {
-    background-position: -120% 0;
   }
 }
 
@@ -349,32 +355,71 @@
   }
 }
 
-@keyframes session-thinking-breathe {
+@keyframes session-thinking-tick {
   0%,
   100% {
-    opacity: 0.58;
-    transform: scale(0.86);
+    opacity: 0.35;
+    transform: scaleY(0.45);
   }
 
-  50% {
+  35% {
     opacity: 1;
-    transform: scale(1);
+    transform: scaleY(1);
+  }
+}
+
+/* The default lightweight mode keeps short chat feedback and the small thinking signal. */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-lite] [data-component="session-workspace"] [data-slot="session-turn-thinking"],
+  html[data-lite] [data-component="session-workspace"] [data-scope-live] [data-component="text-part"],
+  html[data-lite]
+    [data-component="session-workspace"]
+    [data-scope-live]
+    [data-component="tool-part-wrapper"][data-activity-state="active"],
+  html[data-lite]
+    [data-component="session-workspace"]
+    [data-scope-live]
+    [data-component="tool-part-wrapper"][data-activity-state="complete"]
+    [data-slot="basic-tool-activity-indicator"] {
+    animation-duration: 300ms !important;
+  }
+
+  html[data-lite]
+    [data-component="session-workspace"]
+    [data-scope-live]
+    [data-component="text-part"]
+    [data-slot="text-part-body"]
+    > [data-component="markdown"]
+    > :nth-child(-n + 3),
+  html[data-lite]
+    [data-component="session-workspace"]
+    [data-scope-live]
+    [data-component="tool-part-wrapper"][data-activity-state="complete"]
+    [data-slot="basic-tool-activity-indicator"]::after {
+    animation-duration: 280ms !important;
+  }
+
+  html[data-lite] [data-component="session-workspace"] .session-thinking-indicator > span {
+    animation-duration: 960ms !important;
+    animation-delay: var(--thinking-delay) !important;
+    animation-iteration-count: infinite !important;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-component="session-workspace"] [data-component="tool-part-wrapper"],
+  [data-component="session-workspace"] [data-scope-live] [data-component="tool-part-wrapper"],
   [data-component="session-workspace"] [data-slot="session-turn-thinking"],
-  [data-component="session-workspace"] [data-component="text-part"],
+  [data-component="session-workspace"] [data-scope-live] [data-component="text-part"],
   [data-component="session-workspace"]
+    [data-scope-live]
     [data-component="text-part"]
     [data-slot="text-part-body"]
     > [data-component="markdown"]
     > *,
   [data-component="session-workspace"] [data-component="tool-part-wrapper"] [data-component="tool-trigger"]::after,
   [data-component="session-workspace"] [data-slot="basic-tool-activity-indicator"]::after,
-  [data-component="session-workspace"] [data-slot="session-turn-thinking"]::before {
-    animation: none;
+  [data-component="session-workspace"] .session-thinking-indicator > span {
+    animation: none !important;
   }
 
   [data-component="session-workspace"] [data-component="tool-trigger"],
