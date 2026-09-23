@@ -50,7 +50,7 @@
 .personal-update-button:hover .personal-update-label,
 .personal-update-button:focus-visible .personal-update-label,
 .personal-update-button[data-expanded] .personal-update-label {
-  max-width: 120px;
+  max-width: 240px;
   padding: 0 4px 0 3px;
   opacity: 1;
 }

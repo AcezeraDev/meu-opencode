@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "OpenCode Browser Bridge",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Deixa o agente do OpenCode dirigir este navegador (seu perfil real) pelo protocolo DevTools.",
-  "permissions": ["debugger", "tabs", "storage"],
+  "permissions": ["debugger", "tabs", "storage", "alarms"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"

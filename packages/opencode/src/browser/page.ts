@@ -1,7 +1,7 @@
 import fs from "fs"
 import path from "path"
 import { Effect } from "effect"
-import { structuredPatch } from "diff"
+import { diffArrays, structuredPatch } from "diff"
 import { convertHTMLToMarkdown } from "@/tool/webfetch"
 import { BrowserBlocked, type Block } from "./blocked"
 import { BrowserPdf } from "./pdf"
@@ -144,7 +144,99 @@ export function renderChange(previous: SnapshotResult | undefined, next: Snapsho
 /** The whole outline, which also becomes what later actions are compared against. */
 export function outline(tab: Tab, result: SnapshotResult) {
   tab.baseline = result
+  tab.anchor = result
   return withDialogs(tab, render(result))
+}
+
+/**
+ * The outline of a page the agent just arrived at, which also becomes what
+ * later actions are compared against. `partial` says lines were left out.
+ *
+ * Pages of one site repeat their menus, and the repeat is most of what a new
+ * page costs: on a Moodle course every page carried the same course index, a
+ * hundred and fifty links, about half of each outline and some seven thousand
+ * tokens a step, read again by the model at every turn after. Runs of lines
+ * exactly as the last whole outline had them are left out, and the refs they
+ * were shown with there keep working on the new page (31% less across 169 real
+ * Moodle pages). That whole outline stays in the model's context for as long
+ * as later ones lean on it (see `MessageV2`).
+ */
+export function landed(tab: Tab, result: SnapshotResult) {
+  const anchor = tab.anchor
+  // The same page again, reloaded or gone back to, is shown whole.
+  const again = tab.baseline && withoutHash(tab.baseline.url) === withoutHash(result.url)
+  tab.baseline = result
+  const repeats = anchor && !again ? leaveOutRepeats(anchor, result) : undefined
+  if (!repeats) {
+    tab.anchor = result
+    return { output: withDialogs(tab, render(result)), partial: false }
+  }
+  tab.alias(repeats.aliases)
+  return { output: withDialogs(tab, render({ ...result, outline: repeats.outline })), partial: true }
+}
+
+/** A run of unchanged lines shorter than this is cheaper to repeat than to explain. */
+const REPEAT_MIN_LINES = 6
+const REF = /ref_\d+/g
+
+/**
+ * `next`'s outline with the runs of lines `previous` already had left out, and
+ * how their refs map. Compared line by line with the refs taken out, because a
+ * menu that marks the page it is on as selected differs from one page to the
+ * next in that line only; compared as whole blocks, nothing was ever the same.
+ */
+function leaveOutRepeats(previous: SnapshotResult, next: SnapshotResult) {
+  if (origin(previous.url) !== origin(next.url) || withoutHash(previous.url) === withoutHash(next.url)) return undefined
+  const before = previous.outline.split("\n")
+  const after = next.outline.split("\n")
+  const aliases: [string, string][] = []
+  let from = 0
+  let to = 0
+  let left = 0
+  const lines = diffArrays(before.map(withoutRefs), after.map(withoutRefs)).flatMap((part) => {
+    const count = part.value.length
+    if (part.removed) {
+      from += count
+      return []
+    }
+    const run = after.slice(to, to + count)
+    to += count
+    if (part.added) return run
+    const earlier = before.slice(from, from + count)
+    from += count
+    if (count < REPEAT_MIN_LINES) return run
+    for (const [index, line] of run.entries()) {
+      const now = line.match(REF) ?? []
+      for (const [position, ref] of (earlier[index]?.match(REF) ?? []).entries()) {
+        const current = now[position]
+        if (current && current !== ref) aliases.push([ref, current])
+      }
+    }
+    left += count - 1
+    // The first line stays, so it is clear where in the page the run was.
+    return [
+      run[0]!,
+      `${indentOf(run[1]!)}- … ${count - 1} more lines as in the last full outline of this site (the refs you saw there still work here; browser_snapshot shows them all)`,
+    ]
+  })
+  if (left === 0) return undefined
+  return { outline: lines.join("\n"), aliases }
+}
+
+function withoutRefs(line: string) {
+  return line.replace(REF, "ref")
+}
+
+function indentOf(line: string) {
+  return line.slice(0, line.length - line.trimStart().length)
+}
+
+function origin(url: string) {
+  try {
+    return new URL(url).origin
+  } catch {
+    return url
+  }
 }
 
 /** What dialogs the page opened, which were answered on the model's behalf. */
@@ -164,11 +256,18 @@ function withDialogs(tab: Tab, text: string) {
  */
 export function changes(tab: Tab, result: SnapshotResult) {
   const previous = tab.baseline
+  if (previous && withoutHash(previous.url) !== withoutHash(result.url)) {
+    const arrived = landed(tab, result)
+    return { output: arrived.output, full: true, partial: arrived.partial, changed: true }
+  }
   const change = renderChange(previous, result)
   tab.baseline = result
+  const full = change === render(result)
+  if (full) tab.anchor = result
   return {
     output: withDialogs(tab, change),
-    full: change === render(result),
+    full,
+    partial: false,
     /** Whether the outline came out different at all, which is the broadest sign an action did something. */
     changed: previous?.outline !== result.outline,
   }
@@ -320,6 +419,7 @@ export async function perform(tab: Tab, step: Step, timeout: number): Promise<Ve
     if (BrowserTrace.enabled) tab.trace = { requested: describe(step), attempt }
     const mark = tab.mark()
     const before = watching ? undefined : await ActionVerifier.probe(tab, selector)
+    const probed = Date.now()
     let effects: Effects
     try {
       effects = await run(tab, step, selector, wait)
@@ -333,7 +433,9 @@ export async function perform(tab: Tab, step: Step, timeout: number): Promise<Ve
       record(tab, step, started, attempt, { outcome: "failed", signals: [] })
       throw error
     }
+    const acted = Date.now()
     if (!watching && step.action !== "hover") await tab.settle(mark, wait)
+    const settled = Date.now()
     const verdict = watching
       ? { outcome: "success_confirmed" as const, signals: ["what it waited for is on the page"] }
       : ActionVerifier.compare({
@@ -347,6 +449,13 @@ export async function perform(tab: Tab, step: Step, timeout: number): Promise<Ve
         })
     const result = attempt > 1 ? { ...verdict, attempts: attempt } : verdict
     record(tab, step, started, attempt, result)
+    // Where the time went, kept with the tool call for when an action is slow.
+    tab.timing = {
+      probe: probed - started,
+      act: acted - probed,
+      settle: settled - acted,
+      verify: Date.now() - settled,
+    }
     return result
   }
 }
@@ -428,6 +537,25 @@ export const landedOnPdf = Effect.fn("BrowserPage.landedOnPdf")(function* (
       : "It was a PDF, so its text is above; going back to the previous page failed, so navigate to continue."
   return { url, output: [text, "", note].join("\n") }
 })
+
+/**
+ * The tab an action opened (a target=_blank link, a popup), which the browser
+ * has made active. The page the action was on is left as it was, so without
+ * this the agent was told its click changed nothing and kept looking there. An
+ * action that visibly did nothing gets a moment for the new tab to show up.
+ */
+export const openedTab = Effect.fn("BrowserPage.openedTab")(function* (
+  browser: Interface,
+  tab: Tab,
+  since: number,
+  verdict?: Verdict,
+) {
+  if (!verdict || verdict.outcome === "navigation") return undefined
+  return yield* browser.opened(tab, since, verdict.outcome === "success_no_visible_change" ? POPUP_WAIT : 300)
+})
+
+/** How long a click that changed nothing on its page is given to show up as a new tab. */
+const POPUP_WAIT = 1500
 
 /** What the model is told after a page left for the person's own browser. */
 export function renderHandoff(input: { url: string; title?: string; reason?: string; handoff: Handoff }) {

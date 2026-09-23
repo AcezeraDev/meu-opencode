@@ -6,6 +6,12 @@ import { ProviderTransform } from "@/provider/transform"
 import type { MessageV2 } from "./message-v2"
 
 const COMPACTION_BUFFER = 20_000
+/**
+ * Context past which a session is compacted even when the model takes more.
+ * Every step sends the whole context again, so a model with a huge window
+ * gets slower on each step long before it runs out of room.
+ */
+const MAX_CONTEXT = 100_000
 
 export function usable(input: { cfg: ConfigV1.Info; model: Provider.Model; outputTokenMax?: number }) {
   const context = input.model.limit.context
@@ -14,9 +20,11 @@ export function usable(input: { cfg: ConfigV1.Info; model: Provider.Model; outpu
   const reserved =
     input.cfg.compaction?.reserved ??
     Math.min(COMPACTION_BUFFER, ProviderTransform.maxOutputTokens(input.model, input.outputTokenMax))
-  return input.model.limit.input
+  const room = input.model.limit.input
     ? Math.max(0, input.model.limit.input - reserved)
     : Math.max(0, context - ProviderTransform.maxOutputTokens(input.model, input.outputTokenMax))
+  const cap = input.cfg.compaction?.max_context ?? MAX_CONTEXT
+  return cap > 0 ? Math.min(room, cap) : room
 }
 
 export function isOverflow(input: {

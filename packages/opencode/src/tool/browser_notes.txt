@@ -1,0 +1,20 @@
+Keep notes about a website that will save time the next time you use it. They
+are shown to you, with the programs saved for the site, the first time you land
+on it in a later session.
+
+Write a note when you find out something you would otherwise have to discover
+again: where a thing is ("the lessons are under Meus cursos > course > Seção"),
+a step the site needs ("after the last question, press Enviar tudo e terminar,
+then confirm in the dialog"), or a trap ("the PDF opens in a new tab; read it,
+then come back"). One fact per note, short, in words that stay true from one
+visit to the next: no refs, and no ids that change.
+
+Notes are about how the site works, never about the user's private data: no
+passwords, answers to personal questions, grades or documents.
+
+- `add`: the note to keep, for the site of the page the browser is on (or of
+  `url`, when given).
+- `remove`: numbers of notes to delete, as they are listed, for notes that
+  turned out wrong or out of date.
+
+Returns the site's notes as they are now.

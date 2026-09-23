@@ -769,10 +769,13 @@ export const make = <R>(
         const tool = resolve(callableTools, path)
         let describedInput: unknown
         if (isDefinition(tool)) {
-          if (externalArgs.length !== 1)
+          // `tools.ns.tool()` is how a tool without inputs reads; it gets the
+          // empty object, and a tool with required fields still rejects it.
+          const given = externalArgs.length === 0 ? [{}] : externalArgs
+          if (given.length !== 1)
             throw new ToolRuntimeError("InvalidToolInput", `Tool '${name}' expects exactly one input object.`)
           describedInput = yield* Effect.try({
-            try: () => decodeToolInput(tool, externalArgs[0]),
+            try: () => decodeToolInput(tool, given[0]),
             catch: (cause) =>
               new ToolRuntimeError("InvalidToolInput", `Invalid input for tool '${name}': ${String(cause)}`),
           })

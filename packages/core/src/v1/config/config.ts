@@ -152,7 +152,11 @@ export const Info = Schema.Struct({
         description: "Enable automatic compaction when context is full (default: true)",
       }),
       prune: Schema.optional(Schema.Boolean).annotate({
-        description: "Enable pruning of old tool outputs (default: false)",
+        description: "Enable pruning of old tool outputs (default: true)",
+      }),
+      max_context: Schema.optional(NonNegativeInt).annotate({
+        description:
+          "Compact once the context reaches this many tokens, even if the model allows more, since every step resends it (default: 100000; 0 uses the model's full window)",
       }),
       tail_turns: Schema.optional(NonNegativeInt).annotate({
         description:
@@ -203,6 +207,10 @@ export const Info = Schema.Struct({
       extensionToken: Schema.optional(Schema.String).annotate({
         description:
           "Shared secret the Browser Bridge extension must send to pair. Required for mode 'extension'; enter the same value in the extension popup.",
+      }),
+      block: Schema.optional(Schema.Boolean).annotate({
+        description:
+          "Block ad, tracker and analytics requests in the tabs the agent drives, so pages load and settle sooner (default: true)",
       }),
       profile: Schema.optional(Schema.String).annotate({
         description:

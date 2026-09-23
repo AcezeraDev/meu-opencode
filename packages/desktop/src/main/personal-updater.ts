@@ -4,6 +4,7 @@ import { homedir } from "node:os"
 import { delimiter, dirname, join } from "node:path"
 import { app } from "electron"
 import { getLogger } from "./logging"
+import type { BuildStep } from "@opencode-ai/app/updater"
 import type { UpdaterController, UpdaterState } from "./updater-controller"
 import { setAppQuitting } from "./windows"
 
@@ -16,6 +17,19 @@ const HOME = join(process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"
 const STATE = join(HOME, "state.json")
 const PENDING = join(HOME, "OpenCodePersonalSetup.exe")
 const BUILD_LOCK = join(HOME, "update.lock")
+const LOG = join(HOME, "update.log")
+/** The lines update.ts logs as a build moves on (see its `step` calls), and what the button calls them. */
+const STEPS: ReadonlyArray<readonly [string, BuildStep]> = [
+  ["Esperando a compilação em andamento terminar", "waiting"],
+  ["Preparando ícones", "icons"],
+  ["Preparando metadados", "metadata"],
+  ["Compilando servidor", "server"],
+  ["Compilando interface e processo principal", "interface"],
+  ["Gerando instalador", "installer"],
+]
+/** Where a build begins and ends in the log. */
+const BUILD_START = /Compilando o OpenCode Personal|Esperando a compilação em andamento/
+const BUILD_END = /Compilado em|ERRO|Nenhuma mudança nova/
 /** Printed by update.ts once it is really compiling (or waiting for a build in progress). */
 const BUILDING_MARKER = "::opencode-personal-building::"
 /** A lock file is created empty and gets its pid right after; treat that instant as held. */
@@ -48,7 +62,7 @@ export function setupPersonalUpdater(stop: () => Promise<void>): UpdaterControll
 
   /** What the build scripts left on disk: a build in progress, or a staged build newer than this app. */
   const observed = (): UpdaterState | undefined => {
-    if (lockHeld(BUILD_LOCK)) return { status: "downloading", version: "" }
+    if (lockHeld(BUILD_LOCK)) return { status: "downloading", version: "", ...progress() }
     const saved = readBuildState()
     if (existsSync(PENDING) && (saved.sourceTime ?? 0) > SOURCE_TIME)
       return { status: "ready", version: buildLabel(saved.builtAt) }
@@ -57,7 +71,9 @@ export function setupPersonalUpdater(stop: () => Promise<void>): UpdaterControll
 
   // Builds started by the watcher show up here without a click.
   const refresh = () => {
-    if (!enabled || pending || state.status === "installing") return state
+    if (!enabled || state.status === "installing") return state
+    // A build this app started is waited on elsewhere; only its progress is read here.
+    if (pending) return state.status === "downloading" ? transition({ ...state, ...progress() }) : state
     const next = observed()
     if (next) return transition(next)
     if (state.status === "downloading" || state.status === "ready") return transition({ status: "idle" })
@@ -70,16 +86,21 @@ export function setupPersonalUpdater(stop: () => Promise<void>): UpdaterControll
 
     pending = new Promise<UpdaterState>((resolve) => {
       transition({ status: "checking" })
+      // Detached, like install.ts below: a build takes many minutes, and one
+      // started here used to die with the app when it was closed or restarted
+      // meanwhile, leaving half a build and a stale lock. Detached, it finishes
+      // on its own; its output is only read while this app is still here.
       const child = spawn(BUN, [join(scripts, "update.ts"), "--from-app", `--installed=${SOURCE_TIME}`], {
         cwd: ROOT,
         env: scriptEnv(),
+        detached: true,
         stdio: ["ignore", "pipe", "ignore"],
         windowsHide: true,
       })
       const finish = (next: UpdaterState) => resolve(transition(next))
       child.stdout.setEncoding("utf8")
       child.stdout.on("data", (chunk: string) => {
-        if (chunk.includes(BUILDING_MARKER)) transition({ status: "downloading", version: "" })
+        if (chunk.includes(BUILDING_MARKER)) transition({ status: "downloading", version: "", ...progress() })
       })
       child.once("error", (error) => finish({ status: "error", message: error.message }))
       child.once("exit", (code) => {
@@ -134,6 +155,35 @@ export function setupPersonalUpdater(stop: () => Promise<void>): UpdaterControll
         })
     },
   }
+}
+
+/**
+ * The build in progress as update.ts logs it: the step it is on and when it
+ * began, so the button can say more than "Building…" through a ten-minute build.
+ */
+function progress(): { step?: BuildStep; started?: number } {
+  const lines = (() => {
+    try {
+      return readFileSync(LOG, "utf8").split("\n").slice(-60)
+    } catch {
+      return []
+    }
+  })()
+  const start = lines.findLastIndex((line) => BUILD_START.test(line))
+  if (start < 0 || lines.slice(start).some((line) => BUILD_END.test(line))) return {}
+  const step = lines
+    .slice(start)
+    .flatMap((line) => STEPS.filter(([text]) => line.includes(text)).map(([, id]) => id))
+    .at(-1)
+  return { step, started: logTime(lines[start]!) }
+}
+
+/** The time update.ts stamps on a line, `[dd/mm/yyyy, hh:mm:ss]` in local time (pt-BR). */
+function logTime(line: string) {
+  const match = /^\[(\d{2})\/(\d{2})\/(\d{4}), (\d{2}):(\d{2}):(\d{2})\]/.exec(line)
+  if (!match) return undefined
+  const [, day, month, year, hour, minute, second] = match.map(Number)
+  return new Date(year!, month! - 1, day!, hour!, minute!, second!).getTime()
 }
 
 function readBuildState(): BuildState {

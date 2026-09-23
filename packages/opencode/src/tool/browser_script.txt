@@ -1,0 +1,78 @@
+Run a small program against the built-in browser, for work that would take many
+browser_act or browser_batch calls: going through every page of a list, reading
+the same fields from many items, answering a long series of questions, or
+repeating one routine on several pages.
+
+Prefer browser_act and browser_batch for a few steps: they are simpler and just
+as fast. Use this when the next steps depend on what the page shows (a loop, a
+condition, pagination), so they cannot be written down ahead of time.
+
+The program is a restricted JavaScript: plain data, loops, conditions, functions
+and `await`, and nothing else. It cannot read files, reach the network, or use
+timers; it can only call the page functions below, which do exactly what the
+other browser tools do, on the active tab, with the same cursor and permissions.
+Refs work as everywhere else. After an action that opens another page, take a
+new snapshot before using refs again. A tab opened by a link becomes the active
+one, so the next call acts there.
+
+- `await tools.page.snapshot()` returns `{ url, title, outline, elements }`;
+  `elements` is `[{ ref, role, name, href }]`, easy to filter in code.
+- `await tools.page.find({ name, role, exact })` finds an element on the page
+  as it is now by its accessible name (exact match first, then one containing
+  it; `role` narrows it, such as "button" or "link") and returns
+  `{ ref, role, name, href }`, or `null`. For a name that varies, pass
+  `pattern`, a regular expression as a string ("^Finalizar"), instead of
+  `name`; a RegExp object cannot be passed to a page function. `last: true`
+  takes the match that appeared last, such as a confirmation dialog's button
+  named like the button that opened it.
+- `await tools.page.act({ action, ref, text, ... })` takes the same fields as a
+  browser_act step and returns `{ outcome, signals, url, openedTab }`.
+- `await tools.page.navigate({ url })`, or `{ action: "back" | "forward" |
+  "reload" }`, returns `{ url, title }`.
+- `await tools.page.text()` returns `{ url, title, text }`, the visible text.
+- `await tools.page.wait({ ms })` pauses up to 10000 ms.
+- `await tools.page.evaluate({ expression })` runs JavaScript in the page and
+  returns its value. It asks the user first, once per site in a run.
+
+The language: `const`/`let`, functions and arrow functions, `if`, `for`,
+`for...of`, `while`, `try`/`catch`, destructuring, template strings, array and
+string methods, `Math`, `JSON`, `Map`, `Set`, `RegExp` and `Date`. There are no
+classes, generators, timers, `eval`, imports, `new Promise` or `.then`: use
+`await` with `try`/`catch`. `Promise.all` runs calls together (8 at most), but
+actions on one page run one after another anyway.
+
+Return what you need with `return` (plain data), and use `console.log` for
+progress notes; both come back as the result. `args` holds the `args` given to
+this call, so one program can serve different inputs.
+
+Programs that worked can be kept: pass `name` and `description` with `code`
+and it is saved for the site it ran on when the run succeeds. The next time you
+land on that site, it is listed with its description; pass only `name` (and
+`args`) to run it in one call. Save a routine you did by hand twice (open an
+activity, mark it done, go to the next), not a one-off. A saved program must
+not depend on refs, which change from page to page and visit to visit: find
+elements with `tools.page.find` by their name, and take urls and choices from
+`args`. If a saved program fails because the site changed, save corrected code
+under the same name.
+
+Example: collect every answer option of a quiz page and choose the ones asked for.
+
+```js
+const page = await tools.page.snapshot()
+const options = page.elements.filter((element) => element.role === "radio")
+for (const option of options) {
+  if (args.answers.includes(option.name)) await tools.page.act({ action: "click", ref: option.ref })
+}
+return options.map((option) => option.name)
+```
+
+Example of a program worth saving (name "proxima_atividade", description "Clicks
+the next-activity link at the bottom of an activity page and returns where it
+went"):
+
+```js
+const next = await tools.page.find({ name: args.label || "►", role: "link" })
+if (!next) return { done: false, reason: "no next-activity link on this page" }
+const result = await tools.page.act({ action: "click", ref: next.ref })
+return { done: true, url: result.url }
+```

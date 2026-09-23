@@ -11,6 +11,7 @@ import { useServerProtocol, useServerSDK } from "@/context/server-sdk"
 import { useServerSync } from "@/context/server-sync"
 import { DialogConnectProvider, useProviderConnectController } from "../dialog-connect-provider"
 import { DialogCustomProvider } from "../dialog-custom-provider"
+import { RoteiaCard } from "./roteia-card"
 import "./settings-v2.css"
 
 type ProviderSource = "env" | "api" | "config" | "custom"
@@ -25,6 +26,7 @@ const PROVIDER_NOTES = [
   { match: (id: string) => id === "google", key: "dialog.provider.google.note" },
   { match: (id: string) => id === "openrouter", key: "dialog.provider.openrouter.note" },
   { match: (id: string) => id === "vercel", key: "dialog.provider.vercel.note" },
+  { match: (id: string) => id === "roteia", key: "dialog.provider.roteia.note" },
 ] as const
 
 const PROVIDER_ICON_SIZE = 16
@@ -162,39 +164,56 @@ export const SettingsProvidersV2: Component<{
             <div class="settings-v2-provider-grid" data-variant="connected">
               <For each={connected()}>
                 {(item) => (
-                  <div class="settings-v2-provider-card group" data-variant="connected">
-                    <div class="settings-v2-provider-lead">
-                      <span class="settings-v2-provider-tile">
-                        <ProviderIcon
-                          id={item.id}
-                          width={PROVIDER_ICON_SIZE}
-                          height={PROVIDER_ICON_SIZE}
-                          class="settings-v2-provider-icon shrink-0"
-                        />
-                      </span>
-                      <div class="settings-v2-provider-copy">
-                        <div class="settings-v2-provider-main">
-                          <span class="settings-v2-provider-name truncate">{item.name}</span>
-                          <Tag>{type(item)}</Tag>
+                  <Show
+                    when={item.id !== "roteia"}
+                    fallback={
+                      <RoteiaCard
+                        directory={props.directory}
+                        name={item.name}
+                        tag={type(item)}
+                        onChangeKey={() => connect(item.id)}
+                        onDisconnect={() => void disconnect(item.id, item.name)}
+                      />
+                    }
+                  >
+                    <div class="settings-v2-provider-card group" data-variant="connected">
+                      <div class="settings-v2-provider-lead">
+                        <span class="settings-v2-provider-tile">
+                          <ProviderIcon
+                            id={item.id}
+                            width={PROVIDER_ICON_SIZE}
+                            height={PROVIDER_ICON_SIZE}
+                            class="settings-v2-provider-icon shrink-0"
+                          />
+                        </span>
+                        <div class="settings-v2-provider-copy">
+                          <div class="settings-v2-provider-main">
+                            <span class="settings-v2-provider-name truncate">{item.name}</span>
+                            <Tag>{type(item)}</Tag>
+                          </div>
+                          <span class="settings-v2-provider-status">
+                            {language.t("settings.providers.status.connected")}
+                          </span>
                         </div>
-                        <span class="settings-v2-provider-status">
-                          {language.t("settings.providers.status.connected")}
-                        </span>
                       </div>
+                      <Show
+                        when={canDisconnect(item)}
+                        fallback={
+                          <span class="settings-v2-provider-env-hint">
+                            {language.t("settings.providers.connected.environmentDescription")}
+                          </span>
+                        }
+                      >
+                        <ButtonV2
+                          size="normal"
+                          variant="ghost-muted"
+                          onClick={() => void disconnect(item.id, item.name)}
+                        >
+                          {language.t("common.disconnect")}
+                        </ButtonV2>
+                      </Show>
                     </div>
-                    <Show
-                      when={canDisconnect(item)}
-                      fallback={
-                        <span class="settings-v2-provider-env-hint">
-                          {language.t("settings.providers.connected.environmentDescription")}
-                        </span>
-                      }
-                    >
-                      <ButtonV2 size="normal" variant="ghost-muted" onClick={() => void disconnect(item.id, item.name)}>
-                        {language.t("common.disconnect")}
-                      </ButtonV2>
-                    </Show>
-                  </div>
+                  </Show>
                 )}
               </For>
             </div>

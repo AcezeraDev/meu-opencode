@@ -22,7 +22,7 @@
  *   ext  → server  { id, type: "result", result }        reply to a request
  *   ext  → server  { id, type: "error", error }          reply to a request
  *   ext  → server  { type: "event", targetId, method, params }   forwarded CDP event
- *   ext  → server  { type: "target", event, target }     tab lifecycle
+ *   ext  → server  { type: "target", event, target }     tab lifecycle (target.opener on created)
  *   ext  → server  { type: "detached", targetId, reason } debugger detached
  *   server → ext   { id, type: "listTargets" }
  *   server → ext   { id, type: "attach", targetId, events?, fields? }
@@ -41,15 +41,30 @@
 const DEFAULT_PORT = 4919
 /** CDP version chrome.debugger requires. */
 const PROTOCOL = "1.3"
-/** Reconnect backoff, capped. */
-const RETRY_MIN = 1000
-const RETRY_MAX = 15000
+/**
+ * Reconnect backoff, capped low: the server is on this machine, a retry costs
+ * nothing, and the agent only waits a few seconds for the extension to return.
+ */
+const RETRY_MIN = 500
+const RETRY_MAX = 3000
 /** MV3 kills an idle service worker; a ping while connected keeps it and the socket alive. */
 const PING_MS = 20000
+/**
+ * A socket that has answered pings before and then goes this long without a
+ * word is half-open (the machine slept, the app froze), so it is closed and
+ * opened afresh. Servers that never answer pings are left alone.
+ */
+const SILENCE_MS = 3 * PING_MS
+/** Wakes a worker the browser put to sleep while it was disconnected, so it tries again. */
+const ALARM = "reconnect"
 
 let socket
+let socketPort
 let retry = RETRY_MIN
+let retryTimer
 let pingTimer
+/** Consecutive failed attempts; every other one tries the default port, where the app now listens. */
+let attempt = 0
 /** Tabs this extension has attached the debugger to. */
 const attached = new Set()
 /**
@@ -125,9 +140,19 @@ function tabIdOf(targetId) {
 
 /** Tabs being detached on purpose to attach again, whose detach OpenCode must not hear about. */
 const reattaching = new Set()
+/** Attaches in flight, so two requests for one tab share it instead of the second tearing down the first. */
+const attaching = new Map()
 
-async function ensureAttached(tabId) {
-  if (attached.has(tabId)) return
+function ensureAttached(tabId) {
+  if (attached.has(tabId)) return Promise.resolve()
+  const pending = attaching.get(tabId)
+  if (pending) return pending
+  const job = attach(tabId).finally(() => attaching.delete(tabId))
+  attaching.set(tabId, job)
+  return job
+}
+
+async function attach(tabId) {
   try {
     await chrome.debugger.attach({ tabId }, PROTOCOL)
   } catch (error) {
@@ -230,45 +255,80 @@ async function handle(message) {
 }
 
 function connect() {
-  void config().then(({ port, token }) => {
+  clearTimeout(retryTimer)
+  retryTimer = undefined
+  // One socket at a time. The worker's start and the browser's startup event
+  // both call this, and a second socket made the server drop the first and,
+  // when that one closed, the pairing with it.
+  if (socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) return
+  void config().then(({ port: saved, token }) => {
     if (!token) return // Not paired yet; the popup sets port + token.
+    if (socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) return
+    // The app used to take a new port every time it opened, leaving this
+    // pointed at a dead one; it now prefers the default, so that is tried too.
+    const port = attempt % 2 === 1 && saved !== DEFAULT_PORT ? DEFAULT_PORT : saved
+    attempt++
+    let ws
     try {
-      socket = new WebSocket(`ws://127.0.0.1:${port}/experimental/browser/extension`)
+      ws = new WebSocket(`ws://127.0.0.1:${port}/experimental/browser/extension`)
     } catch {
       scheduleReconnect()
       return
     }
+    socket = ws
+    socketPort = port
+    let heard = Date.now()
+    let answers = false
 
-    socket.addEventListener("open", () => {
+    ws.addEventListener("open", () => {
       retry = RETRY_MIN
-      send({ type: "auth", token })
+      attempt = 0
+      if (port !== saved) void chrome.storage.local.set({ port })
+      ws.send(JSON.stringify({ type: "auth", token }))
       clearInterval(pingTimer)
-      pingTimer = setInterval(() => send({ type: "ping" }), PING_MS)
+      pingTimer = setInterval(() => {
+        if (socket !== ws) return
+        if (answers && Date.now() - heard > SILENCE_MS) {
+          ws.close()
+          return
+        }
+        send({ type: "ping" })
+      }, PING_MS)
     })
-    socket.addEventListener("message", (event) => {
+    ws.addEventListener("message", (event) => {
+      heard = Date.now()
       let message
       try {
         message = JSON.parse(event.data)
       } catch {
         return
       }
-      if (message && message.type) void handle(message)
+      if (!message || !message.type) return
+      if (message.type === "pong") {
+        answers = true
+        return
+      }
+      void handle(message)
     })
-    socket.addEventListener("close", () => {
+    ws.addEventListener("close", () => {
+      // A socket already replaced must not take the current one's state with it.
+      if (socket !== ws) return
       clearInterval(pingTimer)
       socket = undefined
+      socketPort = undefined
       scheduleReconnect()
     })
-    socket.addEventListener("error", () => {
+    ws.addEventListener("error", () => {
       try {
-        socket && socket.close()
+        ws.close()
       } catch {}
     })
   })
 }
 
 function scheduleReconnect() {
-  setTimeout(connect, retry)
+  if (retryTimer) return
+  retryTimer = setTimeout(connect, retry)
   retry = Math.min(retry * 2, RETRY_MAX)
 }
 
@@ -296,12 +356,12 @@ chrome.debugger.onDetach.addListener((source, reason) => {
 
 // Tab lifecycle, so OpenCode's tab list and the live panel stay current.
 chrome.tabs.onCreated.addListener((tab) => {
-  if (typeof tab.id === "number")
-    send({
-      type: "target",
-      event: "created",
-      target: { targetId: String(tab.id), url: tab.url || "", title: tab.title || "", active: !!tab.active },
-    })
+  if (typeof tab.id !== "number") return
+  const target = { targetId: String(tab.id), url: tab.url || tab.pendingUrl || "", title: tab.title || "", active: !!tab.active }
+  // The tab a page opened it from (a target=_blank link, window.open), so a
+  // click that opened a tab can be followed there.
+  if (typeof tab.openerTabId === "number") target.opener = String(tab.openerTabId)
+  send({ type: "target", event: "created", target })
 })
 chrome.tabs.onUpdated.addListener((tabId, _info, tab) => {
   send({
@@ -329,16 +389,29 @@ chrome.runtime.onMessage.addListener((message, _sender, respond) => {
   return false
 })
 
-// Reconnect whenever the pairing changes from the popup.
+// Reconnect whenever the pairing changes from the popup. A port saved here
+// after connecting on the default one is already the socket's, so it is kept.
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return
-  if (changes.port || changes.token) {
-    try {
-      socket && socket.close()
-    } catch {}
-    retry = RETRY_MIN
-    connect()
-  }
+  const moved = changes.port && changes.port.newValue !== socketPort
+  if (!moved && !changes.token) return
+  const old = socket
+  socket = undefined
+  socketPort = undefined
+  clearInterval(pingTimer)
+  try {
+    old && old.close()
+  } catch {}
+  retry = RETRY_MIN
+  attempt = 0
+  connect()
+})
+
+// setTimeout does not survive the browser putting this worker to sleep, which
+// it does to a worker with no open socket; an alarm wakes it to try again.
+chrome.alarms.create(ALARM, { periodInMinutes: 0.5 })
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === ALARM) connect()
 })
 
 chrome.runtime.onStartup.addListener(connect)

@@ -59,6 +59,10 @@ const getBase = (appId: string): Configuration => ({
     desktopName: `${appId}.desktop`,
   },
   files: ["out/**/*", "resources/**/*", "!resources/opencode-cli*"],
+  // A personal build's installer is run on this PC right after it is made, so
+  // NSIS need not compress it; see ELECTRON_BUILDER_COMPRESSION_LEVEL in
+  // script/personal-desktop/update.ts for the app archive inside it.
+  ...(personal ? { compression: "store" as const } : {}),
   extraResources: [
     ...(channel === "dev"
       ? [

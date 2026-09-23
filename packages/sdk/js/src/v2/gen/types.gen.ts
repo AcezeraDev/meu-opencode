@@ -2281,6 +2281,17 @@ export type UsageSpend = {
   messages: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
 }
 
+export type RoteiaStatus = {
+  configured: boolean
+  source?: "api" | "env" | "config"
+  models: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  check?: {
+    ok: boolean
+    status?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    message?: string
+  }
+}
+
 export type UsageEta = {
   elapsed: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
   remaining?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
@@ -8139,6 +8150,36 @@ export type ExperimentalUsageSpendResponses = {
 }
 
 export type ExperimentalUsageSpendResponse = ExperimentalUsageSpendResponses[keyof ExperimentalUsageSpendResponses]
+
+export type ExperimentalRoteiaStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+    test?: string
+  }
+  url: "/experimental/roteia/status"
+}
+
+export type ExperimentalRoteiaStatusErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalRoteiaStatusError = ExperimentalRoteiaStatusErrors[keyof ExperimentalRoteiaStatusErrors]
+
+export type ExperimentalRoteiaStatusResponses = {
+  /**
+   * Whether Roteia is connected
+   */
+  200: RoteiaStatus
+}
+
+export type ExperimentalRoteiaStatusResponse =
+  ExperimentalRoteiaStatusResponses[keyof ExperimentalRoteiaStatusResponses]
 
 export type ExperimentalUsageEtaData = {
   body?: never

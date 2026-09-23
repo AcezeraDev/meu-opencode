@@ -73,6 +73,25 @@ const UsageSpend = Schema.Struct({
   messages: Schema.Number,
 }).annotate({ identifier: "UsageSpend" })
 
+// The Roteia provider's card in settings. Only whether a key is set and where it
+// comes from, never the key; `test` also asks Roteia whether it accepts it.
+export const RoteiaStatusQuery = Schema.Struct({
+  ...WorkspaceRoutingQueryFields,
+  test: Schema.optional(Schema.String),
+})
+const RoteiaStatus = Schema.Struct({
+  configured: Schema.Boolean,
+  source: Schema.optional(Schema.Literals(["api", "env", "config"])),
+  models: Schema.Number,
+  check: Schema.optional(
+    Schema.Struct({
+      ok: Schema.Boolean,
+      status: Schema.optional(Schema.Number),
+      message: Schema.optional(Schema.String),
+    }),
+  ),
+}).annotate({ identifier: "RoteiaStatus" })
+
 // How long the request in progress should still take, from the person's own
 // history and the agent's todo list. Times are in milliseconds.
 export const UsageEtaQuery = Schema.Struct({
@@ -205,6 +224,7 @@ export const ExperimentalPaths = {
   webVideoModels: "/experimental/web-video/models",
   usageSpend: "/experimental/usage/spend",
   usageEta: "/experimental/usage/eta",
+  roteiaStatus: "/experimental/roteia/status",
   webVideoSettings: "/experimental/web-video/settings",
   browserStatus: "/experimental/browser/status",
   browserFrame: "/experimental/browser/frame",
@@ -375,6 +395,17 @@ export const ExperimentalApi = HttpApi.make("experimental")
             identifier: "experimental.usage.spend",
             summary: "Get model spend",
             description: "Sum the cost of assistant messages created since `since` (ms), across all sessions.",
+          }),
+        ),
+        HttpApiEndpoint.get("roteiaStatus", ExperimentalPaths.roteiaStatus, {
+          query: RoteiaStatusQuery,
+          success: described(RoteiaStatus, "Whether Roteia is connected"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.roteia.status",
+            summary: "Get Roteia status",
+            description:
+              "Whether a Roteia API key is configured, where it comes from and how many models it loaded; with `test`, whether Roteia accepts the key.",
           }),
         ),
         HttpApiEndpoint.get("usageEta", ExperimentalPaths.usageEta, {

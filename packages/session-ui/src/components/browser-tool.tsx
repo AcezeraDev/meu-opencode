@@ -77,6 +77,10 @@ export function BrowserToolCard(props: ToolProps) {
         active: i18n.t("ui.tool.browser.screenshot.active"),
         done: i18n.t("ui.tool.browser.screenshot.done"),
       }
+    if (props.tool === "browser_script")
+      return { active: i18n.t("ui.tool.browser.script.active"), done: i18n.t("ui.tool.browser.script.done") }
+    if (props.tool === "browser_notes")
+      return { active: i18n.t("ui.tool.browser.notes.active"), done: i18n.t("ui.tool.browser.notes.done") }
     if (props.tool === "browser_snapshot")
       return { active: i18n.t("ui.tool.browser.read"), done: i18n.t("ui.tool.browser.read.done") }
     if (props.tool === "browser_inspect") {
@@ -101,6 +105,13 @@ export function BrowserToolCard(props: ToolProps) {
 
   /** For an interaction, the element is more informative than the page. */
   const detail = createMemo(() => {
+    // A saved program is known by its name.
+    if (props.tool === "browser_script") return typeof props.input?.name === "string" ? props.input.name : ""
+    // The note itself, or the site whose notes were read.
+    if (props.tool === "browser_notes") {
+      if (typeof props.input?.add === "string" && props.input.add) return props.input.add
+      return typeof props.metadata?.host === "string" ? props.metadata.host : ""
+    }
     if (props.tool !== "browser_act") return ""
     const text = props.input?.text
     if (typeof text === "string" && text) return text

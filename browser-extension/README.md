@@ -42,7 +42,13 @@ O motor já fala com a extensão (ponte global, rota
    `OPENCODE_BROWSER_EXTENSION_TOKEN`) para o token entrar em vigor, então pareie.
 
 Detalhe de v1: o token só chega à ponte quando uma sessão usa o navegador ou pela
-env; parear antes disso dá 403. Veja `HANDOFF.md`.
+env; parear antes disso dá 403. Desde a 0.6.0 a extensão tenta de novo a cada
+0,5–3 s e o agente espera até 10 s por ela, então isso não vira mais erro. Veja
+`HANDOFF.md`.
+
+O app desktop pessoal escuta na porta **4919** (a padrão da extensão) quando ela
+está livre, então o pareamento sobrevive a reabrir o app. Se a porta salva parar
+de responder, a extensão tenta a 4919 e passa a lembrar dela.
 
 ## Depois de atualizar esta pasta
 

@@ -26,7 +26,7 @@ export const browserBridgeHandlers = HttpApiBuilder.group(BrowserBridgeApi, "bro
         const write = yield* socket.writer
         const outbox = yield* Queue.unbounded<string | Socket.CloseEvent>()
 
-        bridge.accept(
+        const link = bridge.accept(
           (message) => Queue.offerUnsafe(outbox, JSON.stringify(message)),
           () => Queue.offerUnsafe(outbox, new Socket.CloseEvent(1000)),
         )
@@ -42,11 +42,13 @@ export const browserBridgeHandlers = HttpApiBuilder.group(BrowserBridgeApi, "bro
         yield* Effect.race(
           drain,
           socket.runRaw((message) =>
-            bridge.receive(typeof message === "string" ? message : new TextDecoder().decode(message)),
+            link.receive(typeof message === "string" ? message : new TextDecoder().decode(message)),
           ),
         ).pipe(
           Effect.catchReason("SocketError", "SocketCloseError", () => Effect.void),
-          Effect.ensuring(Effect.sync(() => bridge.disconnect())),
+          // Only this socket's own link: if a newer socket already took over,
+          // this one closing must leave that connection alone.
+          Effect.ensuring(Effect.sync(() => link.disconnect())),
           Effect.orDie,
         )
         return HttpServerResponse.empty()

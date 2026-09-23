@@ -394,12 +394,36 @@ describe("session.compaction.isOverflow", () => {
 
   it.live(
     "returns false when token count within usable context",
+    provideTmpdirInstance(
+      () =>
+        Effect.gen(function* () {
+          const compact = yield* SessionCompaction.Service
+          const model = createModel({ context: 200_000, output: 32_000 })
+          const tokens = { input: 100_000, output: 10_000, reasoning: 0, cache: { read: 0, write: 0 } }
+          expect(yield* compact.isOverflow({ tokens, model })).toBe(false)
+        }),
+      { config: { compaction: { max_context: 0 } } },
+    ),
+  )
+
+  it.live(
+    "compacts past max_context even when the model's window is larger",
     provideTmpdirInstance(() =>
       Effect.gen(function* () {
         const compact = yield* SessionCompaction.Service
-        const model = createModel({ context: 200_000, output: 32_000 })
-        const tokens = { input: 100_000, output: 10_000, reasoning: 0, cache: { read: 0, write: 0 } }
-        expect(yield* compact.isOverflow({ tokens, model })).toBe(false)
+        const model = createModel({ context: 400_000, input: 272_000, output: 128_000 })
+        expect(
+          yield* compact.isOverflow({
+            tokens: { input: 99_000, output: 500, reasoning: 0, cache: { read: 0, write: 0 } },
+            model,
+          }),
+        ).toBe(false)
+        expect(
+          yield* compact.isOverflow({
+            tokens: { input: 5_000, output: 1_000, reasoning: 0, cache: { read: 95_000, write: 0 } },
+            model,
+          }),
+        ).toBe(true)
       }),
     ),
   )
@@ -430,13 +454,15 @@ describe("session.compaction.isOverflow", () => {
 
   it.live(
     "returns false when input/output are within input caps",
-    provideTmpdirInstance(() =>
-      Effect.gen(function* () {
-        const compact = yield* SessionCompaction.Service
-        const model = createModel({ context: 400_000, input: 272_000, output: 128_000 })
-        const tokens = { input: 200_000, output: 20_000, reasoning: 0, cache: { read: 10_000, write: 0 } }
-        expect(yield* compact.isOverflow({ tokens, model })).toBe(false)
-      }),
+    provideTmpdirInstance(
+      () =>
+        Effect.gen(function* () {
+          const compact = yield* SessionCompaction.Service
+          const model = createModel({ context: 400_000, input: 272_000, output: 128_000 })
+          const tokens = { input: 200_000, output: 20_000, reasoning: 0, cache: { read: 10_000, write: 0 } }
+          expect(yield* compact.isOverflow({ tokens, model })).toBe(false)
+        }),
+      { config: { compaction: { max_context: 0 } } },
     ),
   )
 

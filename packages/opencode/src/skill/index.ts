@@ -318,21 +318,23 @@ const layer = Layer.effect(
   }),
 )
 
+/**
+ * Past this size the verbose list is swapped for one line per skill. With a
+ * couple hundred skills installed, the full descriptions cost tens of
+ * thousands of tokens on every step, which slows every model down.
+ */
+const VERBOSE_LIST_LIMIT = 12_000
+const BRIEF_DESCRIPTION = 90
+
 export function fmt(list: Info[], opts: { verbose: boolean }) {
   const described = list.filter((skill) => skill.description !== undefined)
   if (described.length === 0) return "No skills are currently available."
   if (opts.verbose) {
+    const full = verbose(described)
+    if (full.length <= VERBOSE_LIST_LIMIT) return full
     return [
       "<available_skills>",
-      ...described
-        .toSorted((a, b) => a.name.localeCompare(b.name))
-        .flatMap((skill) => [
-          "  <skill>",
-          `    <name>${skill.name}</name>`,
-          `    <description>${skill.description}</description>`,
-          `    <location>${escapeHtml(skill.location)}</location>`,
-          "  </skill>",
-        ]),
+      ...described.toSorted((a, b) => a.name.localeCompare(b.name)).map((skill) => `${skill.name}: ${brief(skill.description!)}`),
       "</available_skills>",
     ].join("\n")
   }
@@ -343,6 +345,28 @@ export function fmt(list: Info[], opts: { verbose: boolean }) {
       .toSorted((a, b) => a.name.localeCompare(b.name))
       .map((skill) => `- **${skill.name}**: ${skill.description}`),
   ].join("\n")
+}
+
+function verbose(described: Info[]) {
+  return [
+    "<available_skills>",
+    ...described
+      .toSorted((a, b) => a.name.localeCompare(b.name))
+      .flatMap((skill) => [
+        "  <skill>",
+        `    <name>${skill.name}</name>`,
+        `    <description>${skill.description}</description>`,
+        `    <location>${escapeHtml(skill.location)}</location>`,
+        "  </skill>",
+      ]),
+    "</available_skills>",
+  ].join("\n")
+}
+
+/** The first sentence of a description, cut to a line. The skill tool gives the rest. */
+function brief(description: string) {
+  const sentence = description.replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s/)[0]!
+  return sentence.length <= BRIEF_DESCRIPTION ? sentence : `${sentence.slice(0, BRIEF_DESCRIPTION - 1).trimEnd()}…`
 }
 
 export const node = LayerNode.make({

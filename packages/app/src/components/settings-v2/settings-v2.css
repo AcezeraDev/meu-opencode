@@ -956,3 +956,41 @@
   font-size: 12px;
   line-height: 1.5;
 }
+
+/* Roteia's card: the key's source and its actions under the status line. */
+.settings-v2-provider-card.settings-v2-roteia-card {
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+}
+
+.settings-v2-provider-status[data-state="checking"]::before,
+.settings-v2-provider-status[data-state="unknown"]::before {
+  background: var(--v2-text-text-faint);
+  box-shadow: none;
+}
+
+.settings-v2-provider-status[data-state="error"] {
+  color: var(--v2-state-fg-danger);
+}
+
+.settings-v2-provider-status[data-state="error"]::before {
+  background: var(--v2-state-fg-danger);
+  box-shadow: none;
+}
+
+.settings-v2-roteia-key {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--v2-text-text-muted);
+}
+
+.settings-v2-roteia-key-value {
+  font-family: var(--font-family-mono);
+  color: var(--v2-text-text-base);
+}
+
+.settings-v2-roteia-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

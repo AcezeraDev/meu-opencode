@@ -1,4 +1,4 @@
-import { CDPConnection, type CDPTransport } from "./cdp"
+import { CDPConnection, ReplacedError, type CDPTransport, type SlowCall } from "./cdp"
 import { BrowserCursor } from "./cursor"
 import { BrowserSnapshot, type RefIdentity, type SnapshotOptions, type SnapshotResult } from "./snapshot"
 import { BrowserTrace } from "./trace"
@@ -122,6 +122,8 @@ export type UserInput =
 /** How a tab reports to whoever owns it, and learns whether anyone is watching. */
 export interface TabHooks {
   presenting(): boolean
+  /** Whether the live view in the app is open, as opposed to only the browser's own window being on screen. */
+  watched?(): boolean
   activity(activity: Activity): void
   changed(): void
 }
@@ -165,6 +167,10 @@ const SCROLL_SETTLE = 350
  */
 const QUIET = 100
 const QUIET_MAX = 800
+/** Refs of earlier pages still answered for; a few pages' worth of menus. */
+const ALIAS_MAX = 3000
+/** How often a page whose timers are held back is asked whether it changed. */
+const QUIET_POLL = 40
 /** A request the action set off, such as a form post or an answer being checked, gets this long to come back. */
 const REQUEST_MAX = 2500
 /** A navigation the action started gets this long to reach DOMContentLoaded. */
@@ -175,6 +181,14 @@ const NAVIGATION_MAX = 15_000
  * was already where it was being sent — and there is nothing to wait for.
  */
 const NAVIGATION_START = 1500
+/**
+ * How long a script sent to a page that has since been replaced by another
+ * document may still answer. Its context is gone, so normally the browser says
+ * so at once; through the extension the reply can instead never come, and the
+ * command sat out the whole 30 s call timeout, twice per click that submitted a
+ * form on a Moodle quiz.
+ */
+const ORPHAN_GRACE = 2000
 /** Request types that end in a re-render; images, fonts and beacons hold nothing up. */
 const SETTLE_TYPES = new Set(["XHR", "Fetch", "Document"])
 /** How recently the agent must have acted for a new document to show its cursor again. */
@@ -199,9 +213,13 @@ const CURSOR_CATCHUP = 90
  * command replies share one socket, so a click waits behind whatever is queued
  * in front of it. Measured on a page animating flat out, this takes the stream
  * from 49 pictures and 961 KB a second to 21 and 419 KB: still live to watch,
- * with the socket free for what the hand is doing.
+ * with the socket free for what the hand is doing. It was then slowed to about
+ * 10 a second: the stream was still most of what the app's network process
+ * and event stream spent CPU on while the agent browsed.
  */
-const CAST_INTERVAL = 40
+const CAST_INTERVAL = 100
+/** How much longer the next picture may wait for the agent's commands to be answered first. */
+const CAST_YIELD = 300
 
 /**
  * Finds an element in the page or in any frame of the same site inside it,
@@ -342,7 +360,12 @@ const FIND = String.raw`(function (selector, identity) {
       return clean(labelFor(el) || el.getAttribute("placeholder") || el.getAttribute("name"))
     }
     if (el.tagName === "IMG") return clean(el.getAttribute("alt"))
-    if (el.tagName === "INPUT") return clean(el.getAttribute("value") || labelFor(el) || el.getAttribute("name"))
+    if (el.tagName === "INPUT") {
+      // As the snapshot names it: a radio or checkbox by its label, not its form value.
+      var type = (el.getAttribute("type") || "").toLowerCase()
+      if (type === "radio" || type === "checkbox") return clean(labelFor(el) || el.getAttribute("value") || el.getAttribute("name"))
+      return clean(el.getAttribute("value") || labelFor(el) || el.getAttribute("name"))
+    }
     return clean(el.innerText || el.textContent || el.getAttribute("title"))
   }
   var candidates = []
@@ -518,7 +541,10 @@ function number(value: unknown) {
  */
 function normalizeFieldValue(type: string, text: string) {
   const value = text.trim()
-  if ((type === "date" || type === "datetime-local" || type === "month" || type === "week") && /^\d{1,2}[/-]\d{1,2}[/-]\d{4}/.test(value)) {
+  if (
+    (type === "date" || type === "datetime-local" || type === "month" || type === "week") &&
+    /^\d{1,2}[/-]\d{1,2}[/-]\d{4}/.test(value)
+  ) {
     const parts = value.split(/[/-]/)
     const day = parts[0].padStart(2, "0")
     const month = parts[1].padStart(2, "0")
@@ -660,6 +686,14 @@ export class EvaluationError extends Error {
   constructor(message: string) {
     super(message)
     this.name = "EvaluationError"
+  }
+}
+
+/** A script whose page was replaced by another document before it answered. */
+export class PageReplacedError extends Error {
+  constructor() {
+    super("The page changed to another document while this was running.")
+    this.name = "PageReplacedError"
   }
 }
 
@@ -830,7 +864,7 @@ export class CoveredError extends Error {
   readonly retryable = true as const
   constructor(target: string, cover: string) {
     super(
-      `${target} is covered by ${cover}, so a click would land on that instead. Close or get past what covers it (a cookie banner, a popup or an ad, often with a close or "X" button), or scroll, then try again.`,
+      `${target} is covered by ${cover}, so a click would land on that instead. Close or get past what covers it (a popup or an ad, often with a close or "X" button; a cookie banner with its option that declines non-essential cookies, such as "Reject all" or "Recusar"), or scroll, then try again.`,
     )
     this.name = "CoveredError"
   }
@@ -854,6 +888,10 @@ export class Tab {
   document?: DocumentResponse
   /** The last outline the model was given, so an action can report only what it changed. */
   baseline?: SnapshotResult
+  /** The last outline the model was given whole, which later pages leave repeated menus out against. */
+  anchor?: SnapshotResult
+  /** How long each part of the last action took, in milliseconds. */
+  timing?: Record<string, number>
   private inflight = new Set<string>()
   private requestIds = new Map<string, NetworkEntry>()
   /** Requests that end in a re-render, with the sequence number each started at. */
@@ -878,6 +916,15 @@ export class Tab {
   /** Last known identity for each ref, retained when a framework replaces its node. */
   private refIdentities = new Map<string, RefIdentity>()
   private refDocument?: string
+  /**
+   * Refs from an earlier page that point at the same element on this one: a
+   * menu that was left out of the outline because it had not changed keeps the
+   * refs the model saw it with.
+   */
+  private refAliases = new Map<string, string>()
+  /** Whether the page's timers are being held back, as they are in a covered or background window. */
+  private throttled = false
+  private quietCount = 0
   /** When the agent last did something, for its cursor to follow it onto a new page. */
   private acted = 0
   /**
@@ -1070,6 +1117,9 @@ export class Tab {
 
   /** Whether the agent's cursor is being shown. */
   private get presenting() {
+    // A browser window covered by another shows the cursor to no one, so its
+    // glide and the human typing pace are only waited out for the live view.
+    if (this.throttled && this.hooks.watched && !this.hooks.watched()) return false
     return this.hooks.presenting()
   }
 
@@ -1115,12 +1165,34 @@ export class Tab {
   /** Evaluates an expression in the page and returns its value. */
   async evaluate<T = unknown>(expression: string): Promise<T> {
     if (!this.connection.connected) throw new TabGoneError()
-    const result = await this.connection.send<EvaluateResult>("Runtime.evaluate", {
-      expression,
-      returnByValue: true,
-      awaitPromise: true,
-      userGesture: true,
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let off = () => {}
+    // Once the main frame commits a new document, the context this runs in is
+    // gone; waiting for an answer past a short grace only burns the call timeout.
+    const orphaned = new Promise<never>((_, reject) => {
+      off = this.connection.on("Page.frameNavigated", (params) => {
+        if (asRecord(params["frame"])["parentId"] || timer) return
+        timer = setTimeout(() => reject(new PageReplacedError()), ORPHAN_GRACE)
+      })
     })
+    const result = await Promise.race([
+      this.connection.send<EvaluateResult>("Runtime.evaluate", {
+        expression,
+        returnByValue: true,
+        awaitPromise: true,
+        userGesture: true,
+      }),
+      orphaned,
+    ])
+      .catch((error: unknown) => {
+        // The relay gave up on it for the same reason.
+        if (error instanceof ReplacedError) throw new PageReplacedError()
+        throw error
+      })
+      .finally(() => {
+        off()
+        clearTimeout(timer)
+      })
     if (result.exceptionDetails) {
       const details = result.exceptionDetails
       const description = details.exception?.description ?? details.text ?? "Evaluation failed"
@@ -1141,8 +1213,40 @@ export class Tab {
 
   /** The in-page expression that resolves a selector, including a snapshotted ref's recovery identity. */
   locate(selector: string) {
-    const ref = /^\[data-oc-ref="(ref_\d+)"\]$/.exec(selector)?.[1]
-    return find(selector, ref ? this.refIdentities.get(ref) : undefined)
+    const given = /^\[data-oc-ref="(ref_\d+)"\]$/.exec(selector)?.[1]
+    const ref = given ? (this.refAliases.get(given) ?? given) : undefined
+    if (!ref) return find(selector, undefined)
+    return find(BrowserSnapshot.locator(ref), this.refIdentities.get(ref))
+  }
+
+  /**
+   * Lets refs the model saw on an earlier page reach the same elements on this
+   * one, given as pairs of old and current refs. A ref already standing in for
+   * an older one carries that one along.
+   */
+  alias(pairs: [string, string][]) {
+    const moved = new Map(pairs)
+    for (const [from, to] of this.refAliases) {
+      const next = moved.get(to)
+      if (next) this.refAliases.set(from, next)
+    }
+    for (const [from, to] of pairs) this.refAliases.set(from, to)
+    // Only the newest few pages are worth answering for.
+    for (const key of this.refAliases.keys()) {
+      if (this.refAliases.size <= ALIAS_MAX) break
+      this.refAliases.delete(key)
+    }
+  }
+
+  /** What a ref stood for when the outline was read: its role and name, among others. */
+  identityOf(ref: string) {
+    const normalized = ref.startsWith("ref_") ? ref : `ref_${ref}`
+    return this.refIdentities.get(this.refAliases.get(normalized) ?? normalized)
+  }
+
+  /** Commands that took unusually long since the last call. */
+  takeSlow(): SlowCall[] {
+    return this.connection.takeSlow?.() ?? []
   }
 
   /**
@@ -1164,13 +1268,18 @@ export class Tab {
    * Reads the page outline. Refs already on the page are kept, and new ones
    * continue from the highest this tab has handed out.
    */
-  async snapshot(options: SnapshotOptions = {}) {
+  async snapshot(options: SnapshotOptions = {}, retry = true): Promise<SnapshotResult> {
     const result = await this.call<SnapshotResult>(BrowserSnapshot.SCRIPT, {
       ...options,
       refStart: this.refMax,
       // So an element the page rebuilt keeps the ref the model already has.
       known: Object.fromEntries(this.refIdentities),
+    }).catch((error: unknown) => {
+      // Reading is harmless to repeat, and the new page is what was wanted.
+      if (retry && error instanceof PageReplacedError) return undefined
+      throw error
     })
+    if (!result) return this.snapshot(options, false)
     this.refMax = Math.max(this.refMax, number(result.lastRef))
     if (result.documentId && result.documentId !== this.refDocument) this.refIdentities.clear()
     this.refDocument = result.documentId
@@ -1318,9 +1427,17 @@ export class Tab {
    * embedded activities answer. Resolves early if the page navigates away
    * mid-wait. A tab in the background runs its timers late, so the wait is
    * also capped from this side.
+   *
+   * A window covered by another one is "hidden" to the browser, which then runs
+   * the page's timers about once a second: the in-page wait below never ends on
+   * its own, and every action paid the whole cap, two or three times over. Once
+   * that is seen, the clock moves here and the page is only asked when it last
+   * changed, which a hidden page answers straight away.
    */
   async quiet(quiet = QUIET, max = QUIET_MAX) {
     if (!this.connected) return
+    if (this.throttled) return this.quietFromHere(quiet, max)
+    let answered = false
     const still = this.evaluate(
       `new Promise((resolve) => {
         const start = performance.now()
@@ -1344,8 +1461,52 @@ export class Tab {
         }
         setTimeout(tick, 20)
       })`,
-    ).catch(() => {})
+    )
+      .then(() => {
+        answered = true
+      })
+      .catch(() => {})
     await Promise.race([still, sleep(max + 150)])
+    // The page's own clock could not even reach the cap: its timers are held back.
+    if (!answered && this.connected) this.throttled = true
+  }
+
+  /** {@link quiet} timed from here, for a page whose timers the browser holds back. */
+  private async quietFromHere(quiet: number, max: number) {
+    const key = `__ocQuiet${++this.quietCount}`
+    const deadline = Date.now() + max
+    const read = (install: boolean) =>
+      this.evaluate<{ idle: number; hidden: boolean } | null>(
+        `(() => {
+          const now = performance.now()
+          let state = window[${JSON.stringify(key)}]
+          if (!state && ${install}) {
+            state = window[${JSON.stringify(key)}] = { last: now, observer: new MutationObserver(() => { state.last = performance.now() }) }
+            const watch = (doc) => {
+              state.observer.observe(doc, { subtree: true, childList: true, attributes: true, characterData: true })
+              for (const frame of doc.querySelectorAll("iframe, frame")) {
+                try {
+                  if (frame.contentDocument) watch(frame.contentDocument)
+                } catch (error) {}
+              }
+            }
+            watch(document)
+          }
+          if (!state) return null
+          return { idle: now - state.last, hidden: document.visibilityState === "hidden" }
+        })()`,
+      ).catch(() => null)
+    const first = await read(true)
+    // Visible again: the page's own clock is good, and cheaper.
+    if (first && !first.hidden) this.throttled = false
+    let state = first
+    while (state && state.idle < quiet && Date.now() < deadline && this.connected) {
+      await sleep(Math.min(QUIET_POLL, Math.max(10, quiet - state.idle)))
+      state = await read(false)
+    }
+    void this.evaluate(
+      `(() => { const state = window[${JSON.stringify(key)}]; if (state) { state.observer.disconnect(); delete window[${JSON.stringify(key)}] } })()`,
+    ).catch(() => {})
   }
 
   /**
@@ -1424,7 +1585,10 @@ export class Tab {
     // where every command is a trip out to the browser and back, that is the
     // difference between the cursor's glide costing its own time and costing
     // nothing at all.
-    const after = Math.max(0, Math.round(options.after ?? 0))
+    const glideWait = Math.max(0, Math.round(options.after ?? 0))
+    // A page whose timers are held back would sleep a whole second instead.
+    if (this.throttled && glideWait > 0) await sleep(glideWait)
+    const after = this.throttled ? 0 : glideWait
     const found = await this.evaluate<(Measured & { duration: number }) | null>(
       `(async () => {
         ${after > 0 ? `await new Promise((resolve) => setTimeout(resolve, ${after}))` : ""}
@@ -2325,6 +2489,13 @@ export class Tab {
     // second one would hand the browser another slot and the pace would be back
     // to whatever the page animates at.
     const ack = () => {
+      // Frames and command replies share one socket, so the next picture waits
+      // while the agent has commands out, up to a point: the view may stutter
+      // for a moment, the click must not queue behind pictures of it.
+      if ((this.connection.busy ?? 0) > 0 && Date.now() - acked < CAST_INTERVAL + CAST_YIELD) {
+        timer = setTimeout(ack, 40)
+        return
+      }
       acked = Date.now()
       timer = undefined
       void this.connection.send("Page.screencastFrameAck", { sessionId: session }).catch(() => {})
@@ -2349,7 +2520,9 @@ export class Tab {
     }
     await this.connection.send("Page.startScreencast", {
       format: "jpeg",
-      quality: 60,
+      // Each picture crosses the extension relay and the event stream; this is
+      // a live view, not a record, and 50 keeps text legible at a smaller size.
+      quality: 50,
       maxWidth: size ? size.width : 1600,
       maxHeight: size ? size.height : 1200,
       everyNthFrame: 1,
@@ -2439,6 +2612,19 @@ export class Tab {
    */
   async clearResize() {
     await this.connection.send("Emulation.clearDeviceMetricsOverride").catch(() => {})
+  }
+
+  /**
+   * Fails requests to these hosts before they leave the browser. `hosts` are
+   * globs such as `*.doubleclick.net`, which leaves out the bare domain. Newer Chromium takes URL
+   * patterns and older only the deprecated wildcard list, so both are tried.
+   */
+  async block(hosts: readonly string[]) {
+    const patterns = hosts.map((host) => `*://${host}/*`)
+    await this.connection
+      .send("Network.setBlockedURLs", { urlPatterns: patterns.map((urlPattern) => ({ urlPattern, block: true })) })
+      .catch(() => this.connection.send("Network.setBlockedURLs", { urls: patterns }))
+      .catch(() => {})
   }
 
   async bringToFront() {

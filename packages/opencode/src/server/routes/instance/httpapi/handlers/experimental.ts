@@ -15,6 +15,8 @@ import { ToolRegistry } from "@/tool/registry"
 import { Worktree } from "@/worktree"
 import { nanoGPT, resolveApiKey, toWebVideoError } from "@/web-video/provider"
 import { WebVideoSettings } from "@/web-video/settings"
+import { Provider } from "@/provider/provider"
+import { Roteia } from "@/provider/roteia"
 import { Database } from "@opencode-ai/core/database/database"
 import { MessageTable, PartTable, TodoTable } from "@opencode-ai/core/session/sql"
 import { SessionPace } from "@/session/pace"
@@ -33,6 +35,7 @@ import {
   ToolListQuery,
   UsageEtaQuery,
   UsageSpendQuery,
+  RoteiaStatusQuery,
   WebVideoDefaults,
   WorktreeApiError,
 } from "../groups/experimental"
@@ -101,12 +104,12 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       const tab = yield* browser.current()
       if (!tab) return { running: false }
       const [url, title, image] = yield* Effect.promise(async () => {
-        const shot = await tab.screenshot().catch(() => undefined)
-        return [
-          await tab.url(),
-          await tab.title(),
-          shot ? `data:image/png;base64,${shot.toString("base64")}` : undefined,
-        ] as const
+        // A JPEG straight off the screen, polled every second and a half while
+        // the strip is open: a full-size PNG, with the cursor hidden and shown
+        // around it, was megabytes a poll through the extension relay, in
+        // front of the agent's own commands.
+        const shot = await tab.frame().catch(() => undefined)
+        return [await tab.url(), await tab.title(), shot ? `data:image/jpeg;base64,${shot.data}` : undefined] as const
       })
       return { running: true, url, title, image }
     })
@@ -196,15 +199,47 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       return { total: Number(rows[0]?.total ?? 0), messages: Number(rows[0]?.messages ?? 0) }
     })
 
+    const roteiaStatus = Effect.fn("ExperimentalHttpApi.roteiaStatus")(function* (ctx: {
+      query: typeof RoteiaStatusQuery.Type
+    }) {
+      // The same places the provider reads a key from, most specific first.
+      const stored = yield* auth.get(Roteia.ID).pipe(Effect.orElseSucceed(() => undefined))
+      const fromEnv = process.env[Roteia.ENV]?.trim()
+      const fromConfig = (yield* config.get()).provider?.[Roteia.ID]?.options?.apiKey
+      const found =
+        stored?.type === "api"
+          ? { key: stored.key, source: "api" as const }
+          : fromEnv
+            ? { key: fromEnv, source: "env" as const }
+            : typeof fromConfig === "string" && fromConfig
+              ? { key: fromConfig, source: "config" as const }
+              : undefined
+      const providers = yield* (yield* Provider.Service).list()
+      const models = Object.keys(providers[Roteia.ID]?.models ?? {}).length
+      if (!found) return { configured: false, models }
+      if (!ctx.query.test) return { configured: true, source: found.source, models }
+      const check = yield* Effect.promise(() => Roteia.check(found.key))
+      return { configured: true, source: found.source, models, check }
+    })
+
     /** Past requests over this window teach how long work takes. */
     const PACE_WINDOW = 60 * 24 * 60 * 60 * 1000
     /** The history changes slowly; reading it on every poll would be waste. */
     const PACE_CACHE_MS = 60_000
     let history: { at: number; runs: SessionPace.Run[]; steps: { model: string; ms: number }[] } | undefined
+    /**
+     * Largest todo list per message, kept between loads. Finding them means
+     * opening every part's JSON, tool outputs and all: across two months that
+     * held the server still for up to half a second every minute, browser relay
+     * and event stream included. After the first load only new parts are read.
+     */
+    const todosByMessage = new Map<string, number>()
+    let todosRead = 0
 
     const loadHistory = Effect.fn("ExperimentalHttpApi.paceHistory")(function* () {
       if (history && Date.now() - history.at < PACE_CACHE_MS) return history
-      const since = Date.now() - PACE_WINDOW
+      const now = Date.now()
+      const since = now - PACE_WINDOW
       const assistants = yield* db
         .select({
           id: MessageTable.id,
@@ -231,11 +266,17 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
           todos: sql<number | null>`json_array_length(json_extract(${PartTable.data}, '$.state.input.todos'))`,
         })
         .from(PartTable)
-        .where(and(gte(PartTable.time_created, since), sql`json_extract(${PartTable.data}, '$.tool') = 'todowrite'`))
+        .where(
+          and(
+            // A part written during the last read may have been missed by it.
+            gte(PartTable.time_created, Math.max(since, todosRead - PACE_CACHE_MS)),
+            sql`json_extract(${PartTable.data}, '$.tool') = 'todowrite'`,
+          ),
+        )
         .all()
         .pipe(Effect.orDie)
+      todosRead = now
       const started = new Map<string, number>(users.map((user) => [user.id, user.created]))
-      const todosByMessage = new Map<string, number>()
       for (const plan of plans) {
         todosByMessage.set(plan.message, Math.max(todosByMessage.get(plan.message) ?? 0, Number(plan.todos ?? 0)))
       }
@@ -256,9 +297,7 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       return history
     })
 
-    const usageEta = Effect.fn("ExperimentalHttpApi.usageEta")(function* (ctx: {
-      query: typeof UsageEtaQuery.Type
-    }) {
+    const usageEta = Effect.fn("ExperimentalHttpApi.usageEta")(function* (ctx: { query: typeof UsageEtaQuery.Type }) {
       const now = Date.now()
       const sessionID = ctx.query.sessionID as SessionID
       const last = yield* db
@@ -463,6 +502,7 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       .handle("sessionBackground", sessionBackground)
       .handle("resource", resource)
       .handle("usageSpend", usageSpend)
+      .handle("roteiaStatus", roteiaStatus)
       .handle("usageEta", usageEta)
       .handle("webVideoModels", webVideoModels)
       .handle("webVideoSettings", webVideoSettings)

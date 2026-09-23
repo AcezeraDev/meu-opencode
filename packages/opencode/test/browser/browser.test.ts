@@ -39,6 +39,18 @@ const PAGE = `<!doctype html>
   </body>
 </html>`
 
+/** A page of a course site: the same long menu on every page, and its own body. */
+const COURSE = (page: string) => `<!doctype html>
+<html>
+  <head><title>Course page ${page}</title></head>
+  <body>
+    <nav aria-label="Course index">
+      ${Array.from({ length: 12 }, (_, index) => `<a href="/course/${index + 1}">Lesson ${index + 1}</a>`).join("\n      ")}
+    </nav>
+    <main><h1>Lesson ${page}</h1><p>Page ${page} body</p><button id="mutate">Mutate</button></main>
+  </body>
+</html>`
+
 const PAGE2 = `<!doctype html>
 <html>
   <head><title>Second Page</title></head>
@@ -129,6 +141,7 @@ const web = Bun.serve({
     const html = (body: string, headers: Record<string, string> = {}) =>
       new Response(body, { headers: { "content-type": "text/html; charset=utf-8", ...headers } })
     if (url.pathname === "/quiz") return html(QUIZ)
+    if (url.pathname.startsWith("/course/")) return html(COURSE(url.pathname.slice("/course/".length)))
     if (url.pathname === "/island") return html(ISLAND)
     if (url.pathname === "/covered") return html(COVERED)
     if (url.pathname === "/dialog") return html(DIALOG)
@@ -289,6 +302,33 @@ describeBrowser("browser over CDP", () => {
     expect(await tab.title()).toBe("Test Page")
     const text = await tab.text()
     expect(text.text).toContain("Hello")
+  })
+
+  test("blocked hosts are never fetched, and the rest of the page still loads", async () => {
+    const hits: string[] = []
+    using server = Bun.serve({
+      port: 0,
+      fetch(request) {
+        const url = new URL(request.url)
+        hits.push(`${url.hostname}${url.pathname}`)
+        if (url.pathname === "/page")
+          return new Response(
+            `<!doctype html><title>Ads</title><img src="http://localhost:${url.port}/ad.png"><img src="http://127.0.0.1:${url.port}/photo.png">`,
+            { headers: { "content-type": "text/html" } },
+          )
+        return new Response("", { headers: { "content-type": "image/png" } })
+      },
+    })
+    await tab.block([`localhost:${server.port}`])
+    try {
+      await tab.navigate(`http://127.0.0.1:${server.port}/page`, "load", 20_000)
+      expect(hits).toContain("127.0.0.1/photo.png")
+      expect(hits).not.toContain("localhost/ad.png")
+      expect(tab.network.find((entry) => entry.url.includes("/ad.png"))?.failure).toBeDefined()
+    } finally {
+      await tab.block([])
+      await tab.navigate(pageUrl, "load", 20_000)
+    }
   })
 
   test("the outline gives every actionable element a ref", async () => {
@@ -525,5 +565,50 @@ describeBrowser("browser over CDP", () => {
     const message = await failure(tab.waitFor({ selector: '[data-oc-ref="ref_99999"]' }, 30_000))
     expect(message).toContain("not on the page")
     expect(Date.now() - started).toBeLessThan(6_000)
+  })
+
+  test("a new page of the same site leaves out the menu it repeats, and the old refs still reach it", async () => {
+    await tab.navigate(`${webUrl}/course/1`, "load", 20_000)
+    const first = await tab.snapshot()
+    expect(BrowserPage.landed(tab, first).output).toContain('link "Lesson 12"')
+    const line = first.outline.split("\n").find((item) => item.includes('link "Lesson 3"'))!
+    const ref = /ref_\d+/.exec(line)![0]
+
+    await tab.navigate(`${webUrl}/course/2`, "load", 20_000)
+    const arrived = BrowserPage.landed(tab, await tab.snapshot())
+    const text = arrived.output
+    expect(arrived.partial).toBe(true)
+    expect(text).toContain("more lines as in the last full outline")
+    expect(text).toContain("Page 2 body")
+    expect(text).not.toContain('link "Lesson 12"')
+
+    await tab.click(BrowserSnapshot.locator(ref))
+    const deadline = Date.now() + 10_000
+    while (Date.now() < deadline && (await tab.title()) !== "Course page 3")
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(await tab.title()).toBe("Course page 3")
+  })
+
+  test("the same page again is shown whole", async () => {
+    await tab.navigate(`${webUrl}/course/4`, "load", 20_000)
+    BrowserPage.landed(tab, await tab.snapshot())
+    await tab.reload("load", 20_000)
+    expect(BrowserPage.landed(tab, await tab.snapshot()).output).toContain('link "Lesson 12"')
+  })
+
+  test("a page whose timers are held back is waited out from this side", async () => {
+    await tab.navigate(`${webUrl}/course/5`, "load", 20_000)
+    // Changes the page every 50 ms for 400 ms, driven by the page's own clock.
+    await tab.evaluate(
+      `(() => { const end = performance.now() + 400; const tick = () => { document.title = String(Math.random()); if (performance.now() < end) setTimeout(tick, 50) }; tick() })()`,
+    )
+    tab["throttled"] = true
+    const started = Date.now()
+    await tab.quiet()
+    const waited = Date.now() - started
+    expect(waited).toBeGreaterThanOrEqual(300)
+    expect(waited).toBeLessThan(1_500)
+    // The page answered that it is on screen, so its own clock is trusted again.
+    expect(tab["throttled"]).toBe(false)
   })
 })

@@ -31,6 +31,17 @@ export interface CDPTransport {
   once(method: string, timeout: number): Promise<Record<string, unknown>>
   close(): void
   readonly connected: boolean
+  /** Commands sent and not yet answered, for work that should yield to them. */
+  readonly busy?: number
+  /** Commands that took unusually long since the last call, for diagnosing a slow action. */
+  takeSlow?(): SlowCall[]
+}
+
+export interface SlowCall {
+  method: string
+  ms: number
+  /** How it ended: answered, failed, or given up on after the page it was sent to went away. */
+  outcome: "ok" | "error" | "replaced"
 }
 
 export class CDPError extends Error {
@@ -40,6 +51,17 @@ export class CDPError extends Error {
   ) {
     super(`${method}: ${message}`)
     this.name = "CDPError"
+  }
+}
+
+/**
+ * A command whose page was replaced by another document before it answered.
+ * Through the extension such a command can otherwise never be answered at all.
+ */
+export class ReplacedError extends CDPError {
+  constructor(method: string) {
+    super(method, "the page was replaced by another document before this answered")
+    this.name = "ReplacedError"
   }
 }
 
@@ -183,6 +205,10 @@ export class CDPConnection {
 
   get connected() {
     return !this.closed && this.socket?.readyState === 1
+  }
+
+  get busy() {
+    return this.pending.size
   }
 }
 

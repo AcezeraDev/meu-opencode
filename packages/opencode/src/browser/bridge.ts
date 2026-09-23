@@ -1,7 +1,7 @@
 import { Context, Effect, Layer } from "effect"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Config } from "@/config/config"
-import { CDPError, type CDPTransport } from "./cdp"
+import { CDPError, ReplacedError, type CDPTransport, type SlowCall } from "./cdp"
 import { TAB_EVENTS, TAB_FIELDS } from "./protocol"
 
 /**
@@ -28,7 +28,8 @@ export interface BridgeTarget {
 /** A tab lifecycle change reported by the extension. */
 export interface TargetEvent {
   event: "created" | "updated" | "activated" | "removed"
-  target: { targetId: string; url?: string; title?: string; active?: boolean }
+  /** `opener` is the tab that opened this one, for a created tab a page opened (target=_blank, window.open). */
+  target: { targetId: string; url?: string; title?: string; active?: boolean; opener?: string }
 }
 
 /**
@@ -42,7 +43,29 @@ const CALL_TIMEOUT = 30_000
  * The extension retries after a second and backs off from there, so this covers
  * a few attempts without leaving the agent hanging on a browser that is gone.
  */
-const RECONNECT_WAIT = 5000
+const RECONNECT_WAIT = 8000
+
+/**
+ * How long a command sent to a page may still answer after the page committed
+ * another document. A live one answers in milliseconds; this only has to cover
+ * the relay being busy.
+ */
+const REPLACED_GRACE = 2000
+const MOVES_PAGE = new Set(["Page.navigate", "Page.reload", "Page.navigateToHistoryEntry"])
+
+/** A command this slow is kept, so the tool can say where an action's time went. */
+const SLOW_CALL = 1500
+const SLOW_KEEP = 20
+
+interface InFlight {
+  method: string
+  started: number
+  /** Set once the page moved on, when the command has to answer by. */
+  timer?: ReturnType<typeof setTimeout>
+  /** Whether it was given up on because the page moved on. */
+  fired: boolean
+  give: () => void
+}
 
 /**
  * Whether a failed command is one that re-attaching the debugger to the tab
@@ -67,6 +90,9 @@ function isReattachable(error: unknown) {
 class BridgeConnection implements CDPTransport {
   private handlers = new Map<string, Set<Handler>>()
   private closed = false
+  private nextCall = 0
+  private inflight = new Map<number, InFlight>()
+  private slow: SlowCall[] = []
   /** Pending `once` waits, failed at once when the tab is lost rather than left to time out. */
   private waiters = new Set<(error: Error) => void>()
 
@@ -85,7 +111,64 @@ class BridgeConnection implements CDPTransport {
     await this.bridge.request("attach", { targetId: this.targetId, events: TAB_EVENTS, fields: TAB_FIELDS })
   }
 
+  /**
+   * Sends one command, and gives up on it shortly after the page it went to is
+   * replaced by another document.
+   *
+   * A click that submits a form, or a script still running when the page moved
+   * on, was sent to a document the browser has since thrown away, often in a
+   * renderer process it has swapped out. Through `chrome.debugger` such a
+   * command can simply never be answered, and it sat out the whole call
+   * timeout: in real sessions on a Moodle quiz, clicks of 25 to 57 seconds with
+   * nothing happening. The press itself was delivered — it is what moved the
+   * page — so an input event counts as done; anything else fails, and the
+   * caller reads the new page instead.
+   */
   async send<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+    const started = Date.now()
+    const id = this.nextCall++
+    const call: InFlight = { method, started, fired: false, give: () => {} }
+    const replaced = new Promise<T>((resolve, reject) => {
+      call.give = () => {
+        call.fired = true
+        // A press or a navigation that was waiting is what moved the page, so it got there.
+        if (method.startsWith("Input.") || MOVES_PAGE.has(method)) resolve({} as T)
+        else reject(new ReplacedError(method))
+      }
+    })
+    this.inflight.set(id, call)
+    const outcome = await Promise.race([this.deliver<T>(method, params), replaced]).then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error }),
+    )
+    clearTimeout(call.timer)
+    this.inflight.delete(id)
+    const ms = Date.now() - started
+    if (ms >= SLOW_CALL) {
+      this.slow.push({
+        method,
+        ms,
+        outcome: call.fired ? "replaced" : "error" in outcome ? "error" : "ok",
+      })
+      if (this.slow.length > SLOW_KEEP) this.slow.shift()
+    }
+    if ("error" in outcome) throw outcome.error
+    return outcome.value
+  }
+
+  get busy() {
+    let count = 0
+    for (const call of this.inflight.values()) if (call.method !== "Page.screencastFrameAck") count++
+    return count
+  }
+
+  takeSlow() {
+    const slow = this.slow
+    this.slow = []
+    return slow
+  }
+
+  private async deliver<T>(method: string, params: Record<string, unknown>): Promise<T> {
     if (this.closed) throw new CDPError(method, "not connected")
     // An extension whose service worker was put to sleep takes its socket down
     // with it and comes back on its own a second later. Failing the command
@@ -169,6 +252,18 @@ class BridgeConnection implements CDPTransport {
 
   /** Fed by the Bridge when a CDP event arrives for this tab. */
   dispatch(method: string, params: Record<string, unknown>) {
+    // The main frame committed another document: what was sent to the old one
+    // gets a moment to answer, and is then given up on (see `send`).
+    if (method === "Page.frameNavigated") {
+      const frame = params["frame"]
+      const child = typeof frame === "object" && frame !== null && "parentId" in frame && frame.parentId
+      if (!child) {
+        for (const call of this.inflight.values()) {
+          if (call.timer || call.method === "Page.screencastFrameAck") continue
+          call.timer = setTimeout(call.give, REPLACED_GRACE)
+        }
+      }
+    }
     for (const handler of this.handlers.get(method) ?? []) handler(params)
   }
 
@@ -189,6 +284,12 @@ interface Pending {
   reject: (error: Error) => void
 }
 
+/** One accepted extension socket's view of the bridge; it goes inert once a newer socket takes over. */
+export interface Link {
+  receive: (raw: string) => void
+  disconnect: () => void
+}
+
 /**
  * Holds the single extension connection and multiplexes it: requests are
  * matched to replies by id, CDP events are routed to the right tab's
@@ -197,6 +298,8 @@ interface Pending {
 export class Bridge {
   private write?: (message: object) => void
   private disconnectSocket?: () => void
+  /** Identity of the socket accepted last; messages and closes from any other are stale. */
+  private link?: object
   private authed = false
   private nextId = 1
   private pending = new Map<number, Pending>()
@@ -225,12 +328,28 @@ export class Bridge {
    * message; `close` drops the socket. The socket is not trusted until it sends
    * the right token.
    */
-  accept(write: (message: object) => void, close: () => void) {
-    // Only one extension at a time; a new one replaces the old.
+  accept(write: (message: object) => void, close: () => void): Link {
+    // Only one extension at a time; a new one replaces the old. The old socket
+    // is closed rather than left open: a restarted extension worker can open a
+    // second socket before the first is gone, and when that first one finally
+    // closed it used to tear down the new, healthy connection with it, leaving
+    // the extension believing it was connected while the bridge had dropped it.
+    const previous = this.disconnectSocket
     this.reset()
+    previous?.()
+    const link = {}
+    this.link = link
     this.write = write
     this.disconnectSocket = close
     this.authed = false
+    return {
+      receive: (raw) => {
+        if (this.link === link) this.receive(raw)
+      },
+      disconnect: () => {
+        if (this.link === link) this.disconnect()
+      },
+    }
   }
 
   /** Feeds one raw message from the extension. */
@@ -265,6 +384,9 @@ export class Bridge {
     if (!this.authed) return
     switch (message.type) {
       case "ping":
+        // The extension closes a socket that stops answering, so a connection
+        // left half-open (the machine slept, the app froze) heals by itself.
+        this.write?.({ type: "pong" })
         return
       case "result":
       case "error": {
@@ -303,6 +425,7 @@ export class Bridge {
   private reset() {
     this.write = undefined
     this.disconnectSocket = undefined
+    this.link = undefined
     this.authed = false
     for (const waiter of this.pending.values()) waiter.reject(new Error("browser extension disconnected"))
     this.pending.clear()

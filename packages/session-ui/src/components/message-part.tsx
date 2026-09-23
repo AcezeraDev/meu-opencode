@@ -2684,6 +2684,14 @@ ToolRegistry.register({
   render: WebVideoToolCard,
 })
 
-for (const name of ["browser_navigate", "browser_snapshot", "browser_act", "browser_screenshot", "browser_inspect"]) {
+for (const name of [
+  "browser_navigate",
+  "browser_snapshot",
+  "browser_act",
+  "browser_screenshot",
+  "browser_inspect",
+  "browser_script",
+  "browser_notes",
+]) {
   ToolRegistry.register({ name, render: BrowserToolCard })
 }

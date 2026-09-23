@@ -315,6 +315,7 @@ function BodyDesignClass() {
     const root = document.documentElement
     root.toggleAttribute("data-chroma-off", !settings.appearance.chroma())
     root.setAttribute("data-chroma-speed", settings.appearance.chromaSpeed())
+    root.toggleAttribute("data-lite", settings.appearance.lite())
     requestAnimationFrame(realignChroma)
   })
 

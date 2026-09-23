@@ -100,8 +100,12 @@ const layer = Layer.effect(
       yield* events.publish(Event.Asked, info)
       return yield* Effect.ensuring(
         Deferred.await(deferred),
-        Effect.sync(() => {
-          pending.delete(id)
+        Effect.gen(function* () {
+          // Still pending means nobody answered: the tool that asked was
+          // interrupted, as when the session is aborted. Clients drop a prompt
+          // only on a reply, so without one it stayed on screen, unanswerable.
+          if (!pending.delete(id)) return
+          yield* events.publish(Event.Replied, { sessionID: info.sessionID, requestID: id, reply: "reject" })
         }),
       )
     })

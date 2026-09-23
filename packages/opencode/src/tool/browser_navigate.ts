@@ -3,6 +3,7 @@ import { Browser } from "@/browser/session"
 import { BrowserBlocked } from "@/browser/blocked"
 import { BrowserPage } from "@/browser/page"
 import { BrowserPdf } from "@/browser/pdf"
+import { BrowserSite } from "@/browser/site"
 import * as Tool from "./tool"
 import DESCRIPTION from "./browser_navigate.txt"
 
@@ -177,28 +178,31 @@ export const BrowserNavigateTool = Tool.define(
           const waitUntil = params.waitUntil ?? "domcontentloaded"
           const timeout = yield* browser.timeout()
 
-          let refusal: ReturnType<typeof BrowserBlocked.refused>
-          if (action === "goto" || action === "new_tab") {
-            const failure = yield* Effect.promise(() =>
-              tab.navigate(url!, waitUntil, timeout).then(
-                () => undefined,
-                (error: unknown) => (error instanceof Error ? error : new Error(String(error))),
-              ),
-            )
-            refusal = failure ? BrowserBlocked.refused(failure.message) : undefined
-            if (failure && !refusal) throw failure
-          } else if (action === "back") {
-            yield* Effect.promise(() => tab.history(-1, waitUntil, timeout))
-          } else if (action === "forward") {
-            yield* Effect.promise(() => tab.history(1, waitUntil, timeout))
-          } else if (action === "reload") {
-            yield* Effect.promise(() => tab.reload(waitUntil, timeout))
-          }
-          // A parsed document is often still being built by its scripts; the
-          // outline should show what they render, not the empty shell.
-          if (NAVIGATIONS.has(action) && waitUntil === "domcontentloaded" && !refusal) {
-            yield* Effect.promise(() => tab.quiet(150, 2500))
-          }
+          // In the same queue as clicks and typing: a model that sends a
+          // navigation and a click together would otherwise have the click land
+          // on whichever page happened to be there, with a ref from the other.
+          const moving = yield* Effect.promise(() =>
+            tab.serialize(async () => {
+              if (action === "goto" || action === "new_tab") {
+                const failure = await tab.navigate(url!, waitUntil, timeout).then(
+                  () => undefined,
+                  (error: unknown) => (error instanceof Error ? error : new Error(String(error))),
+                )
+                const refused = failure ? BrowserBlocked.refused(failure.message) : undefined
+                if (failure && !refused) return { failure }
+                if (refused) return { refusal: refused }
+              }
+              if (action === "back") await tab.history(-1, waitUntil, timeout)
+              if (action === "forward") await tab.history(1, waitUntil, timeout)
+              if (action === "reload") await tab.reload(waitUntil, timeout)
+              // A parsed document is often still being built by its scripts; the
+              // outline should show what they render, not the empty shell.
+              if (NAVIGATIONS.has(action) && waitUntil === "domcontentloaded") await tab.quiet(150, 2500)
+              return {}
+            }),
+          )
+          if ("failure" in moving) throw moving.failure
+          const refusal = "refusal" in moving ? moving.refusal : undefined
 
           // An address that did not look like one can still serve a PDF.
           if (NAVIGATIONS.has(action)) {
@@ -232,18 +236,35 @@ export const BrowserNavigateTool = Tool.define(
 
           if (params.snapshot === false) {
             const [current, title] = yield* Effect.promise(() => Promise.all([tab.url(), tab.title()]))
+            const step =
+              action === "goto" || action === "new_tab" ? BrowserSite.describeOpen(current) : { text: action }
+            const extra = yield* Effect.promise(() =>
+              BrowserSite.aside(ctx.sessionID, { steps: [step], from: current, to: current }),
+            )
             return {
-              output: [`url: ${current}`, `title: ${title || "(untitled)"}`].join("\n"),
+              output: [`url: ${current}`, `title: ${title || "(untitled)"}`, ...extra].join("\n"),
               title: title || current,
               metadata: { action, url: current },
             }
           }
 
           const result = yield* Effect.promise(() => tab.snapshot())
+          const arrived = BrowserPage.landed(tab, result)
+          const step =
+            action === "goto" || action === "new_tab" ? BrowserSite.describeOpen(result.url) : { text: action }
+          const extra = yield* Effect.promise(() =>
+            BrowserSite.aside(ctx.sessionID, { steps: [step], from: result.url, to: result.url }),
+          )
           return {
-            output: BrowserPage.outline(tab, result),
+            output: [arrived.output, ...extra].join("\n"),
             title: result.title || result.url,
-            metadata: { action, url: result.url, refs: result.refs, page: "outline" },
+            metadata: {
+              action,
+              url: result.url,
+              refs: result.refs,
+              page: "outline",
+              ...(arrived.partial ? { partial: true } : {}),
+            },
           }
         }).pipe(Effect.orDie),
     }

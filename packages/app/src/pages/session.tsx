@@ -2393,7 +2393,7 @@ export default function Page() {
                   <SessionPanelFrame
                     newLayout
                     raised={!!params.id}
-                    working={!!params.id && busy(params.id) && settings.appearance.chromaGlow()}
+                    working={!!params.id && busy(params.id) && settings.appearance.chromaGlow() && !settings.appearance.lite()}
                   >
                     <ErrorBoundary fallback={sessionErrorFallback}>{sessionPanelContent()}</ErrorBoundary>
                   </SessionPanelFrame>

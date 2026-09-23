@@ -187,6 +187,15 @@ const ScopeSettings = () => {
   return (
     <>
       <SettingsRowV2
+        title={language.t("settings.general.row.lite.title")}
+        description={language.t("settings.general.row.lite.description")}
+      >
+        <div data-action="settings-lite">
+          <Switch checked={settings.appearance.lite()} onChange={(checked) => settings.appearance.setLite(checked)} />
+        </div>
+      </SettingsRowV2>
+
+      <SettingsRowV2
         title={language.t("settings.general.row.chroma.title")}
         description={language.t("settings.general.row.chroma.description")}
       >

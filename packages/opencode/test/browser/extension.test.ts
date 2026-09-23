@@ -181,6 +181,36 @@ describe("browser service in extension mode", () => {
   )
 
   it.instance(
+    "a tab a driven page opens is followed, and one the person opens is not",
+    () =>
+      Effect.gen(function* () {
+        const { bridge } = pairFakeExtension()
+        const browser = yield* Browser.Service
+        const tab = yield* browser.tab()
+        const since = Date.now()
+
+        // The person opens a tab of their own: the agent stays where it is.
+        bridge.receive(
+          JSON.stringify({ type: "target", event: "created", target: { targetId: "20", url: "", active: true } }),
+        )
+        // A target=_blank link on the agent's page opens another.
+        bridge.receive(
+          JSON.stringify({
+            type: "target",
+            event: "created",
+            target: { targetId: "21", url: "https://example.com/material", active: true, opener: tab.targetId },
+          }),
+        )
+        const opened = yield* browser.opened(tab, since, 5000)
+        expect(opened?.targetId).toBe("21")
+        expect((yield* browser.tab()).targetId).toBe("21")
+
+        yield* browser.shutdown()
+      }),
+    30_000,
+  )
+
+  it.instance(
     "a tab showing a PDF does not leave the agent stuck",
     () =>
       Effect.gen(function* () {
@@ -219,29 +249,157 @@ describe("browser service in extension mode", () => {
 })
 
 /**
+ * Loads the extension's service worker with enough of `chrome` to reach the end
+ * of the file, and a fake WebSocket that records every socket it opens. Without
+ * a token it never opens one.
+ */
+function loadRelay(stored: { token?: string; port?: number } = {}) {
+  const source = fs.readFileSync(path.join(import.meta.dir, "../../../../browser-extension/background.js"), "utf8")
+  const hub = () => {
+    const listeners: ((...args: unknown[]) => void)[] = []
+    return {
+      addListener: (fn: (...args: unknown[]) => void) => listeners.push(fn),
+      fire: (...args: unknown[]) => listeners.forEach((fn) => fn(...args)),
+    }
+  }
+  const sockets: FakeSocket[] = []
+  class FakeSocket {
+    static CONNECTING = 0
+    static OPEN = 1
+    static CLOSING = 2
+    static CLOSED = 3
+    readyState = 0
+    sent: unknown[] = []
+    private listeners = new Map<string, ((event?: unknown) => void)[]>()
+    constructor(readonly url: string) {
+      sockets.push(this)
+    }
+    addEventListener(type: string, fn: (event?: unknown) => void) {
+      this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn])
+    }
+    send(data: string) {
+      this.sent.push(JSON.parse(data))
+    }
+    open() {
+      this.readyState = 1
+      this.emit("open")
+    }
+    close() {
+      if (this.readyState === 3) return
+      this.readyState = 3
+      this.emit("close")
+    }
+    private emit(type: string, event?: unknown) {
+      for (const fn of this.listeners.get(type) ?? []) fn(event)
+    }
+  }
+  const data: Record<string, unknown> = { ...stored }
+  const onChanged = hub()
+  const onStartup = hub()
+  const chrome = {
+    storage: {
+      local: {
+        get: async () => ({ ...data }),
+        set: async (values: Record<string, unknown>) => {
+          const changes = Object.fromEntries(
+            Object.entries(values).map(([key, value]) => [key, { oldValue: data[key], newValue: value }]),
+          )
+          Object.assign(data, values)
+          onChanged.fire(changes, "local")
+        },
+      },
+      onChanged,
+    },
+    alarms: { create: () => {}, onAlarm: hub() },
+    debugger: { onEvent: hub(), onDetach: hub() },
+    tabs: { onCreated: hub(), onUpdated: hub(), onActivated: hub(), onRemoved: hub() },
+    runtime: { onMessage: hub(), onStartup, onInstalled: hub() },
+  }
+  const load = new Function("chrome", "WebSocket", `${source}\nreturn { prune }`) as (
+    chrome: unknown,
+    socket: unknown,
+  ) => { prune: (params: unknown, paths: readonly string[]) => Record<string, any> }
+  return {
+    ...load(chrome, FakeSocket),
+    sockets,
+    data,
+    startup: () => onStartup.fire(),
+    created: (tab: Record<string, unknown>) => chrome.tabs.onCreated.fire(tab),
+    save: (values: Record<string, unknown>) => chrome.storage.local.set(values),
+  }
+}
+
+/** Lets the worker's pending promises and retry timers run. */
+const pause = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms))
+
+describe("the extension relay's connection", () => {
+  test("its start and the browser's startup event open one socket, not two", async () => {
+    const relay = loadRelay({ token: "t", port: 4919 })
+    relay.startup()
+    await pause()
+    expect(relay.sockets).toHaveLength(1)
+    relay.sockets[0]!.open()
+    expect(relay.sockets[0]!.sent[0]).toEqual({ type: "auth", token: "t" })
+  })
+
+  test("a saved port that no longer answers falls back to the default, and remembers it", async () => {
+    const relay = loadRelay({ token: "t", port: 57646 })
+    await pause()
+    expect(relay.sockets[0]!.url).toContain(":57646/")
+    relay.sockets[0]!.close()
+    await pause(700)
+    const second = relay.sockets[1]!
+    expect(second.url).toContain(":4919/")
+    second.open()
+    await pause()
+    expect(relay.data["port"]).toBe(4919)
+    // Remembering the port it is already on must not make it reconnect.
+    await pause(700)
+    expect(relay.sockets).toHaveLength(2)
+    expect(second.readyState).toBe(1)
+  })
+
+  test("a new tab says which tab opened it, so the agent can follow its own link there", async () => {
+    const relay = loadRelay({ token: "t", port: 4919 })
+    await pause()
+    const socket = relay.sockets[0]!
+    socket.open()
+    relay.created({ id: 21, openerTabId: 7, pendingUrl: "https://example.com/material", active: true })
+    relay.created({ id: 22, url: "", active: true })
+    const created = socket.sent.filter((message: any) => message.type === "target") as any[]
+    expect(created[0].target).toEqual({
+      targetId: "21",
+      url: "https://example.com/material",
+      title: "",
+      active: true,
+      opener: "7",
+    })
+    expect(created[1].target.opener).toBeUndefined()
+  })
+
+  test("pairing again replaces the socket once, and the old one closing opens no third", async () => {
+    const relay = loadRelay({ token: "t", port: 4919 })
+    await pause()
+    const first = relay.sockets[0]!
+    first.open()
+    await relay.save({ token: "new" })
+    await pause()
+    expect(first.readyState).toBe(3)
+    expect(relay.sockets).toHaveLength(2)
+    relay.sockets[1]!.open()
+    await pause(700)
+    expect(relay.sockets).toHaveLength(2)
+    expect(relay.sockets[1]!.sent[0]).toEqual({ type: "auth", token: "new" })
+  })
+})
+
+/**
  * The relay in `browser-extension/background.js` keeps only the fields
  * `protocol.ts` asks for. That table is the one place saying what the engine
  * reads, and nothing type-checks it against the plain JavaScript that applies
  * it, so the extension's own function is loaded here and held to it.
  */
 describe("the extension relay's pruning", () => {
-  /** Loads the service worker with enough of `chrome` to reach the end of the file. */
-  function loadRelay() {
-    const source = fs.readFileSync(path.join(import.meta.dir, "../../../../browser-extension/background.js"), "utf8")
-    const listener = () => ({ addListener: () => {} })
-    const chrome = {
-      // No token, so it never opens a socket.
-      storage: { local: { get: async () => ({}) }, onChanged: listener() },
-      debugger: { onEvent: listener(), onDetach: listener() },
-      tabs: { onCreated: listener(), onUpdated: listener(), onActivated: listener(), onRemoved: listener() },
-      runtime: { onMessage: listener(), onStartup: listener(), onInstalled: listener() },
-    }
-    const load = new Function("chrome", `${source}\nreturn { prune }`) as (chrome: unknown) => {
-      prune: (params: unknown, paths: readonly string[]) => Record<string, any>
-    }
-    return load(chrome)
-  }
-
   test("a response keeps what the tab reads and drops the rest", () => {
     const { prune } = loadRelay()
     const event = {

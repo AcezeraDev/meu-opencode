@@ -963,6 +963,45 @@ it.instance(
   { git: true },
 )
 
+it.instance(
+  "ask - an interrupted request is withdrawn with a replied event, so clients stop showing it",
+  () =>
+    Effect.gen(function* () {
+      const events = yield* EventV2Bridge.Service
+      const seen = yield* Deferred.make<{ requestID: PermissionV1.ID; reply: PermissionV1.Reply }>()
+      const unsub = yield* events.listen((event) => {
+        if (event.type === Permission.Event.Replied.type)
+          Deferred.doneUnsafe(seen, Effect.succeed(event.data as { requestID: PermissionV1.ID; reply: PermissionV1.Reply }))
+        return Effect.void
+      })
+      yield* Effect.addFinalizer(() => unsub)
+
+      const fiber = yield* ask({
+        id: PermissionV1.ID.make("per_abort"),
+        sessionID: SessionID.make("session_test"),
+        permission: "browser",
+        patterns: ["https://example.com/"],
+        metadata: {},
+        always: [],
+        ruleset: [],
+      }).pipe(Effect.forkScoped)
+      yield* waitForPending(1)
+
+      // What aborting the session does to the tool that is waiting.
+      yield* Fiber.interrupt(fiber)
+      expect(yield* list()).toHaveLength(0)
+      expect(
+        yield* Deferred.await(seen).pipe(
+          Effect.timeoutOrElse({
+            duration: "1 second",
+            orElse: () => Effect.fail(new Error("timed out waiting for permission replied event")),
+          }),
+        ),
+      ).toMatchObject({ requestID: PermissionV1.ID.make("per_abort"), reply: "reject" })
+    }),
+  { git: true },
+)
+
 it.live("permission requests stay isolated by directory", () =>
   Effect.gen(function* () {
     const one = yield* tmpdirScoped({ git: true })

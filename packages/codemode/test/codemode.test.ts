@@ -1161,3 +1161,36 @@ describe("CodeMode public contract", () => {
     expect(() => CodeMode.make({ tools: { $codemode: { lookup } } })).toThrow(/reserved for CodeMode discovery tools/)
   })
 })
+
+describe("CodeMode tool arguments", () => {
+  const execute = (tool: Tool.Definition<never>, code: string) =>
+    Effect.runPromise(CodeMode.make({ tools: { host: { call: tool } } }).execute(code))
+
+  test("a call without arguments passes an empty input object", async () => {
+    const result = await execute(
+      Tool.make({ description: "No inputs", input: Schema.Struct({}), run: () => Effect.succeed("ran") }),
+      "return await tools.host.call()",
+    )
+    expect(result.ok ? result.value : result.error).toBe("ran")
+  })
+
+  test("a tool with required fields still rejects a call without arguments", async () => {
+    const result = await execute(
+      Tool.make({
+        description: "Needs an id",
+        input: Schema.Struct({ id: Schema.String }),
+        run: () => Effect.succeed("ran"),
+      }),
+      "return await tools.host.call()",
+    )
+    expect(result.ok ? undefined : result.error.kind).toBe("InvalidToolInput")
+  })
+
+  test("more than one argument is still refused", async () => {
+    const result = await execute(
+      Tool.make({ description: "No inputs", input: Schema.Struct({}), run: () => Effect.succeed("ran") }),
+      "return await tools.host.call({}, {})",
+    )
+    expect(result.ok ? undefined : result.error.kind).toBe("InvalidToolInput")
+  })
+})

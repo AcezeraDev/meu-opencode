@@ -102,8 +102,7 @@ function results(messages: Awaited<ReturnType<typeof MessageV2.toModelMessages>>
     for (const part of message.content) {
       if (part.type !== "tool-result") continue
       const value = part.output as { type: string; value: unknown }
-      out[part.toolCallId] =
-        value.type === "text" ? String(value.value) : JSON.stringify(value.value)
+      out[part.toolCallId] = value.type === "text" ? String(value.value) : JSON.stringify(value.value)
     }
   }
   return out
@@ -113,7 +112,12 @@ const pdf = `data:application/pdf;base64,${Buffer.from(makePdf(["Plano de aula",
 
 describe("PDFs for models that cannot read them", () => {
   test("a PDF the user attached reaches the model as its text", async () => {
-    const input = [user("u1", [{ type: "text", text: "resuma" }, { type: "file", mime: "application/pdf", filename: "aula.pdf", url: pdf }])]
+    const input = [
+      user("u1", [
+        { type: "text", text: "resuma" },
+        { type: "file", mime: "application/pdf", filename: "aula.pdf", url: pdf },
+      ]),
+    ]
     const messages = await MessageV2.toModelMessages(input, modelWith(false))
     const content = JSON.stringify(messages)
     expect(content).toContain("Exercicios de fixacao")
@@ -144,7 +148,8 @@ describe("PDFs for models that cannot read them", () => {
 })
 
 describe("old views of the browser page", () => {
-  const big = (label: string) => `url: https://moodle.test/\ntitle: ${label}\n\n` + "- text: linha do curso\n".repeat(60)
+  const big = (label: string) =>
+    `url: https://moodle.test/\ntitle: ${label}\n\n` + "- text: linha do curso\n".repeat(60)
 
   test("only the latest outline and what follows it are sent in full", async () => {
     const input = [
@@ -185,6 +190,36 @@ describe("old views of the browser page", () => {
     expect(out["new"]).toContain("nova")
   })
 
+  test("an outline that left out repeated menus keeps the last whole one it leans on", async () => {
+    const input = [
+      user("u1", [{ type: "text", text: "faca as atividades" }]),
+      assistant("a1", "u1", [
+        tool("whole", "browser_navigate", big("com menu"), { refs: 40, page: "outline" }),
+        tool("page2", "browser_act", big("aula 2"), { refs: 20, page: "outline", partial: true }),
+        tool("page3", "browser_act", big("aula 3"), { refs: 20, page: "outline", partial: true }),
+      ]),
+    ]
+    const out = results(await MessageV2.toModelMessages(input, modelWith(false)))
+    expect(out["whole"]).toContain("com menu")
+    expect(out["page2"]).toContain("cleared")
+    expect(out["page3"]).toContain("aula 3")
+  })
+
+  test("what a site is remembered for stays when the page view it came with is cleared", async () => {
+    const memory = '<site-memory host="moodle.test">\n1. O botão Enviar tudo pede confirmação.\n</site-memory>'
+    const input = [
+      user("u1", [{ type: "text", text: "faca as atividades" }]),
+      assistant("a1", "u1", [
+        tool("first", "browser_navigate", `${big("Semana 15")}\n\n${memory}`, { refs: 40, page: "outline" }),
+        tool("next", "browser_navigate", big("Semana 16"), { refs: 50, page: "outline" }),
+      ]),
+    ]
+    const out = results(await MessageV2.toModelMessages(input, modelWith(false)))
+    expect(out["first"]).toContain("cleared")
+    expect(out["first"]).not.toContain("Semana 15")
+    expect(out["first"]).toContain("O botão Enviar tudo pede confirmação.")
+  })
+
   test("a text read does not replace the outline the refs came from", async () => {
     const input = [
       user("u1", [{ type: "text", text: "leia" }]),
@@ -201,7 +236,19 @@ describe("old views of the browser page", () => {
 
 describe("session titles", () => {
   test("a greeting is not what a session is about", () => {
-    for (const text of ["oi", "oie", "oioi", "eae", "e aí", "opa", "Olá!", "oi, tudo bem?", "bom dia", "eae mano, beleza?", "o"]) {
+    for (const text of [
+      "oi",
+      "oie",
+      "oioi",
+      "eae",
+      "e aí",
+      "opa",
+      "Olá!",
+      "oi, tudo bem?",
+      "bom dia",
+      "eae mano, beleza?",
+      "o",
+    ]) {
       expect(Session.isGreeting(text)).toBe(true)
     }
     for (const text of [

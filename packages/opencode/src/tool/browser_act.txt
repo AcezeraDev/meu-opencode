@@ -64,6 +64,9 @@ instead of clicking whatever took its place.
 
 If an element is covered by a banner, a popup or an ad, the action fails and
 says what covers it: close that first (look for its close or "X" button).
+A cookie or consent banner is answered with the choice that declines what is
+not essential ("Reject all", "Only necessary", "Recusar", "Rejeitar"), not
+"Accept all", unless the user asked otherwise; the page works either way.
 Dialogs the page opens (alert, confirm, "leave this page?") are answered
 automatically, and the result says what they said.
 

@@ -53,7 +53,13 @@ export { isMedia }
  * metadata with `page`: a full `outline` (with refs), a `change` to the last
  * one, a `text` read, a `screenshot` or a `pdf`.
  */
-const PAGE_TOOLS = new Set(["browser_navigate", "browser_snapshot", "browser_act", "browser_batch", "browser_screenshot"])
+const PAGE_TOOLS = new Set([
+  "browser_navigate",
+  "browser_snapshot",
+  "browser_act",
+  "browser_batch",
+  "browser_screenshot",
+])
 /** Below this, a stale result costs less than the cache it would invalidate. */
 const STALE_PAGE_MIN_CHARS = 400
 const STALE_PAGE_TEXT = "[Earlier view of the browser page, cleared: a newer outline of the page comes later.]"
@@ -66,7 +72,7 @@ const STALE_PAGE_TEXT = "[Earlier view of the browser page, cleared: a newer out
  * page, and a text read does not replace an outline, which carries the refs.
  */
 function stalePageReads(input: WithParts[]) {
-  const reads: { id: string; outline: boolean; clearable: boolean }[] = []
+  const reads: { id: string; outline: boolean; partial: boolean; clearable: boolean }[] = []
   for (const msg of input) {
     for (const part of msg.parts) {
       if (part.type !== "tool" || !PAGE_TOOLS.has(part.tool) || part.state.status !== "completed") continue
@@ -84,11 +90,32 @@ function stalePageReads(input: WithParts[]) {
               : undefined
       if (!page || page === "pdf") continue
       const size = part.state.output.length + (part.state.attachments?.length ?? 0) * STALE_PAGE_MIN_CHARS
-      reads.push({ id: part.id, outline: page === "outline", clearable: size >= STALE_PAGE_MIN_CHARS })
+      reads.push({
+        id: part.id,
+        outline: page === "outline",
+        partial: metadata["partial"] === true,
+        clearable: size >= STALE_PAGE_MIN_CHARS,
+      })
     }
   }
   const last = reads.findLastIndex((read) => read.outline)
-  return new Set(reads.slice(0, Math.max(0, last)).flatMap((read) => (read.clearable ? [read.id] : [])))
+  // An outline that left out the menus it repeats leans on the last whole
+  // one, whose refs still work, so that one stays.
+  const anchor = reads[last]?.partial
+    ? reads.findLastIndex((read, index) => index < last && read.outline && !read.partial)
+    : -1
+  return new Set(
+    reads.slice(0, Math.max(0, last)).flatMap((read, index) => (read.clearable && index !== anchor ? [read.id] : [])),
+  )
+}
+
+/**
+ * What a site is remembered for, which rides along with the page view the
+ * agent first landed on (see `BrowserSite`). It is said once per session, so
+ * clearing that old view must not take it along.
+ */
+function siteMemories(output: string) {
+  return output.match(/<site-memory host="[^"]*">[\s\S]*?<\/site-memory>/g) ?? []
 }
 
 /** Extracted PDF text by content hash, so replaying a conversation does not parse the same file on every step. */
@@ -373,9 +400,9 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
           if (part.state.status === "completed") {
             const cleared = part.state.time.compacted || stale.has(part.id)
             let outputText = part.state.time.compacted
-              ? "[Old tool result content cleared]"
+              ? ["[Old tool result content cleared]", ...siteMemories(part.state.output)].join("\n")
               : stale.has(part.id)
-                ? STALE_PAGE_TEXT
+                ? [STALE_PAGE_TEXT, ...siteMemories(part.state.output)].join("\n")
                 : truncateToolOutput(part.state.output, options?.toolOutputMaxChars)
             let attachments = cleared || options?.stripMedia ? [] : (part.state.attachments ?? [])
             // A model that cannot take PDF files gets the text of one a tool returned.

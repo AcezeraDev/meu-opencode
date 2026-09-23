@@ -84,6 +84,11 @@ async function build() {
     OPENCODE_PERSONAL_BUN: process.execPath,
     OPENCODE_PERSONAL_SOURCE_TIME: String(sourceTime),
     CSC_IDENTITY_AUTO_DISCOVERY: "false",
+    // electron-builder packs the app for its NSIS installer with 7-Zip at -mx=9
+    // whatever `compression` says (that only turns NSIS's own pass off); this is
+    // the one knob it reads for the level. Measured: ~40 s less per build, for
+    // an installer that is only run on this PC (157 MB instead of 133 MB).
+    ELECTRON_BUILDER_COMPRESSION_LEVEL: "0",
   }
 
   try {

@@ -19,6 +19,8 @@ import { BrowserActTool } from "./browser_act"
 import { BrowserBatchTool } from "./browser_batch"
 import { BrowserScreenshotTool } from "./browser_screenshot"
 import { BrowserInspectTool } from "./browser_inspect"
+import { BrowserScriptTool } from "./browser_script"
+import { BrowserNotesTool } from "./browser_notes"
 import { Browser } from "@/browser/session"
 import { BrowserInstall } from "@/browser/install"
 import { WebVideoTool } from "./web-video"
@@ -87,6 +89,8 @@ const BROWSER_TOOL_IDS = new Set<string>([
   BrowserBatchTool.id,
   BrowserScreenshotTool.id,
   BrowserInspectTool.id,
+  BrowserScriptTool.id,
+  BrowserNotesTool.id,
 ])
 
 type TaskDef = Tool.InferDef<typeof TaskTool>
@@ -138,6 +142,8 @@ const layer = Layer.effect(
     const browserBatch = yield* BrowserBatchTool
     const browserScreenshot = yield* BrowserScreenshotTool
     const browserInspect = yield* BrowserInspectTool
+    const browserScript = yield* BrowserScriptTool
+    const browserNotes = yield* BrowserNotesTool
     const webvideo = yield* WebVideoTool
     const websearch = yield* WebSearchTool
     const shell = yield* ShellTool
@@ -255,6 +261,8 @@ const layer = Layer.effect(
           browserBatch: Tool.init(browserBatch),
           browserScreenshot: Tool.init(browserScreenshot),
           browserInspect: Tool.init(browserInspect),
+          browserScript: Tool.init(browserScript),
+          browserNotes: Tool.init(browserNotes),
           video: Tool.init(webvideo),
           todo: Tool.init(todo),
           search: Tool.init(websearch),
@@ -285,6 +293,8 @@ const layer = Layer.effect(
             tool.browserBatch,
             tool.browserScreenshot,
             tool.browserInspect,
+            tool.browserScript,
+            tool.browserNotes,
             tool.video,
             tool.todo,
             tool.search,

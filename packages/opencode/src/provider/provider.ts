@@ -31,6 +31,7 @@ import { ModelV2 } from "@opencode-ai/core/model"
 import { ModelStatus } from "./model-status"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { ProviderError } from "./error"
+import { Roteia } from "./roteia"
 
 const OPENAI_HEADER_TIMEOUT_DEFAULT = 300_000
 
@@ -882,6 +883,19 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
         options: {},
       }
     }),
+    // Its models are not on models.dev; they come from Roteia's own /v1/models.
+    roteia: Effect.fnUntraced(function* (input: Info) {
+      const env = yield* dep.env()
+      const auth = yield* dep.auth(input.id)
+      const apiKey =
+        (auth?.type === "api" ? auth.key : undefined) ??
+        input.env.map((item) => env[item]).find(Boolean) ??
+        (typeof input.options?.apiKey === "string" ? input.options.apiKey : undefined)
+      return {
+        autoload: false,
+        discoverModels: () => Roteia.discover(apiKey),
+      }
+    }),
     cerebras: () =>
       Effect.succeed({
         autoload: false,
@@ -1135,7 +1149,12 @@ export function toPublicInfo(provider: Info): Info {
 }
 
 export function defaultModelIDs<T extends { models: Record<string, { id: string }> }>(providers: Record<string, T>) {
-  return mapValues(providers, (item) => sort(Object.values(item.models))[0].id)
+  // A provider can be listed before it has models (Roteia's come from its API
+  // once a key is set); it has no default, and must not take the list down.
+  return mapValues(
+    pickBy(providers, (item) => Object.keys(item.models).length > 0),
+    (item) => sort(Object.values(item.models))[0]!.id,
+  )
 }
 
 export class ModelNotFoundError extends Schema.TaggedErrorClass<ModelNotFoundError>()("ProviderModelNotFoundError", {
@@ -1401,7 +1420,7 @@ const layer = Layer.effect(
       Effect.gen(function* () {
         const bridge = yield* EffectBridge.make()
         const cfg = yield* config.get()
-        const modelsDev = yield* modelsDevSvc.get()
+        const modelsDev = Roteia.withCatalog(yield* modelsDevSvc.get())
         const catalog = mapValues(modelsDev, fromModelsDevProvider)
         const database = mapValues(catalog, toPublicInfo)
 
@@ -1654,14 +1673,15 @@ const layer = Layer.effect(
           mergeProvider(providerID, partial)
         }
 
-        const gitlab = ProviderV2.ID.make("gitlab")
-        if (discoveryLoaders[gitlab] && providers[gitlab] && isProviderAllowed(gitlab)) {
+        for (const [id, discover] of Object.entries(discoveryLoaders)) {
+          const providerID = ProviderV2.ID.make(id)
+          if (!providers[providerID] || !isProviderAllowed(providerID)) continue
           yield* Effect.promise(async () => {
             try {
-              const discovered = await discoveryLoaders[gitlab]()
+              const discovered = await discover()
               for (const [modelID, model] of Object.entries(discovered)) {
-                if (!providers[gitlab].models[modelID]) {
-                  providers[gitlab].models[modelID] = model
+                if (!providers[providerID].models[modelID]) {
+                  providers[providerID].models[modelID] = model
                 }
               }
             } catch (e) {}

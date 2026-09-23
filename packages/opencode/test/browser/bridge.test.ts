@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
 import { Bridge, type TargetEvent } from "@/browser/bridge"
+import { ReplacedError, type CDPTransport } from "@/browser/cdp"
+import { PageReplacedError, Tab } from "@/browser/tab"
 import { TAB_EVENTS } from "@/browser/protocol"
 
 /**
@@ -193,6 +195,45 @@ describe("browser bridge", () => {
     expect(h.bridge.connection("5")).toBe(fresh)
   })
 
+  test("answers the extension's ping, so it can tell a live socket from a half-open one", () => {
+    const h = harness()
+    h.auth()
+    h.bridge.receive(JSON.stringify({ type: "ping" }))
+    expect(h.last()).toEqual({ type: "pong" })
+  })
+
+  test("a newer socket closes the older one, and the older one closing late leaves the newer alone", () => {
+    const bridge = new Bridge("secret")
+    let oldClosed = false
+    const old = bridge.accept(
+      () => {},
+      () => {
+        oldClosed = true
+      },
+    )
+    old.receive(JSON.stringify({ type: "auth", token: "secret" }))
+    expect(bridge.connected).toBe(true)
+
+    // A restarted extension worker opens a second socket before the first is gone.
+    const sent: any[] = []
+    const fresh = bridge.accept(
+      (message) => sent.push(message),
+      () => {},
+    )
+    expect(oldClosed).toBe(true)
+    fresh.receive(JSON.stringify({ type: "auth", token: "secret" }))
+    expect(bridge.connected).toBe(true)
+
+    // The first socket's messages and its close no longer reach the bridge.
+    old.receive(JSON.stringify({ type: "ping" }))
+    expect(sent).toHaveLength(0)
+    old.disconnect()
+    expect(bridge.connected).toBe(true)
+
+    fresh.disconnect()
+    expect(bridge.connected).toBe(false)
+  })
+
   test("disconnecting fails in-flight calls and closes tabs", async () => {
     const h = harness()
     h.auth()
@@ -202,5 +243,114 @@ describe("browser bridge", () => {
     await expect(inflight).rejects.toThrow(/disconnected/)
     expect(h.bridge.connected).toBe(false)
     expect(tab.connected).toBe(false)
+  })
+})
+
+/**
+ * A transport whose `Runtime.evaluate` can be left unanswered, the way the
+ * extension leaves a script that was running when its page was replaced.
+ */
+function silentTransport() {
+  const handlers = new Map<string, Set<(params: Record<string, unknown>) => void>>()
+  const held: ((value: unknown) => void)[] = []
+  let silent = false
+  const transport: CDPTransport = {
+    connected: true,
+    connect: async () => {},
+    close: () => {},
+    once: () => new Promise(() => {}),
+    on: (method, handler) => {
+      const set = handlers.get(method) ?? new Set()
+      handlers.set(method, set)
+      set.add(handler)
+      return () => set.delete(handler)
+    },
+    send: async <T>(method: string) => {
+      if (method !== "Runtime.evaluate") return {} as T
+      if (silent) return new Promise<T>((resolve) => held.push(resolve as (value: unknown) => void))
+      return { result: { value: { width: 800, height: 600 } } } as T
+    },
+  }
+  return {
+    transport,
+    silence: () => {
+      silent = true
+    },
+    answer: (value: unknown) => held.splice(0).forEach((resolve) => resolve({ result: { value } })),
+    emit: (method: string, params: Record<string, unknown>) =>
+      handlers.get(method)?.forEach((handler) => handler(params)),
+  }
+}
+
+describe("a script on a page that is replaced", () => {
+  test("stops waiting soon after the new document commits, instead of the whole call timeout", async () => {
+    const fake = silentTransport()
+    const tab = await Tab.attachTransport("t", "1", fake.transport)
+    fake.silence()
+    const started = Date.now()
+    const pending = tab.evaluate("document.title").then(
+      () => "answered",
+      (error: unknown) => error,
+    )
+    fake.emit("Page.frameNavigated", { frame: { id: "main", url: "https://example.com/next" } })
+    expect(await pending).toBeInstanceOf(PageReplacedError)
+    expect(Date.now() - started).toBeLessThan(5000)
+  })
+
+  test("keeps waiting when only a frame inside the page navigates", async () => {
+    const fake = silentTransport()
+    const tab = await Tab.attachTransport("t", "1", fake.transport)
+    fake.silence()
+    const pending = tab.evaluate<string>("document.title")
+    fake.emit("Page.frameNavigated", { frame: { id: "ad", parentId: "main", url: "https://ads.example/" } })
+    await new Promise((resolve) => setTimeout(resolve, 2600))
+    fake.answer("still here")
+    expect(await pending).toBe("still here")
+  })
+})
+
+describe("a command through the extension when the page moves on", () => {
+  const navigated = (h: ReturnType<typeof harness>, frame: Record<string, unknown>) =>
+    h.bridge.receive(JSON.stringify({ type: "event", targetId: "7", method: "Page.frameNavigated", params: { frame } }))
+
+  test("a press the browser never answers counts as delivered soon after the new document commits", async () => {
+    const h = harness()
+    h.auth()
+    const connection = h.bridge.connection("7")
+    const started = Date.now()
+    const press = connection.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: 1, y: 1 })
+    expect(connection.busy).toBe(1)
+    navigated(h, { id: "main", url: "https://example.com/next" })
+    expect(await press).toEqual({})
+    expect(Date.now() - started).toBeLessThan(5000)
+    expect(connection.busy).toBe(0)
+    expect(connection.takeSlow?.()).toEqual([
+      expect.objectContaining({ method: "Input.dispatchMouseEvent", outcome: "replaced" }),
+    ])
+    expect(connection.takeSlow?.()).toEqual([])
+  })
+
+  test("a script the old page never answers fails as replaced instead of waiting out the call timeout", async () => {
+    const h = harness()
+    h.auth()
+    const connection = h.bridge.connection("7")
+    const script = connection.send("Runtime.evaluate", { expression: "1" }).then(
+      () => "answered",
+      (error: unknown) => error,
+    )
+    navigated(h, { id: "main", url: "https://example.com/next" })
+    expect(await script).toBeInstanceOf(ReplacedError)
+  })
+
+  test("an answer that arrives in time is kept, and a frame inside the page moving changes nothing", async () => {
+    const h = harness()
+    h.auth()
+    const connection = h.bridge.connection("7")
+    const script = connection.send<{ value: number }>("Runtime.evaluate", { expression: "1" })
+    const id = h.last().id
+    navigated(h, { id: "ad", parentId: "main", url: "https://ads.example/" })
+    await new Promise((resolve) => setTimeout(resolve, 2300))
+    h.reply(id, { value: 1 })
+    expect(await script).toEqual({ value: 1 })
   })
 })

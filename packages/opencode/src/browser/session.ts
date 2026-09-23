@@ -77,6 +77,8 @@ const CAST_HEADROOM = 1.5
 
 const DEFAULT_TIMEOUT = 30_000
 const DEFAULT_VIEWPORT = { width: 1280, height: 800 }
+/** How long the agent waits for a paired extension that is between sockets; it retries every few seconds. */
+const EXTENSION_WAIT = 10_000
 /** How long to wait for the browser to publish its debugging port. */
 const STARTUP_TIMEOUT = 30_000
 /** Navigations fire several events in a burst; the address bar needs one update. */
@@ -86,12 +88,51 @@ const HANDOFF_REPEAT = 10 * 60_000
 /** How long a browser being started for a handoff gets to report a failure. */
 const HANDOFF_START = 3000
 
+/**
+ * Ad, tracker and analytics hosts, failed in the tabs the agent drives. They
+ * keep a page loading and its network busy after it is readable, which the
+ * wait after each action counts. Nothing a page needs to work is on it.
+ */
+const BLOCKED_HOSTS = [
+  "doubleclick.net",
+  "googlesyndication.com",
+  "googleadservices.com",
+  "adservice.google.com",
+  "google-analytics.com",
+  "googletagmanager.com",
+  "googletagservices.com",
+  "connect.facebook.net",
+  "amazon-adsystem.com",
+  "adnxs.com",
+  "criteo.com",
+  "criteo.net",
+  "taboola.com",
+  "outbrain.com",
+  "scorecardresearch.com",
+  "quantserve.com",
+  "hotjar.com",
+  "clarity.ms",
+  "mc.yandex.ru",
+  "bat.bing.com",
+  "analytics.tiktok.com",
+  "ads.linkedin.com",
+  "pubmatic.com",
+  "rubiconproject.com",
+  "openx.net",
+  "smartadserver.com",
+  "moatads.com",
+  "adsrvr.org",
+  "nr-data.net",
+].flatMap((host) => [host, `*.${host}`])
+
 interface State {
   process?: ChildProcess
   connection?: CDPConnection
   endpoint?: string
   label?: string
   headless: boolean
+  /** Whether tabs fail requests to `BLOCKED_HOSTS`. */
+  block: boolean
   timeout: number
   viewport: { width: number; height: number }
   profileDir: string
@@ -110,6 +151,8 @@ interface State {
   tabs: Map<string, Tab>
   /** Attachments in flight, so a tab reported twice is only attached once. */
   attaching: Map<string, Promise<Tab>>
+  /** Per tab that opened another (by target id), the tab it opened last and when. */
+  popups: Map<string, { tab: string; at: number }>
   active?: string
   counter: number
   listeners: Set<Listener>
@@ -172,6 +215,11 @@ export interface Interface {
    * debugger off. Resolves to whether the tab is drivable again.
    */
   readonly leavePdf: (tab: Tab) => Effect.Effect<boolean>
+  /**
+   * The tab `opener` opened since `since` (a target=_blank link, a popup), once
+   * it is attached and active, waiting up to `wait` ms for one to show up.
+   */
+  readonly opened: (opener: Tab, since: number, wait: number) => Effect.Effect<Tab | undefined>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Browser") {}
@@ -319,6 +367,7 @@ const layer = Layer.effect(
           // always has an audience there: its cursor shows whether or not the
           // live view is open.
           headless: mode === "extension" ? false : (options.headless ?? true),
+          block: options.block ?? true,
           timeout: options.timeout ?? DEFAULT_TIMEOUT,
           viewport: {
             width: options.viewport?.width ?? DEFAULT_VIEWPORT.width,
@@ -333,6 +382,7 @@ const layer = Layer.effect(
           handed: new Map(),
           tabs: new Map(),
           attaching: new Map(),
+          popups: new Map(),
           counter: 0,
           listeners: new Set(),
         }
@@ -442,6 +492,7 @@ const layer = Layer.effect(
       return {
         // A visible window is an audience too.
         presenting: () => s.listeners.size > 0 || !s.headless,
+        watched: () => s.listeners.size > 0,
         activity: (activity) => emit(s, { type: "activity", activity }),
         changed: () => announceStatus(s),
       }
@@ -556,6 +607,7 @@ const layer = Layer.effect(
           // This also undoes an emulated size a previous version forced on it,
           // which is worth doing on a browser we reconnected to.
           await tab.clearResize()
+          if (s.block) await tab.block(BLOCKED_HOSTS)
           s.tabs.set(tab.id, tab)
           return tab
         })
@@ -565,8 +617,29 @@ const layer = Layer.effect(
     }
 
     /** Reacts to tabs opened, closed or focused in the user's own browser. */
+    /**
+     * Takes over a tab a site opened from one of ours and makes it active, the
+     * way a browser focuses it, and remembers which tab opened it so the action
+     * that did it can report where it went.
+     */
+    function follow(s: State, targetId: string, opener: string, at: number) {
+      return adopt(s, targetId)
+        .then((tab) => {
+          s.active = tab.id
+          s.popups.set(opener, { tab: tab.id, at })
+          changed(s)
+        })
+        .catch(() => {})
+    }
+
     function onBridgeTarget(s: State, event: TargetEvent) {
       const { targetId, url, title, active } = event.target
+      // A tab opened by one the agent drives (a target=_blank link, a popup)
+      // is where its click went, as in the launched browser.
+      const opener = event.target.opener
+      if (event.event === "created" && opener && [...s.tabs.values()].some((tab) => tab.targetId === opener)) {
+        void follow(s, targetId, opener, Date.now())
+      }
       if (event.event === "removed") {
         s.targets = s.targets.filter((t) => t.targetId !== targetId)
         const gone = [...s.tabs.values()].find((tab) => tab.targetId === targetId)
@@ -704,12 +777,7 @@ const layer = Layer.effect(
       connection.on("Target.targetCreated", (params) => {
         const info = asRecord(params["targetInfo"])
         if (asText(info["type"]) !== "page" || !asText(info["openerId"])) return
-        void adopt(s, asText(info["targetId"]))
-          .then((tab) => {
-            s.active = tab.id
-            changed(s)
-          })
-          .catch(() => {})
+        void follow(s, asText(info["targetId"]), asText(info["openerId"]), Date.now())
       })
       // Title changes and single page app navigations (pushState) never fire a
       // load event, but they do change the target, which is what the address
@@ -751,7 +819,14 @@ const layer = Layer.effect(
       const s = yield* InstanceState.get(state)
       if (s.mode === "extension") {
         // The extension is the browser; if it is not paired there is nothing to
-        // drive, and this must never fall back to launching one.
+        // drive, and this must never fall back to launching one. It is often
+        // only between sockets, though: its worker restarted, or it was turned
+        // away before this server knew the pairing token (set just now, when
+        // this state was built), and it retries within a few seconds.
+        const bridge = s.bridge
+        if (bridge && !bridge.connected && bridge.paired) {
+          yield* Effect.promise(() => bridge.whenConnected(EXTENSION_WAIT).catch(() => {}))
+        }
         if (!s.bridge?.connected) {
           yield* Effect.die(
             new BrowserStartError(
@@ -1031,7 +1106,23 @@ const layer = Layer.effect(
       yield* Effect.promise(() => active.input(event).catch(() => {}))
     })
 
+    const opened: Interface["opened"] = Effect.fn("Browser.opened")(function* (
+      opener: Tab,
+      since: number,
+      wait: number,
+    ) {
+      const s = yield* InstanceState.get(state)
+      const find = () => {
+        const popup = s.popups.get(opener.targetId)
+        return popup && popup.at >= since ? s.tabs.get(popup.tab) : undefined
+      }
+      const deadline = Date.now() + wait
+      while (!find() && Date.now() < deadline) yield* Effect.sleep(50)
+      return find()
+    })
+
     return Service.of({
+      opened,
       tab,
       current,
       open,

@@ -1,0 +1,245 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "z-ai/glm-5.3-flash",
+      "object": "model",
+      "created": 1790115952,
+      "owned_by": "z-ai",
+      "name": "GLM 5.3 Flash",
+      "description": "GLM 5.3 Flash, da Z.ai, é um modelo de linguagem disponível pela API da Roteia. Suporta uso de ferramentas, JSON estruturado, leitura de imagens.",
+      "context_length": 1310720,
+      "capabilities": {
+        "audio": false,
+        "tools": true,
+        "vision": true,
+        "streaming": true,
+        "structuredOutputs": true
+      },
+      "architecture": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "endpoint": "/v1/chat/completions",
+      "supported_parameters": [
+        "model",
+        "models",
+        "messages",
+        "stream",
+        "max_tokens",
+        "max_completion_tokens",
+        "temperature",
+        "parallel_tool_calls",
+        "tools",
+        "tool_choice",
+        "response_format"
+      ],
+      "pricing": {
+        "currency": "BRL",
+        "unit": "1M_tokens",
+        "prompt": 0.547934,
+        "completion": 1.826448,
+        "price_per_unit": null,
+        "long_context": null
+      },
+      "status": "available",
+      "updated_at": "2026-09-22T22:25:52.625Z"
+    },
+    {
+      "id": "deepseek/deepseek-v4-flash",
+      "object": "model",
+      "created": 1790115952,
+      "owned_by": "deepseek",
+      "name": "DeepSeek V4 Flash",
+      "description": "DeepSeek V4 Flash, da DeepSeek, é um modelo de linguagem disponível pela API da Roteia. Suporta uso de ferramentas, JSON estruturado, resposta em streaming.",
+      "context_length": 1000000,
+      "capabilities": {
+        "audio": false,
+        "tools": true,
+        "vision": false,
+        "streaming": true,
+        "structuredOutputs": true
+      },
+      "architecture": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "endpoint": "/v1/chat/completions",
+      "supported_parameters": [
+        "model",
+        "models",
+        "messages",
+        "stream",
+        "max_tokens",
+        "max_completion_tokens",
+        "temperature",
+        "parallel_tool_calls",
+        "tools",
+        "tool_choice",
+        "response_format"
+      ],
+      "pricing": {
+        "currency": "BRL",
+        "unit": "1M_tokens",
+        "prompt": 0.647337,
+        "completion": 1.294674,
+        "price_per_unit": null,
+        "long_context": null
+      },
+      "status": "available",
+      "updated_at": "2026-09-22T22:25:52.625Z"
+    },
+    {
+      "id": "x-ai/grok-4.20-multi-agent",
+      "object": "model",
+      "created": 1790115952,
+      "owned_by": "x-ai",
+      "name": "Grok 4.20 Multi-Agent",
+      "description": "Grok 4.20 Multi-Agent, da xAI, é um modelo de linguagem disponível pela API da Roteia. Suporta JSON estruturado, leitura de imagens, resposta em streaming.",
+      "context_length": 2000000,
+      "capabilities": {
+        "audio": false,
+        "tools": false,
+        "vision": true,
+        "streaming": true,
+        "structuredOutputs": true
+      },
+      "architecture": {
+        "input": [
+          "text",
+          "image",
+          "file"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "endpoint": "/v1/chat/completions",
+      "supported_parameters": [
+        "model",
+        "models",
+        "messages",
+        "stream",
+        "max_tokens",
+        "max_completion_tokens",
+        "temperature",
+        "parallel_tool_calls",
+        "response_format"
+      ],
+      "pricing": {
+        "currency": "BRL",
+        "unit": "1M_tokens",
+        "prompt": 9.132239,
+        "completion": 18.264477,
+        "price_per_unit": null,
+        "long_context": {
+          "threshold_tokens": 200000,
+          "prompt": 18.264477,
+          "completion": 36.528954
+        }
+      },
+      "status": "available",
+      "updated_at": "2026-09-22T22:25:52.625Z"
+    },
+    {
+      "id": "openai/text-embedding-3-small",
+      "object": "model",
+      "created": 1790115952,
+      "owned_by": "openai",
+      "name": "Text Embedding 3 Small",
+      "description": "Text Embedding 3 Small, da OpenAI, transforma textos em vetores para busca semântica, RAG e recomendação. Suporta JSON estruturado.",
+      "context_length": 8192,
+      "capabilities": {
+        "audio": false,
+        "tools": false,
+        "vision": false,
+        "streaming": false,
+        "structuredOutputs": true
+      },
+      "architecture": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "embedding"
+        ]
+      },
+      "endpoint": "/v1/embeddings",
+      "supported_parameters": [
+        "model",
+        "input",
+        "dimensions",
+        "encoding_format",
+        "input_type",
+        "user"
+      ],
+      "pricing": {
+        "currency": "BRL",
+        "unit": "1M_tokens",
+        "prompt": 0.146116,
+        "completion": 0,
+        "price_per_unit": null,
+        "long_context": null
+      },
+      "status": "available",
+      "updated_at": "2026-09-22T22:25:52.625Z"
+    },
+    {
+      "id": "google/gemini-3-pro-image",
+      "object": "model",
+      "created": 1790115952,
+      "owned_by": "google",
+      "name": "Nano Banana Pro (Gemini 3 Pro Image)",
+      "description": "Nano Banana Pro (Gemini 3 Pro Image), da Google Gemini, gera imagens a partir de instruções de texto. Suporta uso de ferramentas, JSON estruturado, leitura de imagens.",
+      "context_length": 131072,
+      "capabilities": {
+        "audio": false,
+        "tools": true,
+        "vision": true,
+        "streaming": false,
+        "structuredOutputs": true
+      },
+      "architecture": {
+        "input": [
+          "image",
+          "text"
+        ],
+        "output": [
+          "image",
+          "text"
+        ]
+      },
+      "endpoint": "/v1/images/generations",
+      "supported_parameters": [
+        "model",
+        "prompt",
+        "n",
+        "size",
+        "quality",
+        "response_format",
+        "aspect_ratio",
+        "image_size"
+      ],
+      "pricing": {
+        "currency": "BRL",
+        "unit": "1M_tokens",
+        "prompt": 14.611582,
+        "completion": 876.694896,
+        "price_per_unit": null,
+        "long_context": null
+      },
+      "status": "available",
+      "updated_at": "2026-09-22T22:25:52.625Z"
+    }
+  ]
+}

@@ -69,6 +69,8 @@ import type {
   ExperimentalProjectCopyGenerateNameResponses,
   ExperimentalResourceListErrors,
   ExperimentalResourceListResponses,
+  ExperimentalRoteiaStatusErrors,
+  ExperimentalRoteiaStatusResponses,
   ExperimentalSessionBackgroundErrors,
   ExperimentalSessionBackgroundResponses,
   ExperimentalSessionListErrors,
@@ -1215,6 +1217,44 @@ export class Usage extends HeyApiClient {
   }
 }
 
+export class Roteia extends HeyApiClient {
+  /**
+   * Get Roteia status
+   *
+   * Whether a Roteia API key is configured, where it comes from and how many models it loaded; with `test`, whether Roteia accepts the key.
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      test?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "test" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalRoteiaStatusResponses,
+      ExperimentalRoteiaStatusErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/roteia/status",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Settings extends HeyApiClient {
   /**
    * Update web video defaults
@@ -1866,6 +1906,11 @@ export class Experimental extends HeyApiClient {
   private _usage?: Usage
   get usage(): Usage {
     return (this._usage ??= new Usage({ client: this.client }))
+  }
+
+  private _roteia?: Roteia
+  get roteia(): Roteia {
+    return (this._roteia ??= new Roteia({ client: this.client }))
   }
 
   private _webVideo?: WebVideo

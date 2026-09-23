@@ -1,5 +1,5 @@
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
-import { Match, Show, Switch } from "solid-js"
+import { createSignal, Match, onCleanup, Show, Switch } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { useUpdaterAction } from "./updater-action"
@@ -16,11 +16,26 @@ export function PersonalUpdateButton() {
   const updater = useUpdaterAction()
   const state = () => platform.updater?.state()
   const busy = () => ["checking", "downloading", "installing"].includes(state()?.status ?? "")
+  // Minutes since the build began, kept current while it runs.
+  const [now, setNow] = createSignal(Date.now())
+  const timer = setInterval(() => setNow(Date.now()), 15_000)
+  onCleanup(() => clearInterval(timer))
+
+  /** "Building · interface · 3 min" while a build runs, so a long one plainly moves on. */
+  const building = () => {
+    const current = state()
+    if (current?.status !== "downloading" || !current.step) return language.t("settings.updates.action.building")
+    const minutes = current.started ? Math.max(0, Math.floor((now() - current.started) / 60_000)) : 0
+    return language.t("titlebar.personalUpdate.progress", {
+      step: language.t(`titlebar.personalUpdate.step.${current.step}`),
+      minutes: String(minutes),
+    })
+  }
 
   const label = () => {
     const status = state()?.status
     if (status === "checking") return language.t("settings.updates.action.checking")
-    if (status === "downloading") return language.t("settings.updates.action.building")
+    if (status === "downloading") return building()
     if (status === "ready") return language.t("titlebar.personalUpdate.restart")
     if (status === "installing") return language.t("settings.updates.action.installing")
     return language.t("titlebar.update")

@@ -205,3 +205,23 @@ html[data-chroma-off] [data-chroma] {
   color: var(--chroma) !important;
   background-color: color-mix(in srgb, var(--chroma) 16%, var(--v2-background-bg-layer-02)) !important;
 }
+
+/*
+ * Lightweight mode (on by default): endless animations stop and one-shot ones
+ * finish at once, so nothing keeps the page restyling and repainting every
+ * frame next to the live browser view. The RGB cycle was the worst of them: an
+ * animated custom property restyles every element that reads it, each frame.
+ * Durations are cut to almost nothing rather than removed, so code waiting on
+ * animationend or transitionend (exit animations before unmounting) still hears
+ * it. Spinners stay: they only fade or rotate, which the compositor does alone,
+ * and they are how a wait shows it is still going.
+ */
+html[data-lite] *:not([data-component="spinner"] *, [data-component="loader-v2"], [data-slot="titlebar-update-loader"]),
+html[data-lite] *::before,
+html[data-lite] *::after {
+  animation-duration: 1ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
+  transition-delay: 0s !important;
+}

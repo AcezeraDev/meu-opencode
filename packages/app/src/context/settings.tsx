@@ -50,6 +50,8 @@ export interface Settings {
     chromaSpeed?: ChromaSpeed
     /** RGB trace around the chat while the agent is responding. */
     chromaGlow?: boolean
+    /** Drops the endless animations (RGB cycling, the trace, scans and pulses) to keep the app light. */
+    lite?: boolean
   }
   usage?: {
     /** Daily model spend (USD) that turns the titlebar readout into a warning; 0 disables it. */
@@ -215,6 +217,7 @@ const defaultSettings: Settings = {
     chroma: true,
     chromaSpeed: "medium",
     chromaGlow: true,
+    lite: true,
   },
   usage: {
     dailyLimit: 0,
@@ -503,6 +506,10 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         chromaGlow: withFallback(() => store.appearance?.chromaGlow, true),
         setChromaGlow(value: boolean) {
           setStore("appearance", "chromaGlow", value)
+        },
+        lite: withFallback(() => store.appearance?.lite, true),
+        setLite(value: boolean) {
+          setStore("appearance", "lite", value)
         },
       },
       usage: {

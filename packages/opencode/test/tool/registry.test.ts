@@ -63,6 +63,7 @@ const BROWSER_TOOLS = [
   "browser_act",
   "browser_screenshot",
   "browser_inspect",
+  "browser_script",
 ] as const
 
 /** The shared config layer always returns `{}`, so config-driven cases need their own. */

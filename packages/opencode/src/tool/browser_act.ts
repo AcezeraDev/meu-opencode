@@ -2,6 +2,7 @@ import { Effect, Schema } from "effect"
 import { Browser } from "@/browser/session"
 import { BrowserPage } from "@/browser/page"
 import { ActionVerifier, type Verdict } from "@/browser/verify"
+import { BrowserSite } from "@/browser/site"
 import { BrowserTab } from "@/browser/tab"
 import * as Tool from "./tool"
 import DESCRIPTION from "./browser_act.txt"
@@ -100,11 +101,18 @@ export const BrowserActTool = Tool.define(
 
           const timeout = yield* browser.timeout()
           const before = tab.pdf
+          // Only this action's slow commands are worth reporting with it.
+          tab.takeSlow()
+          // What the step did in words that outlive its ref, for noticing a routine.
+          const step = BrowserSite.describeStep(params, params.ref ? tab.identityOf(params.ref) : undefined)
+          const started = Date.now()
           const outcome = yield* Effect.promise(() =>
-            tab.serialize(() => BrowserPage.perform(tab, params, timeout)).then(
-              (verdict: Verdict) => ({ verdict }),
-              (error: unknown) => ({ failure: error instanceof Error ? error : new Error(String(error)) }),
-            ),
+            tab
+              .serialize(() => BrowserPage.perform(tab, params, timeout))
+              .then(
+                (verdict: Verdict) => ({ verdict }),
+                (error: unknown) => ({ failure: error instanceof Error ? error : new Error(String(error)) }),
+              ),
           )
           const failure = "failure" in outcome ? outcome.failure : undefined
           const verdict = "verdict" in outcome ? outcome.verdict : undefined
@@ -121,6 +129,30 @@ export const BrowserActTool = Tool.define(
             }
           }
           if (failure) throw failure
+
+          const opened = yield* BrowserPage.openedTab(browser, tab, started, verdict)
+          if (opened) {
+            const page = yield* Effect.promise(() => opened.snapshot())
+            const extra = yield* Effect.promise(() =>
+              BrowserSite.aside(ctx.sessionID, { steps: [step], from: url, to: page.url }),
+            )
+            return {
+              output: [
+                `${label}: it opened a new tab, and the browser switched to it. The page it was on is unchanged.`,
+                "",
+                BrowserPage.outline(opened, page),
+                ...extra,
+              ].join("\n"),
+              title: label,
+              metadata: {
+                action: params.action,
+                url: page.url,
+                refs: page.refs,
+                page: "outline",
+                outcome: "navigation",
+              },
+            }
+          }
 
           // A click or a search can land on a captcha as easily as a link can.
           const handed = yield* BrowserPage.handOver(browser, tab)
@@ -140,27 +172,39 @@ export const BrowserActTool = Tool.define(
 
           if (params.snapshot === false) {
             const [current, title] = yield* Effect.promise(() => Promise.all([tab.url(), tab.title()]))
+            const extra = yield* Effect.promise(() =>
+              BrowserSite.aside(ctx.sessionID, { steps: [step], from: url, to: current }),
+            )
             return {
-              output: [done, `url: ${current}`, `title: ${title || "(untitled)"}`].join("\n"),
+              output: [done, `url: ${current}`, `title: ${title || "(untitled)"}`, ...extra].join("\n"),
               title: label,
               metadata: { action: params.action, url: current, outcome: verdict?.outcome },
             }
           }
 
+          const read = Date.now()
           const result = yield* Effect.promise(() => tab.snapshot())
           const change = BrowserPage.changes(tab, result)
           // The outline is the broadest sign there is, and only the tool holds
           // it: an action that looked like it did nothing may well have.
           const told = verdict ? ActionVerifier.withOutline(verdict, change.changed) : undefined
+          const slow = tab.takeSlow()
+          const extra = yield* Effect.promise(() =>
+            BrowserSite.aside(ctx.sessionID, { steps: [step], from: url, to: result.url }),
+          )
           return {
-            output: [told ? ActionVerifier.render(label, told) : done, "", change.output].join("\n"),
+            output: [told ? ActionVerifier.render(label, told) : done, "", change.output, ...extra].join("\n"),
             title: label,
             metadata: {
               action: params.action,
               url: result.url,
               refs: result.refs,
               page: change.full ? "outline" : "change",
+              ...(change.partial ? { partial: true } : {}),
               outcome: told?.outcome,
+              // For diagnosing a slow action later; the model never sees these.
+              timing: { ...tab.timing, snapshot: Date.now() - read, total: Date.now() - started },
+              ...(slow.length ? { slow } : {}),
             },
           }
         }).pipe(Effect.orDie),

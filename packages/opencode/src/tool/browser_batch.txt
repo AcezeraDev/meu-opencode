@@ -12,7 +12,9 @@ Use it whenever you already know the next few steps, for example:
 
 Refs are stable while their element stays on the page, so refs from the last
 output can be used in every step. If a step opens a new page, the refs you had
-are gone: end the batch there and act on the new outline.
+are gone: end the batch there and act on the new outline. A batch that opens a
+new page stops there by itself when later steps use refs, and returns the new
+outline.
 
 The output lists each step's outcome, followed by what changed on the page
 since your last outline (or the whole outline, on a new page).

@@ -91,6 +91,24 @@ describe("skill", () => {
     }),
   )
 
+  it.effect("lists many skills one line each, with the first sentence of each description", () =>
+    Effect.sync(() => {
+      const list = Array.from({ length: 200 }, (_, index) => ({
+        name: `skill-${String(index).padStart(3, "0")}`,
+        description: `Does thing number ${index}. ${"Longer explanation that only the skill tool needs. ".repeat(6)}`,
+        location: `/home/user/.claude/skills/skill-${index}/SKILL.md`,
+        content: "",
+      }))
+      const output = Skill.fmt(list, { verbose: true })
+
+      expect(output).toContain("skill-007: Does thing number 7.")
+      expect(output).not.toContain("Longer explanation")
+      expect(output).not.toContain("<location>")
+      expect(output.split("\n")).toHaveLength(202)
+      expect(output.length).toBeLessThan(8_000)
+    }),
+  )
+
   it.live("discovers skills from .opencode/skill/ directory", () =>
     provideTmpdirInstance(
       (dir) =>

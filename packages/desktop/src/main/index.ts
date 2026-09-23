@@ -66,6 +66,8 @@ const PERSONAL_NAME = "OpenCode Personal"
 const PERSONAL_ID = "ai.opencode.desktop.personal"
 const TEST_ONBOARDING = process.env.OPENCODE_TEST_ONBOARDING === "1"
 const SIDECAR_VERSION = process.env.OPENCODE_SIDECAR_V2 === "1" ? "v2" : "v1"
+/** The port the browser extension connects to by default (DEFAULT_PORT in browser-extension/background.js). */
+const BROWSER_EXTENSION_PORT = 4919
 const jsCallStackFeature = "DocumentPolicyIncludeJSCallStacksInCrashReports"
 
 let logger: ReturnType<typeof initLogging>
@@ -361,21 +363,29 @@ const main = Effect.gen(function* () {
         if (!Number.isNaN(parsed)) return parsed
       }
 
-      const res = yield* Deferred.make<number, unknown>()
-      const socket = createServer()
-      socket.on("error", (e) => Deferred.failSync(res, () => e))
-      socket.listen(0, "127.0.0.1", () => {
-        const address = socket.address()
-        if (typeof address !== "object" || !address) {
-          socket.close()
-          Deferred.failSync(res, () => new Error("Failed to get port"))
-          return
-        }
-        const port = address.port
-        socket.close(() => Effect.runSync(Deferred.succeed(res, port)))
-      })
+      const probe = (wanted: number) =>
+        Effect.gen(function* () {
+          const res = yield* Deferred.make<number, unknown>()
+          const socket = createServer()
+          socket.on("error", (e) => Deferred.failSync(res, () => e))
+          socket.listen(wanted, "127.0.0.1", () => {
+            const address = socket.address()
+            if (typeof address !== "object" || !address) {
+              socket.close()
+              Deferred.failSync(res, () => new Error("Failed to get port"))
+              return
+            }
+            const port = address.port
+            socket.close(() => Effect.runSync(Deferred.succeed(res, port)))
+          })
+          return yield* Deferred.await(res)
+        })
 
-      return yield* Deferred.await(res)
+      // The browser extension remembers the port it paired with, and a new
+      // random one on every launch left it knocking on a dead one; the fixed
+      // port it defaults to keeps it connected across restarts when free.
+      if (!PERSONAL) return yield* probe(0)
+      return yield* probe(BROWSER_EXTENSION_PORT).pipe(Effect.catch(() => probe(0)))
     })
     const hostname = "127.0.0.1"
     const url = `http://${hostname}:${port}`

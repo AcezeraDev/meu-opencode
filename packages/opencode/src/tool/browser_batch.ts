@@ -1,7 +1,9 @@
 import { Effect, Schema } from "effect"
 import { Browser } from "@/browser/session"
+import { BrowserSite } from "@/browser/site"
 import { BrowserPage } from "@/browser/page"
 import type { SnapshotResult } from "@/browser/snapshot"
+import type { Tab } from "@/browser/tab"
 import { ActionVerifier, type Verdict } from "@/browser/verify"
 import { Step } from "./browser_act"
 import * as Tool from "./tool"
@@ -62,15 +64,26 @@ export const BrowserBatchTool = Tool.define(
           const title = `${steps.length} browser steps`
           yield* ctx.metadata({ title, metadata: { url: "", steps: steps.length, done: 0 } })
 
+          // Only this batch's slow commands are worth reporting with it.
+          tab.takeSlow()
+          const began = Date.now()
           let done = 0
           let failure: Error | undefined
           let pdf: { url: string; output: string } | undefined
           let previous = tab.baseline
           let latest: Awaited<ReturnType<typeof tab.snapshot>> | undefined
+          /** Where a step took the tab, when the steps after it still aim at refs of the page before. */
+          let moved: string | undefined
+          /** A tab a step opened, which the browser switched to; the batch ends there. */
+          let opened: Tab | undefined
           /** What each step that ran was seen to do, so the report says more than "done". */
           const verdicts: Verdict[] = []
+          /** Each step in words that outlive its refs, for noticing a routine. */
+          const described: BrowserSite.TrailStep[] = []
+          const from = yield* Effect.promise(() => tab.url())
           for (const step of steps) {
             const url = yield* Effect.promise(() => tab.url())
+            described.push(BrowserSite.describeStep(step, step.ref ? tab.identityOf(step.ref) : undefined))
             // The same consent as browser_act, per step, since a step can land
             // on another site.
             yield* ctx.ask({
@@ -80,11 +93,14 @@ export const BrowserBatchTool = Tool.define(
               metadata: { action: step.action, url, ref: step.ref, selector: step.selector, text: step.text },
             })
             const before = tab.pdf
+            const started = Date.now()
             const outcome = yield* Effect.promise(() =>
-              tab.serialize(() => BrowserPage.perform(tab, step, timeout)).then(
-                (verdict: Verdict) => ({ verdict }),
-                (error: unknown) => ({ failure: error instanceof Error ? error : new Error(String(error)) }),
-              ),
+              tab
+                .serialize(() => BrowserPage.perform(tab, step, timeout))
+                .then(
+                  (verdict: Verdict) => ({ verdict }),
+                  (error: unknown) => ({ failure: error instanceof Error ? error : new Error(String(error)) }),
+                ),
             )
             failure = "failure" in outcome ? outcome.failure : undefined
             // A step that opened a PDF ends the batch: the page the next steps
@@ -97,11 +113,24 @@ export const BrowserBatchTool = Tool.define(
               break
             }
             if ("failure" in outcome) break
+            opened = yield* BrowserPage.openedTab(browser, tab, started, outcome.verdict)
+            if (opened) {
+              verdicts.push({ ...outcome.verdict, outcome: "navigation", signals: ["it opened a new tab"] })
+              done++
+              break
+            }
             latest = yield* Effect.promise(() => tab.snapshot())
             verdicts.push(withStepOutline(outcome.verdict, previous, latest))
             previous = latest
             done++
             yield* ctx.metadata({ title, metadata: { url, steps: steps.length, done } })
+            // Refs belong to the page they were read on. After a step opens
+            // another page, the ones left in the batch can only miss, and each
+            // miss used to be looked for again before failing.
+            if (outcome.verdict.outcome === "navigation" && steps.slice(done).some((next) => next.ref)) {
+              moved = latest.url
+              break
+            }
           }
 
           const report = steps.map((step, index) => {
@@ -114,13 +143,40 @@ export const BrowserBatchTool = Tool.define(
             ? [`Stopped at step ${done + 1} of ${steps.length}: ${failure.message}`, ...report]
             : pdf && done < steps.length
               ? [`Stopped after step ${done} of ${steps.length}: it opened a PDF.`, ...report]
-              : [`Ran all ${steps.length} steps.`, ...report]
+              : opened
+                ? [
+                    `Stopped after step ${done} of ${steps.length}: it opened a new tab, and the browser switched to it. Continue there with the refs below.`,
+                    ...report,
+                  ]
+                : moved
+                  ? [
+                      `Stopped after step ${done} of ${steps.length}: it opened another page (${moved}), and the next steps use refs from the page before, which do not carry over. Continue with the refs below.`,
+                      ...report,
+                    ]
+                  : [`Ran all ${steps.length} steps.`, ...report]
 
           if (pdf) {
             return {
               output: [...summary, "", pdf.output].join("\n"),
               title,
               metadata: { url: pdf.url, steps: steps.length, done, page: "pdf" },
+            }
+          }
+
+          if (opened) {
+            const tab = opened
+            const page = yield* Effect.promise(() => tab.snapshot())
+            return {
+              output: [...summary, "", BrowserPage.outline(tab, page)].join("\n"),
+              title,
+              metadata: {
+                url: page.url,
+                steps: steps.length,
+                done,
+                refs: page.refs,
+                page: "outline",
+                outcome: "navigation",
+              },
             }
           }
 
@@ -153,8 +209,12 @@ export const BrowserBatchTool = Tool.define(
           const result = latest && !failure ? latest : yield* Effect.promise(() => tab.snapshot())
           const change = BrowserPage.changes(tab, result)
           const last = verdicts[verdicts.length - 1]
+          const slow = tab.takeSlow()
+          const extra = yield* Effect.promise(() =>
+            BrowserSite.aside(ctx.sessionID, { steps: described.slice(0, done), from, to: result.url }),
+          )
           return {
-            output: [...summary, "", change.output].join("\n"),
+            output: [...summary, "", change.output, ...extra].join("\n"),
             title,
             metadata: {
               url: result.url,
@@ -162,7 +222,11 @@ export const BrowserBatchTool = Tool.define(
               done,
               refs: result.refs,
               page: change.full ? "outline" : "change",
+              ...(change.partial ? { partial: true } : {}),
               outcome: last?.outcome,
+              // For diagnosing a slow batch later; the model never sees these.
+              timing: { total: Date.now() - began },
+              ...(slow.length ? { slow } : {}),
             },
           }
         }).pipe(Effect.orDie),
