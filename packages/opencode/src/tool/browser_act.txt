@@ -78,8 +78,6 @@ Elements inside open shadow DOM are also included and act like ordinary refs.
 Closed shadow roots are deliberately inaccessible to page JavaScript, so their
 internal elements cannot appear in snapshots or be targeted.
 
-Prefer browser_batch. Each tool call resends the whole conversation to the
-model, so one browser_act per step costs a full round trip every time. Use
-browser_act only for a single step whose result you must see before deciding
-the next one; whenever you already know two or more steps (fill a form and
-submit it, pick an answer and confirm it), send them in one browser_batch.
+To do several things in a row (fill a form and submit it, pick an answer and
+confirm it), use browser_batch: it runs them all in one call, which is much
+faster than one browser_act per step.

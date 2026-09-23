@@ -1,22 +1,15 @@
 Run several actions on the current page of the built-in browser in one call.
 
-This is the default way to act on a page. Every tool call resends the whole
-conversation to the model, so each call saved is time and money saved: plan
-the next steps from the outline you already have and send them together.
-Use browser_act alone only when the next step truly depends on seeing the
-result of this one.
-
 Each step takes the same fields as browser_act (action, ref, selector, text,
 submit, direction, amount, timeout). The steps run in order, each one waiting
 for the page to settle before the next, and the batch stops at the first step
-that fails, saying which one and why.
+that fails, saying which one and why. Steps only act on the page: opening an
+address, going back or switching tabs is browser_navigate, not a step.
 
 Use it whenever you already know the next few steps, for example:
 - fill the email and password fields, then click "Sign in"
 - check an answer, then click "Check" or "Next"
 - fill a search box with submit set to true, then wait_for a result
-- answer every question visible on the page, then click "Submit"
-- close a banner, scroll, then click the button it was hiding
 
 Refs are stable while their element stays on the page, so refs from the last
 output can be used in every step. If a step opens a new page, the refs you had

@@ -58,16 +58,17 @@ function folder(host: string) {
   return path.join(ROOT(), host.replace(/[^a-z0-9.-]/gi, "_"))
 }
 
+// Node's fs rather than Bun.file: the desktop app runs this server under Node, where `Bun` does not exist.
 async function readJson<T>(file: string, fallback: T): Promise<T> {
-  return Bun.file(file)
-    .json()
-    .then((value) => value as T)
+  return fs
+    .readFile(file, "utf8")
+    .then((text) => JSON.parse(text) as T)
     .catch(() => fallback)
 }
 
 async function writeJson(file: string, value: unknown) {
   await fs.mkdir(path.dirname(file), { recursive: true })
-  await Bun.write(file, JSON.stringify(value, null, 2))
+  await fs.writeFile(file, JSON.stringify(value, null, 2))
 }
 
 export function notes(host: string) {
@@ -104,9 +105,7 @@ export async function programs(host: string): Promise<Program[]> {
 }
 
 export async function loadProgram(host: string, name: string) {
-  const code = await Bun.file(path.join(folder(host), "programs", `${name}.js`))
-    .text()
-    .catch(() => undefined)
+  const code = await fs.readFile(path.join(folder(host), "programs", `${name}.js`), "utf8").catch(() => undefined)
   return code
 }
 
@@ -115,7 +114,7 @@ export async function saveProgram(host: string, name: string, code: string, desc
   const dir = path.join(folder(host), "programs")
   const known = await readJson<Program | undefined>(path.join(dir, `${name}.json`), undefined)
   await fs.mkdir(dir, { recursive: true })
-  await Bun.write(path.join(dir, `${name}.js`), code)
+  await fs.writeFile(path.join(dir, `${name}.js`), code)
   await writeJson(path.join(dir, `${name}.json`), {
     name,
     description: description.replace(/\s+/g, " ").trim().slice(0, DESCRIPTION_CHARS) || known?.description || "",
