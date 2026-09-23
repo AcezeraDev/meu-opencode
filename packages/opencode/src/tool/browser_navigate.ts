@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect"
+import { Cause, Effect, Schema } from "effect"
 import { Browser } from "@/browser/session"
 import { BrowserBlocked } from "@/browser/blocked"
 import { BrowserPage } from "@/browser/page"
@@ -58,6 +58,9 @@ interface Metadata {
 }
 
 const NAVIGATIONS = new Set(["goto", "new_tab", "back", "forward", "reload"])
+
+/** What a tool call fails with when the browser extension went away under it. */
+const DROPPED = /browser extension disconnected|extension not connected|can no longer be controlled/i
 
 function normalize(url: string) {
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)) return url
@@ -167,42 +170,59 @@ export const BrowserNavigateTool = Tool.define(
 
           if (action === "select_tab" && !params.tab) throw new Error("The select_tab action needs a tab id.")
 
-          const tab =
-            action === "new_tab"
-              ? yield* browser.open()
-              : action === "select_tab" || (action === "goto" && params.tab)
-                ? yield* browser.select(params.tab!)
-                : yield* browser.tab()
-          const before = tab.pdf
+          const go = Effect.gen(function* () {
+            const tab =
+              action === "new_tab"
+                ? yield* browser.open()
+                : action === "select_tab" || (action === "goto" && params.tab)
+                  ? yield* browser.select(params.tab!)
+                  : yield* browser.tab()
+            const before = tab.pdf
+            const waitUntil = params.waitUntil ?? "domcontentloaded"
+            const timeout = yield* browser.timeout()
 
-          const waitUntil = params.waitUntil ?? "domcontentloaded"
-          const timeout = yield* browser.timeout()
-
-          // In the same queue as clicks and typing: a model that sends a
-          // navigation and a click together would otherwise have the click land
-          // on whichever page happened to be there, with a ref from the other.
-          const moving = yield* Effect.promise(() =>
-            tab.serialize(async () => {
-              if (action === "goto" || action === "new_tab") {
-                const failure = await tab.navigate(url!, waitUntil, timeout).then(
-                  () => undefined,
-                  (error: unknown) => (error instanceof Error ? error : new Error(String(error))),
-                )
-                const refused = failure ? BrowserBlocked.refused(failure.message) : undefined
-                if (failure && !refused) return { failure }
-                if (refused) return { refusal: refused }
-              }
-              if (action === "back") await tab.history(-1, waitUntil, timeout)
-              if (action === "forward") await tab.history(1, waitUntil, timeout)
-              if (action === "reload") await tab.reload(waitUntil, timeout)
-              // A parsed document is often still being built by its scripts; the
-              // outline should show what they render, not the empty shell.
-              if (NAVIGATIONS.has(action) && waitUntil === "domcontentloaded") await tab.quiet(150, 2500)
-              return {}
-            }),
+            // In the same queue as clicks and typing: a model that sends a
+            // navigation and a click together would otherwise have the click land
+            // on whichever page happened to be there, with a ref from the other.
+            const moving = yield* Effect.promise(() =>
+              tab.serialize(async () => {
+                if (action === "goto" || action === "new_tab") {
+                  const failure = await tab.navigate(url!, waitUntil, timeout).then(
+                    () => undefined,
+                    (error: unknown) => (error instanceof Error ? error : new Error(String(error))),
+                  )
+                  const refused = failure ? BrowserBlocked.refused(failure.message) : undefined
+                  if (failure && !refused) return { failure }
+                  if (refused) return { refusal: refused }
+                }
+                if (action === "back") await tab.history(-1, waitUntil, timeout)
+                if (action === "forward") await tab.history(1, waitUntil, timeout)
+                if (action === "reload") await tab.reload(waitUntil, timeout)
+                // A parsed document is often still being built by its scripts; the
+                // outline should show what they render, not the empty shell.
+                if (NAVIGATIONS.has(action) && waitUntil === "domcontentloaded") await tab.quiet(150, 2500)
+                return {}
+              }),
+            )
+            if ("failure" in moving) throw moving.failure
+            return { tab, before, refusal: "refusal" in moving ? moving.refusal : undefined }
+          })
+          // The extension dropping out mid-navigation (its worker restarted, or
+          // the browser stalled until it closed the socket) cost the agent a
+          // whole step and usually a second try of its own. Opening the same
+          // address again is safe, so it is retried once here: getting the tab
+          // again waits for the extension to come back and re-attaches. A click
+          // is never retried like this, since it could land twice.
+          const moved = yield* go.pipe(
+            Effect.catchCause((cause) =>
+              (action === "goto" || action === "reload") && DROPPED.test(String(Cause.squash(cause)))
+                ? go
+                : Effect.failCause(cause),
+            ),
           )
-          if ("failure" in moving) throw moving.failure
-          const refusal = "refusal" in moving ? moving.refusal : undefined
+          const tab = moved.tab
+          const before = moved.before
+          const refusal = moved.refusal
 
           // An address that did not look like one can still serve a PDF.
           if (NAVIGATIONS.has(action)) {

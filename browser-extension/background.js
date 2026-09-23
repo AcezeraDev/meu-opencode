@@ -63,6 +63,12 @@ let socketPort
 let retry = RETRY_MIN
 let retryTimer
 let pingTimer
+/**
+ * Why the last socket ended, sent with the next pairing so OpenCode can log it:
+ * from its side a socket just closes. A worker that starts from nothing says so,
+ * which is what the browser putting it to sleep or restarting it looks like.
+ */
+let previous = { reason: "worker-start", at: Date.now() }
 /** Consecutive failed attempts; every other one tries the default port, where the app now listens. */
 let attempt = 0
 /** Tabs this extension has attached the debugger to. */
@@ -279,16 +285,20 @@ function connect() {
     socketPort = port
     let heard = Date.now()
     let answers = false
+    let opened = 0
+    let closing
 
     ws.addEventListener("open", () => {
       retry = RETRY_MIN
       attempt = 0
+      opened = Date.now()
       if (port !== saved) void chrome.storage.local.set({ port })
-      ws.send(JSON.stringify({ type: "auth", token }))
+      ws.send(JSON.stringify({ type: "auth", token, previous }))
       clearInterval(pingTimer)
       pingTimer = setInterval(() => {
         if (socket !== ws) return
         if (answers && Date.now() - heard > SILENCE_MS) {
+          closing = "silence"
           ws.close()
           return
         }
@@ -310,9 +320,18 @@ function connect() {
       }
       void handle(message)
     })
-    ws.addEventListener("close", () => {
+    ws.addEventListener("close", (event) => {
       // A socket already replaced must not take the current one's state with it.
       if (socket !== ws) return
+      if (opened) {
+        previous = {
+          reason: closing ?? "closed",
+          code: event.code,
+          at: Date.now(),
+          lasted: Math.round((Date.now() - opened) / 1000),
+          silent: Math.round((Date.now() - heard) / 1000),
+        }
+      }
       clearInterval(pingTimer)
       socket = undefined
       socketPort = undefined

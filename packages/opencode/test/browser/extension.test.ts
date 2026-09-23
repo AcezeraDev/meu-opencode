@@ -339,7 +339,8 @@ describe("the extension relay's connection", () => {
     await pause()
     expect(relay.sockets).toHaveLength(1)
     relay.sockets[0]!.open()
-    expect(relay.sockets[0]!.sent[0]).toEqual({ type: "auth", token: "t" })
+    // A worker that just started says so, which is what a restart or sleep looks like to the app.
+    expect(relay.sockets[0]!.sent[0]).toMatchObject({ type: "auth", token: "t", previous: { reason: "worker-start" } })
   })
 
   test("a saved port that no longer answers falls back to the default, and remembers it", async () => {
@@ -389,7 +390,7 @@ describe("the extension relay's connection", () => {
     relay.sockets[1]!.open()
     await pause(700)
     expect(relay.sockets).toHaveLength(2)
-    expect(relay.sockets[1]!.sent[0]).toEqual({ type: "auth", token: "new" })
+    expect(relay.sockets[1]!.sent[0]).toMatchObject({ type: "auth", token: "new" })
   })
 })
 

@@ -1,4 +1,7 @@
+import fs from "fs/promises"
+import path from "path"
 import { Context, Effect, Layer } from "effect"
+import { Global } from "@opencode-ai/core/global"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Config } from "@/config/config"
 import { CDPError, ReplacedError, type CDPTransport, type SlowCall } from "./cdp"
@@ -56,6 +59,34 @@ const MOVES_PAGE = new Set(["Page.navigate", "Page.reload", "Page.navigateToHist
 /** A command this slow is kept, so the tool can say where an action's time went. */
 const SLOW_CALL = 1500
 const SLOW_KEEP = 20
+
+/** Past this size the log starts over, keeping the previous one as `.old`. */
+const LOG_LIMIT = 512 * 1024
+let logging = Promise.resolve()
+
+/**
+ * Appends one line to `browser-bridge.log` in the data folder's log directory.
+ *
+ * The app writes no server log, and the extension dropping out mid-command was
+ * the biggest cost in real sessions with nothing to say why: who closed the
+ * socket, after how long, with which commands waiting. Lines are written in
+ * order and a failure to write is ignored; the log must never break the bridge.
+ */
+function log(event: string, detail: Record<string, unknown> = {}) {
+  const line = `${new Date().toISOString()} ${event} ${JSON.stringify(detail)}
+`
+  const file = path.join(Global.Path.log, "browser-bridge.log")
+  logging = logging
+    .then(async () => {
+      const size = await fs.stat(file).then(
+        (stat) => stat.size,
+        () => 0,
+      )
+      if (size > LOG_LIMIT) await fs.rename(file, `${file}.old`)
+      await fs.appendFile(file, line)
+    })
+    .catch(() => {})
+}
 
 interface InFlight {
   method: string
@@ -282,6 +313,8 @@ class BridgeConnection implements CDPTransport {
 interface Pending {
   resolve: (value: unknown) => void
   reject: (error: Error) => void
+  method: string
+  started: number
 }
 
 /** One accepted extension socket's view of the bridge; it goes inert once a newer socket takes over. */
@@ -335,6 +368,8 @@ export class Bridge {
     // closed it used to tear down the new, healthy connection with it, leaving
     // the extension believing it was connected while the bridge had dropped it.
     const previous = this.disconnectSocket
+    if (previous) log("replaced", this.waiting())
+    else log("connect")
     this.reset()
     previous?.()
     const link = {}
@@ -366,6 +401,7 @@ export class Bridge {
       event?: TargetEvent["event"]
       target?: TargetEvent["target"]
       reason?: string
+      previous?: unknown
     }
     try {
       message = JSON.parse(raw)
@@ -374,9 +410,12 @@ export class Bridge {
     }
     if (message.type === "auth") {
       if (message.token !== this.token) {
+        log("auth-refused")
         this.disconnectSocket?.()
         return
       }
+      // The extension says why its previous socket ended, which this side cannot see.
+      log("auth", { previous: message.previous })
       this.authed = true
       this.emitState()
       return
@@ -404,6 +443,7 @@ export class Bridge {
         }
         return
       case "detached":
+        log("detached", { target: message.targetId, reason: message.reason })
         if (message.targetId) this.connections.get(message.targetId)?.drop()
         return
       case "target":
@@ -418,8 +458,17 @@ export class Bridge {
 
   /** The socket closed. Every in-flight call fails and tabs go stale. */
   disconnect() {
+    log("disconnect", this.waiting())
     this.reset()
     this.emitState()
+  }
+
+  /** The commands still waiting for the extension, for the log. */
+  private waiting() {
+    const now = Date.now()
+    return {
+      pending: [...this.pending.values()].map((item) => `${item.method} ${Math.round((now - item.started) / 1000)}s`),
+    }
   }
 
   private reset() {
@@ -437,10 +486,11 @@ export class Bridge {
     const write = this.write
     if (!write || !this.authed) return Promise.reject(new CDPError(type, "extension not connected"))
     const id = this.nextId++
+    const method = typeof extra["method"] === "string" ? extra["method"] : type
     const promise = new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id)
-        const method = typeof extra["method"] === "string" ? extra["method"] : type
+        log("timeout", { method, target: extra["targetId"] })
         reject(
           new CDPError(
             method,
@@ -449,6 +499,8 @@ export class Bridge {
         )
       }, CALL_TIMEOUT)
       this.pending.set(id, {
+        method,
+        started: Date.now(),
         resolve: (value) => {
           clearTimeout(timer)
           resolve(value as T)
