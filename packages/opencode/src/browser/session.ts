@@ -74,6 +74,8 @@ const VIEWPORT_MAX = { width: 2560, height: 1600 }
  * sees, and through the extension they share one socket with every command.
  */
 const CAST_HEADROOM = 1.5
+/** How long the live view waits for a still page's first picture before the stream's own. */
+const FIRST_FRAME_WAIT = 3000
 
 const DEFAULT_TIMEOUT = 30_000
 const DEFAULT_VIEWPORT = { width: 1280, height: 800 }
@@ -158,6 +160,10 @@ interface State {
   listeners: Set<Listener>
   /** The tab currently being streamed to the live view. */
   cast?: string
+  /** The recast in progress; later requests wait for it and run once more after. */
+  recasting?: Promise<void>
+  recastAgain?: boolean
+  recastRestart?: boolean
   statusTimer?: ReturnType<typeof setTimeout>
   /** The last status sent to the live view, so an unchanged one is not sent again. */
   announced?: string
@@ -510,19 +516,45 @@ const layer = Layer.effect(
      * Streams the active tab while anyone watches, and nothing otherwise.
      * `restart` streams it afresh, for when the pane changed size.
      */
-    async function recast(s: State, restart = false) {
+    function recast(s: State, restart = false): Promise<void> {
+      // One at a time. Status changes, resizes and viewers coming and going each
+      // ask for one, and when the browser was slow to answer they used to pile
+      // up by the hundred, every one stopping and restarting the stream.
+      s.recastRestart ||= restart
+      if (s.recasting) {
+        s.recastAgain = true
+        return s.recasting
+      }
+      const run = async () => {
+        do {
+          s.recastAgain = false
+          const again = s.recastRestart === true
+          s.recastRestart = false
+          await castOnce(s, again).catch(() => {})
+        } while (s.recastAgain)
+      }
+      s.recasting = run().finally(() => {
+        s.recasting = undefined
+      })
+      return s.recasting
+    }
+
+    async function castOnce(s: State, restart: boolean) {
       const wanted = s.listeners.size > 0 && live(s) ? s.active : undefined
       if (s.cast === wanted && !restart) return
       const previous = s.cast ? s.tabs.get(s.cast) : undefined
       s.cast = wanted
-      if (previous?.connected) await previous.stopScreencast()
+      // Not waited for: the stream's frames stop here at once, and a tab the
+      // browser is not painting may never confirm, which held up the next start.
+      if (previous?.connected) void previous.stopScreencast()
       const next = wanted ? s.tabs.get(wanted) : undefined
       if (!next?.connected) return
       await next.startScreencast((frame) => {
         if (s.cast === next.id) emit(s, { type: "frame", frame })
       }, castSize(s))
-      // Chromium only sends frames on change, so a still page needs one sent by hand.
-      const first = await next.frame().catch(() => undefined)
+      // Chromium only sends frames on change, so a still page needs one sent by
+      // hand; a tab that is not being painted never gives one, so not for long.
+      const first = await Promise.race([next.frame(), sleep(FIRST_FRAME_WAIT).then(() => undefined)]).catch(() => undefined)
       if (first && s.cast === next.id) emit(s, { type: "frame", frame: first })
     }
 
@@ -987,6 +1019,9 @@ const layer = Layer.effect(
         const s = yield* InstanceState.get(state)
         const width = Math.round(Math.min(VIEWPORT_MAX.width, Math.max(VIEWPORT_MIN.width, command.width)))
         const height = Math.round(Math.min(VIEWPORT_MAX.height, Math.max(VIEWPORT_MIN.height, command.height)))
+        // The pane repeats its size whenever its status changes; only a new
+        // size is worth restarting the stream for.
+        if (s.fit?.width === width && s.fit.height === height) return yield* status()
         s.fit = { width, height }
         // The pane's size says how large the pictures need to be, and nothing
         // more. Laying the page out at the pane's size instead meant a site

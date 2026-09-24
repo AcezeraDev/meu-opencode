@@ -56,6 +56,16 @@ const RECONNECT_WAIT = 8000
 const REPLACED_GRACE = 2000
 const MOVES_PAGE = new Set(["Page.navigate", "Page.reload", "Page.navigateToHistoryEntry"])
 
+/**
+ * The live view's own commands. A tab the browser is not painting (behind
+ * another tab, or in a covered window) can leave these unanswered, and in real
+ * sessions hundreds of them queued for the full call timeout while the view
+ * restarted, ahead of the agent's clicks on the same relay. The view only
+ * wants a picture: they give up quickly, and nothing waits on them.
+ */
+const LIVE_VIEW = new Set(["Page.startScreencast", "Page.stopScreencast", "Page.screencastFrameAck"])
+const LIVE_VIEW_TIMEOUT = 5000
+
 /** A command this slow is kept, so the tool can say where an action's time went. */
 const SLOW_CALL = 1500
 const SLOW_KEEP = 20
@@ -175,7 +185,8 @@ class BridgeConnection implements CDPTransport {
     clearTimeout(call.timer)
     this.inflight.delete(id)
     const ms = Date.now() - started
-    if (ms >= SLOW_CALL) {
+    // The live view's own commands are not part of any action's time.
+    if (ms >= SLOW_CALL && !LIVE_VIEW.has(method)) {
       this.slow.push({
         method,
         ms,
@@ -189,7 +200,7 @@ class BridgeConnection implements CDPTransport {
 
   get busy() {
     let count = 0
-    for (const call of this.inflight.values()) if (call.method !== "Page.screencastFrameAck") count++
+    for (const call of this.inflight.values()) if (!LIVE_VIEW.has(call.method)) count++
     return count
   }
 
@@ -487,17 +498,20 @@ export class Bridge {
     if (!write || !this.authed) return Promise.reject(new CDPError(type, "extension not connected"))
     const id = this.nextId++
     const method = typeof extra["method"] === "string" ? extra["method"] : type
+    const limit = LIVE_VIEW.has(method) ? LIVE_VIEW_TIMEOUT : CALL_TIMEOUT
     const promise = new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id)
-        log("timeout", { method, target: extra["targetId"] })
+        // A live-view picture that never came is routine on a tab the browser is
+        // not painting; logged, a burst of them pushed everything useful out.
+        if (!LIVE_VIEW.has(method)) log("timeout", { method, target: extra["targetId"] })
         reject(
           new CDPError(
             method,
-            `the browser did not answer within ${CALL_TIMEOUT / 1000}s. The page may be frozen or busy; wait a moment and try once more, or reload it with browser_navigate.`,
+            `the browser did not answer within ${limit / 1000}s. The page may be frozen or busy; wait a moment and try once more, or reload it with browser_navigate.`,
           ),
         )
-      }, CALL_TIMEOUT)
+      }, limit)
       this.pending.set(id, {
         method,
         started: Date.now(),

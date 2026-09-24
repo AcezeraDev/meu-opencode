@@ -117,7 +117,10 @@ export function BrowserPane(props: {
   const [now, setNow] = createSignal(Date.now())
 
   const status = () => feed.status()
-  const running = () => status()?.running === true
+  // A memo, so what depends on it reruns when the browser starts or stops, not
+  // on every status (a title, a tab loading): the resize below used to be sent
+  // again each time, and each one restarted the live stream.
+  const running = createMemo(() => status()?.running === true)
   const live = () => feed.connected() && running()
   /** Only a web page can go to another browser; a blank tab or a local file cannot. */
   const handable = () => running() && /^https?:\/\//.test(status()?.url ?? "")

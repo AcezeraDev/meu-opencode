@@ -330,6 +330,22 @@ describe("a command through the extension when the page moves on", () => {
     expect(connection.takeSlow?.()).toEqual([])
   })
 
+  test("the live view's commands give up in seconds and never hold up the agent's", async () => {
+    const h = harness()
+    h.auth()
+    const connection = h.bridge.connection("7")
+    const started = Date.now()
+    const stop = connection.send("Page.stopScreencast").then(
+      () => "answered",
+      (error: unknown) => (error instanceof Error ? error.message : String(error)),
+    )
+    void connection.send("Page.startScreencast", {}).catch(() => {})
+    expect(connection.busy).toBe(0)
+    expect(await stop).toContain("within 5s")
+    expect(Date.now() - started).toBeLessThan(7000)
+    expect(connection.takeSlow?.()).toEqual([])
+  }, 10_000)
+
   test("a script the old page never answers fails as replaced instead of waiting out the call timeout", async () => {
     const h = harness()
     h.auth()
