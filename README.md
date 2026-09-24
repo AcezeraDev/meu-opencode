@@ -73,7 +73,7 @@ O app pessoal nunca divide pasta, nome de pacote ou cache com o oficial.
 
 ### Instalar em outro PC
 
-O código vem daqui, do GitHub. As configurações vêm num arquivo `.ocpack` criptografado com senha: configuração, agentes, skills, chaves de API e logins, as preferências do app e, se eu quiser, o histórico de conversas. Esse arquivo nunca vai para o GitHub.
+O outro PC não compila nada: ele baixa o app pronto da [Release `personal-latest`](https://github.com/AcezeraDev/meu-opencode/releases/tag/personal-latest). Toda vez que o vigia (ou o botão Atualizar) termina um build aqui, `release.ts` sobe esse build para lá sozinho. As configurações vão à parte, num arquivo `.ocpack` criptografado com senha: configuração, agentes, skills, chaves de API e logins, as preferências do app e, se eu quiser, o histórico de conversas. Esse arquivo nunca vai para o GitHub.
 
 1. **No PC de sempre:** dois cliques em `script/personal-desktop/Exportar configuracoes.cmd`. Ele pede uma senha e deixa o arquivo na Área de Trabalho. Levo o arquivo por pendrive ou Drive.
 2. **No PC novo:** abro o PowerShell (não precisa ser administrador) e rodo:
@@ -82,15 +82,17 @@ O código vem daqui, do GitHub. As configurações vêm num arquivo `.ocpack` cr
    irm https://raw.githubusercontent.com/AcezeraDev/meu-opencode/dev/script/personal-desktop/instalar.ps1 | iex
    ```
 
-   Ele instala o Git e o Bun, baixa o código, pede o arquivo e a senha, compila e instala o app (uns 10 minutos na primeira vez) e abre o Brave na página de extensões. Lá, ligo o "Modo do desenvolvedor", uso "Carregar sem compactação" com a pasta `browser-extension` e coloco a porta e o código que o painel do navegador do app mostra.
+   Ele baixa o instalador pronto, instala em segundos, pede o arquivo e a senha e abre o Brave na página de extensões. Lá, ligo o "Modo do desenvolvedor", uso "Carregar sem compactação" com a pasta que ele mostra e coloco a porta e o código que o painel do navegador do app mostra.
 
-Depois disso, o PC novo **segue o GitHub**: a cada 20 minutos, e quando o Windows inicia, ele confere se publiquei algo novo, recompila e instala quando o app fecha. O botão **Atualizar** também puxa de lá. Para publicar o que mudei aqui:
+Depois disso, o PC novo **se atualiza pelo próprio app**, como o OpenCode oficial: ele confere a Release ao abrir e a cada 10 minutos, baixa só o que mudou e o botão da barra de título vira **Reiniciar**.
+
+O `instalar.ps1` e os outros scripts vêm do código publicado. Para publicar o que mudei aqui:
 
 ```bash
 bun script/personal-desktop/publish.ts "o que mudou"
 ```
 
-Antes de enviar, ele confere se nenhum arquivo tem uma chave ou login meu, porque este repositório é público.
+Antes de enviar o código ou um build, ele confere se nenhum arquivo tem uma chave ou login meu, porque este repositório é público.
 
 ## Como rodar
 

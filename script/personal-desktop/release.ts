@@ -1,36 +1,179 @@
 #!/usr/bin/env bun
 /**
- * Publishes the *already built* OpenCode Personal installer to a GitHub Release,
- * so another PC installs it by downloading and running it — no clone, no Bun, no
- * compiling. This is the counterpart of instalar.ps1's download step.
+ * Publishes OpenCode Personal builds to a GitHub Release, where every other PC
+ * gets them: instalar.ps1 downloads the installer from there, and the installed
+ * app updates itself from there with electron-updater (the latest.yml feed and
+ * the .blockmap let it download only what changed).
+ *
+ * update.ts runs this on its own after every build on this PC (`--auto`): the
+ * build is copied into RELEASES and the newest one waiting there is uploaded.
+ * Run by hand, it publishes the build in packages/desktop/dist.
  *
  *   bun script/personal-desktop/release.ts            publish the current build
  *   bun script/personal-desktop/release.ts "texto"    with a release note
  *
- * It uploads three assets to a fixed tag (personal-latest), so the download URLs
- * never change:
- *   - OpenCodePersonalSetup.exe   the NSIS installer (built by update.ts/watch.ts)
- *   - opencode-import.exe         a standalone importer for the .ocpack settings
- *   - version.json                the version a following PC compares against
+ * Assets on the fixed tag (personal-latest), so the URLs never change:
+ *   - OpenCodePersonalSetup.exe (+ .blockmap)   the NSIS installer
+ *   - latest.yml                                what the installed app checks
+ *   - opencode-import.exe                       restores a .ocpack (instalar.ps1)
+ *   - version.json                              for PCs set up before the app updated itself
  *
- * The repository is public, so before uploading it scans both exes for any key
- * or sign-in this PC holds and refuses to publish if one is embedded. The
- * installer is built without secrets (keys live in auth.json / the .ocpack, not
- * in the app), so this only ever guards against a mistake.
+ * The repository is public, so before uploading it scans the binaries for any
+ * key or sign-in this PC holds and refuses to publish if one is embedded.
  */
 import { $ } from "bun"
-import { existsSync, readFileSync, statSync } from "node:fs"
-import { copyFile, mkdir, writeFile } from "node:fs/promises"
-import os from "node:os"
+import { createHash } from "node:crypto"
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
+import { copyFile, mkdir, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { ENV, PLACES } from "./places"
-import { DESKTOP, PENDING, ROOT, newestSourceTime, readState } from "./shared"
+import {
+  DESKTOP,
+  HOME,
+  RELEASES,
+  RELEASE_FILES,
+  RELEASE_LOCK,
+  ROOT,
+  acquireLock,
+  log,
+  newestSourceTime,
+  readState,
+  releaseLock,
+} from "./shared"
 
 const TAG = "personal-latest"
 const REPO = "AcezeraDev/meu-opencode"
+const IMPORTER_STATE = path.join(HOME, "release-importer.json")
+const IMPORTER_SOURCES = ["import.ts", "pack.ts", "places.ts"]
+const auto = process.argv.includes("--auto")
 const note = process.argv.slice(2).find((arg) => !arg.startsWith("--")) ?? "Atualização do OpenCode Personal"
 
-const git = (strings: TemplateStringsArray, ...values: unknown[]) => $(strings, ...values).cwd(ROOT).quiet()
+if ((await $`gh auth status`.nothrow().quiet()).exitCode !== 0) {
+  await log("Release: o GitHub CLI (gh) não está instalado ou logado; o build não foi publicado.")
+  process.exit(1)
+}
+
+if (!auto) await stageDist()
+// Another upload is running; it picks up the newest build when it finishes.
+if (!(await acquireLock(RELEASE_LOCK))) process.exit(0)
+try {
+  await ensureRelease()
+  for (let build = newestStaged(); build; build = newestStaged()) await publish(build)
+} finally {
+  await releaseLock(RELEASE_LOCK)
+}
+
+/** Uploads one staged build, then removes it (and any older one) from RELEASES. */
+async function publish(build: string) {
+  const dir = path.join(RELEASES, build)
+  // Only the newest build matters; older ones waiting behind it are dropped.
+  for (const old of staged().filter((name) => name !== build)) await rm(path.join(RELEASES, old), { recursive: true, force: true })
+
+  const installer = path.join(dir, RELEASE_FILES[0]!)
+  const keys = await secrets()
+  if (contains(installer, keys)) {
+    await log(`Release PARADA: o instalador ${build} tem uma chave ou login seu embutido, e a Release é pública.`)
+    await rm(dir, { recursive: true, force: true })
+    return
+  }
+
+  const importer = await freshImporter(keys)
+  const version = path.join(dir, "version.json")
+  await writeFile(
+    version,
+    JSON.stringify({ version: build, commit: build, builtAt: statSync(installer).mtimeMs, note, at: Date.now() }, null, 2),
+  )
+
+  await log(`Release: enviando ${build} para o GitHub...`)
+  // latest.yml goes last: until it is replaced, apps keep being pointed at the
+  // previous installer instead of one that is still uploading.
+  const first = [installer, path.join(dir, RELEASE_FILES[1]!), version, ...(importer ? [importer] : [])]
+  for (const files of [first, [path.join(dir, RELEASE_FILES[2]!)]]) {
+    const uploaded = await $`gh release upload ${TAG} -R ${REPO} --clobber ${files}`.nothrow().quiet()
+    if (uploaded.exitCode !== 0) {
+      await log(`Release: falha ao enviar (${uploaded.stderr.toString().trim().split("\n").at(-1)}); tento no próximo build.`)
+      return await rm(dir, { recursive: true, force: true })
+    }
+  }
+  if (importer) await writeFile(IMPORTER_STATE, JSON.stringify({ hash: importerHash() }))
+  await $`gh release edit ${TAG} -R ${REPO} --title ${`OpenCode Personal ${build}`} --notes ${note}`.nothrow().quiet()
+  await rm(dir, { recursive: true, force: true })
+  await log(`Release: ${build} publicado; os outros PCs já podem atualizar.`)
+}
+
+/** Copies the build in packages/desktop/dist into RELEASES, refusing one older than the code. */
+async function stageDist() {
+  const dist = path.join(DESKTOP, "dist")
+  const missing = RELEASE_FILES.filter((name) => !existsSync(path.join(dist, name)))
+  if (missing.length) {
+    console.error(`Não achei ${missing.join(", ")} em ${dist}.`)
+    console.error("Deixe o vigia (ou o botão Atualizar do app) compilar uma versão e rode de novo.")
+    process.exit(1)
+  }
+  // That is how a Release once went out without the bundled browser extension.
+  if (((await readState()).sourceTime ?? 0) < (await newestSourceTime())) {
+    console.error("O app ainda não recompilou com as últimas mudanças, então o instalador está velho.")
+    console.error("Clique em Atualizar na barra de título, ou espere o vigia; o build novo sobe sozinho.")
+    process.exit(1)
+  }
+  const version = /^version:\s*(\S+)/m.exec(readFileSync(path.join(dist, "latest.yml"), "utf8"))?.[1]
+  if (!version) {
+    console.error("O latest.yml do build não tem versão.")
+    process.exit(1)
+  }
+  const dir = path.join(RELEASES, version)
+  await mkdir(dir, { recursive: true })
+  for (const name of RELEASE_FILES) await copyFile(path.join(dist, name), path.join(dir, name))
+}
+
+/** Build versions waiting in RELEASES, oldest first (versions sort by their time stamp). */
+function staged() {
+  if (!existsSync(RELEASES)) return []
+  return readdirSync(RELEASES, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && RELEASE_FILES.every((name) => existsSync(path.join(RELEASES, entry.name, name))))
+    .map((entry) => entry.name)
+    .sort((a, b) => statSync(path.join(RELEASES, a)).mtimeMs - statSync(path.join(RELEASES, b)).mtimeMs)
+}
+
+function newestStaged() {
+  return staged().at(-1)
+}
+
+async function ensureRelease() {
+  if ((await $`gh release view ${TAG} -R ${REPO}`.nothrow().quiet()).exitCode === 0) return
+  const created = await $`gh release create ${TAG} -R ${REPO} --title ${"OpenCode Personal"} --notes ${note}`.nothrow().quiet()
+  if (created.exitCode === 0) return
+  await log(`Release: falha ao criar (${created.stderr.toString().trim().split("\n").at(-1)}).`)
+  process.exit(1)
+}
+
+/**
+ * The importer only changes when its scripts do, and it is ~100 MB, so it is
+ * rebuilt and uploaded only then. Returns its path when it must go up.
+ */
+async function freshImporter(keys: string[]) {
+  const hash = importerHash()
+  const saved = await Bun.file(IMPORTER_STATE)
+    .json()
+    .catch(() => ({}))
+  if (saved.hash === hash) return
+  const out = path.join(RELEASES, "opencode-import.exe")
+  const compiled = await $`bun build --compile --target=bun-windows-x64 ${path.join(import.meta.dir, "import.ts")} --outfile ${out}`
+    .cwd(ROOT)
+    .nothrow()
+    .quiet()
+  if (compiled.exitCode !== 0 || contains(out, keys)) {
+    await log("Release: não consegui preparar o importador; sobe o anterior.")
+    return
+  }
+  return out
+}
+
+function importerHash() {
+  const hash = createHash("sha256")
+  for (const name of IMPORTER_SOURCES) hash.update(readFileSync(path.join(import.meta.dir, name)))
+  return hash.digest("hex")
+}
 
 /** Every key and sign-in this PC holds, which must never reach a public release. */
 async function secrets() {
@@ -68,96 +211,3 @@ function contains(file: string, values: string[]) {
   const text = readFileSync(file, "latin1")
   return values.some((value) => text.includes(value))
 }
-
-// 1. The installer the watcher/update.ts built. Prefer the staged copy, since it
-//    is the one the app itself would install.
-const installer = existsSync(PENDING) ? PENDING : path.join(DESKTOP, "dist", "opencode-personal-win-x64.exe")
-if (!existsSync(installer)) {
-  console.error(`Não achei o instalador. Rode o app com o botão Atualizar (ou o vigia) para gerar um build, depois publique.`)
-  console.error(`Procurei em:\n  ${PENDING}\n  ${path.join(DESKTOP, "dist", "opencode-personal-win-x64.exe")}`)
-  process.exit(1)
-}
-
-// Refuse to ship a build older than the code: that is how a Release once went
-// out without the bundled extension. The build stamps the source time it was
-// made from into state.json (see update.ts), the same check the app uses.
-const builtFrom = (await readState()).sourceTime ?? 0
-const newest = await newestSourceTime()
-if (builtFrom < newest) {
-  console.error("O app ainda não recompilou com as últimas mudanças, então o instalador está velho.")
-  console.error("Clique em Atualizar na barra de título (e depois Reiniciar), ou espere o vigia, e rode de novo.")
-  process.exit(1)
-}
-
-// 2. The standalone tools, compiled fresh so they match the current scripts: the
-//    importer for the .ocpack, and the updater a following PC runs with no repo.
-const dist = path.join(DESKTOP, "dist")
-await mkdir(dist, { recursive: true })
-const importer = path.join(dist, "opencode-import.exe")
-const updater = path.join(dist, "opencode-atualizar.exe")
-for (const [source, out, label] of [
-  ["import.ts", importer, "importador"],
-  ["update-release.ts", updater, "atualizador"],
-] as const) {
-  console.log(`Compilando o ${label} standalone...`)
-  const compiled = await $`bun build --compile --target=bun-windows-x64 ${path.join(ROOT, "script/personal-desktop", source)} --outfile ${out}`
-    .cwd(ROOT)
-    .nothrow()
-  if (compiled.exitCode !== 0) {
-    console.error(`Falha ao compilar o ${label}:\n` + compiled.stderr.toString().slice(-2000))
-    process.exit(1)
-  }
-}
-
-// 3. Nothing secret goes out.
-const keys = await secrets()
-const leaky = [installer, importer, updater].filter((file) => contains(file, keys))
-if (leaky.length) {
-  console.error("\nPARADO: um destes tem uma chave ou login seu embutido, e a Release é pública:")
-  for (const file of leaky) console.error(`  - ${file}`)
-  process.exit(1)
-}
-
-// 4. The version a following PC compares against, from the checkout being shipped.
-const version = (await Bun.file(path.join(ROOT, "packages/opencode/package.json")).json()).version as string
-const commit = (await git`git rev-parse --short HEAD`.nothrow().text()).trim() || "sem-git"
-const marker = path.join(dist, "version.json")
-const built = statSync(installer).mtimeMs
-await writeFile(marker, JSON.stringify({ version, commit, builtAt: built, note, at: Date.now() }, null, 2))
-
-// 5. Create or refresh the fixed-tag release, replacing its assets.
-if ((await $`gh --version`.nothrow().quiet()).exitCode !== 0) {
-  console.error("Preciso do GitHub CLI (gh) autenticado. Instale com: winget install GitHub.cli")
-  process.exit(1)
-}
-const exists = (await $`gh release view ${TAG} -R ${REPO}`.nothrow().quiet()).exitCode === 0
-const title = `OpenCode Personal ${version} (${commit})`
-if (exists) {
-  console.log(`Atualizando a Release ${TAG}...`)
-  await $`gh release edit ${TAG} -R ${REPO} --title ${title} --notes ${note}`.nothrow().quiet()
-} else {
-  console.log(`Criando a Release ${TAG}...`)
-  const created = await $`gh release create ${TAG} -R ${REPO} --title ${title} --notes ${note}`.nothrow()
-  if (created.exitCode !== 0) {
-    console.error("Falha ao criar a Release:\n" + created.stderr.toString().slice(-1500))
-    process.exit(1)
-  }
-}
-
-// gh's `file#label` only sets a display label, not the download filename, so the
-// installer is copied to the name instalar.ps1 fetches and uploaded as itself.
-const setup = path.join(dist, "OpenCodePersonalSetup.exe")
-await copyFile(installer, setup)
-
-console.log("Enviando os arquivos (o instalador tem ~130 MB, pode demorar)...")
-const uploaded = await $`gh release upload ${TAG} -R ${REPO} --clobber ${setup} ${importer} ${updater} ${marker}`.nothrow()
-if (uploaded.exitCode !== 0) {
-  console.error("Falha ao enviar os arquivos:\n" + uploaded.stderr.toString().slice(-1500))
-  process.exit(1)
-}
-
-const base = `https://github.com/${REPO}/releases/download/${TAG}`
-console.log(`\nPublicado (${version}, ${commit}).`)
-console.log(`Instalador:  ${base}/OpenCodePersonalSetup.exe`)
-console.log(`Para instalar noutro PC, rode lá:`)
-console.log(`  irm https://raw.githubusercontent.com/${REPO}/dev/script/personal-desktop/instalar.ps1 | iex`)

@@ -5,14 +5,17 @@
 #   irm https://raw.githubusercontent.com/AcezeraDev/meu-opencode/dev/script/personal-desktop/instalar.ps1 | iex
 #
 # O que ele faz, na ordem:
-#   1. baixa da GitHub Release o instalador pronto e duas ferramentas pequenas
+#   1. baixa da GitHub Release o instalador pronto e o importador de configurações
 #   2. instala o app (segundos, não compila nada)
 #   3. restaura o arquivo de configurações (.ocpack) que você exportou no outro PC
-#   4. agenda a atualização automática (baixa a Release nova quando aparecer)
-#   5. abre o app e mostra como ligar a extensão do Brave
+#   4. abre o app e mostra como ligar a extensão do Brave
+#
+# Depois disso o próprio app se atualiza: cada build do PC principal sobe sozinho
+# para a Release, e aqui aparece o botão Atualizar → Reiniciar na barra de título
+# (baixa só o que mudou). Sem tarefa agendada, sem rodar este script de novo.
 #
 # NÃO precisa de Git, Bun, compilador nem do código-fonte. Pode rodar de novo
-# quando quiser: reinstala por cima com a versão mais nova.
+# quando quiser (por exemplo, para importar configurações mais novas).
 #
 # Para já apontar o arquivo de configurações, defina antes:
 #   $env:OPENCODE_PACOTE = "C:\Users\voce\Desktop\OpenCode-configuracoes.ocpack"
@@ -58,16 +61,19 @@ function Baixar([string]$url, [string]$destino) {
 New-Item -ItemType Directory -Force $Casa | Out-Null
 
 # ------------------------------------------------------------------ 1. baixar
-Etapa "Baixando o OpenCode Personal (instalador pronto, ~130 MB)"
+Etapa "Baixando o OpenCode Personal (instalador pronto, ~160 MB)"
 $Setup = Join-Path $Casa "OpenCodePersonalSetup.exe"
 $Importador = Join-Path $Casa "opencode-import.exe"
-$Atualizador = Join-Path $Casa "opencode-atualizar.exe"
-$Versao = Join-Path $Casa "version.json"
 Baixar "$Base/OpenCodePersonalSetup.exe" $Setup
 Baixar "$Base/opencode-import.exe" $Importador
-Baixar "$Base/opencode-atualizar.exe" $Atualizador
-Baixar "$Base/version.json" $Versao
 Ok "Baixado."
+
+# Instalações antigas tinham uma tarefa agendada que baixava o instalador
+# inteiro a cada 6 h. Agora o app se atualiza sozinho; a tarefa sai.
+Unregister-ScheduledTask -TaskName "OpenCode Personal - Atualizar" -Confirm:$false -ErrorAction SilentlyContinue
+foreach ($velho in "opencode-atualizar.exe", "atualizar.vbs", "release.json", "version.json") {
+  Remove-Item (Join-Path $Casa $velho) -Force -ErrorAction SilentlyContinue
+}
 
 # ------------------------------------------------------------------ 2. instalar
 Etapa "Instalando (segundos)"
@@ -113,35 +119,7 @@ if ($Pacote) {
   Aviso "  $Importador <arquivo.ocpack>"
 }
 
-# ------------------------------------------------------------------ 4. atualização automática
-# Este PC segue as Releases: um atualizador leve confere o GitHub e, quando há
-# versão nova, baixa e instala (só com o app fechado). Sem código, sem compilar.
-Etapa "Deixando o app se atualizar sozinho"
-try {
-  $commit = (Get-Content $Versao -Raw | ConvertFrom-Json).commit
-  $versaoTxt = (Get-Content $Versao -Raw | ConvertFrom-Json).version
-} catch { $commit = ""; $versaoTxt = "" }
-$marcador = @{ commit = $commit; version = $versaoTxt; installedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() }
-[IO.File]::WriteAllText((Join-Path $Casa "release.json"), ($marcador | ConvertTo-Json))
-
-# Um lançador .vbs roda o atualizador escondido (sem piscar janela de console).
-$vbs = Join-Path $Casa "atualizar.vbs"
-$conteudoVbs = 'Set s = CreateObject("WScript.Shell")' + "`r`n" + 's.Run Chr(34) & "' + $Atualizador + '" & Chr(34), 0, False'
-[IO.File]::WriteAllText($vbs, $conteudoVbs, [Text.Encoding]::ASCII)
-$nomeTarefa = "OpenCode Personal - Atualizar"
-try {
-  $acao = New-ScheduledTaskAction -Execute "wscript.exe" -Argument ('"' + $vbs + '"')
-  $gLogon = New-ScheduledTaskTrigger -AtLogOn
-  $gPeriodo = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Hours 6)
-  Register-ScheduledTask -TaskName $nomeTarefa -Action $acao -Trigger $gLogon, $gPeriodo -Force | Out-Null
-  Ok "Confere o GitHub ao ligar o PC e a cada 6 horas."
-} catch {
-  # Fallback para o schtasks se o módulo ScheduledTasks não estiver disponível.
-  & schtasks /Create /TN $nomeTarefa /TR "wscript.exe `"$vbs`"" /SC ONLOGON /F | Out-Null
-  Ok "Confere o GitHub ao ligar o PC."
-}
-
-# ------------------------------------------------------------------ 5. abrir + Brave
+# ------------------------------------------------------------------ 4. abrir + Brave
 Etapa "Abrindo o OpenCode Personal"
 Start-Process $AppExe
 
@@ -171,4 +149,4 @@ if (Test-Path $extensao) { Start-Process explorer.exe $extensao }
 
 Write-Host ""
 Write-Host "Pronto! O OpenCode Personal está instalado em $AppExe" -ForegroundColor Green
-Write-Host "Atualizações e registro em $Casa" -ForegroundColor Green
+Write-Host "Ele se atualiza sozinho: quando houver versão nova, use o botão Atualizar na barra de título." -ForegroundColor Green

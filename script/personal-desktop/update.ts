@@ -16,6 +16,7 @@
  * (see FOLLOW in shared.ts), so the button and the watcher update from there.
  */
 import { $ } from "bun"
+import { spawn } from "node:child_process"
 import { copyFile, mkdir } from "node:fs/promises"
 import path from "node:path"
 import {
@@ -23,6 +24,8 @@ import {
   DESKTOP,
   HOME,
   PENDING,
+  RELEASES,
+  RELEASE_FILES,
   ROOT,
   acquireLock,
   appRunning,
@@ -70,14 +73,19 @@ async function build() {
   }
 
   process.stdout.write(`${BUILDING_MARKER}\n`)
+  // The OpenCode version this checkout is built from. Without it a dev build reports
+  // 0.0.0-dev-<date>, and OpenCode Zen refuses its free models to versions that old.
+  const version = await Bun.file(path.join(ROOT, "packages", "opencode", "package.json"))
+    .json()
+    .then((pkg: { version: string }) => pkg.version)
+  // The app's own version, unique per build (UTC yyyymmddhhmm), so a PC updating
+  // from the GitHub Release sees each build as newer than the last.
+  const buildVersion = `${version}-p.${new Date(started).toISOString().replace(/\D/g, "").slice(0, 12)}`
   const env = {
     ...process.env,
     OPENCODE_CHANNEL: "dev",
-    // The OpenCode version this checkout is built from. Without it a dev build reports
-    // 0.0.0-dev-<date>, and OpenCode Zen refuses its free models to versions that old.
-    OPENCODE_VERSION: await Bun.file(path.join(ROOT, "packages", "opencode", "package.json"))
-      .json()
-      .then((pkg: { version: string }) => pkg.version),
+    OPENCODE_VERSION: version,
+    OPENCODE_PERSONAL_BUILD_VERSION: buildVersion,
     OPENCODE_PERSONAL: "1",
     // Baked into the app so its update button can rebuild from this checkout.
     OPENCODE_PERSONAL_ROOT: ROOT,
@@ -106,9 +114,14 @@ async function build() {
         .env(env),
     )
 
-    const built = path.join(DESKTOP, "dist", "opencode-personal-win-x64.exe")
+    const dist = path.join(DESKTOP, "dist")
+    const built = path.join(dist, RELEASE_FILES[0]!)
     if (!(await Bun.file(built).exists())) throw new Error(`Instalador não encontrado em ${built}`)
     await copyFile(built, PENDING)
+    // Set aside for release.ts: the next build overwrites dist while it uploads.
+    const staged = path.join(RELEASES, buildVersion)
+    await mkdir(staged, { recursive: true })
+    for (const name of RELEASE_FILES) await copyFile(path.join(dist, name), path.join(staged, name))
     await writeState({ ...(await readState()), builtAt: Date.now(), sourceTime, lastError: undefined })
     await log(`Compilado em ${Math.round((Date.now() - started) / 60000)} min.`)
     return "built" as const
@@ -147,6 +160,15 @@ const pulled = follow
 const result = pulled ? await build().finally(() => releaseLock(BUILD_LOCK)) : "failed"
 if (!pulled) await releaseLock(BUILD_LOCK)
 if (result === "failed") process.exitCode = 1
+// Every build made here goes up to the GitHub Release on its own, for the other
+// PCs. Detached: the upload takes minutes and must not hold up the next build.
+if (result === "built" && !follow)
+  spawn(process.execPath, [path.join(import.meta.dir, "release.ts"), "--auto"], {
+    cwd: ROOT,
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+  }).unref()
 if (result === "built" && fromApp) await log("Nova versão pronta: reinicie pelo botão de atualizar do app.")
 if (result === "built" && !fromApp && !(await installPending()) && (await appRunning())) {
   await log("App aberto: a nova versão será instalada assim que você fechar o OpenCode Personal.")

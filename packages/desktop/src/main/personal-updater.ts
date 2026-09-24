@@ -44,10 +44,33 @@ const SOURCE_TIME = Number(import.meta.env.OPENCODE_PERSONAL_SOURCE_TIME) || 0
 
 type BuildState = { builtAt?: number; sourceTime?: number; lastError?: string }
 
+const SCRIPTS = ROOT ? join(ROOT, "script", "personal-desktop") : ""
+
+/**
+ * Whether this PC has the checkout the app was built from. Elsewhere (a PC set
+ * up by instalar.ps1) there is nothing to compile, so the app updates from the
+ * GitHub Release with electron-updater instead, like the official app.
+ */
+export function buildsFromSource() {
+  return app.isPackaged && !!BUN && existsSync(BUN) && existsSync(join(SCRIPTS, "update.ts"))
+}
+
+/**
+ * PCs installed before the app could update itself got a scheduled task that
+ * downloaded the whole installer every few hours. The app does that now, so the
+ * task only gets in the way; removing a task that is not there is a no-op.
+ */
+export function retireReleaseTask() {
+  spawn("schtasks", ["/Delete", "/TN", "OpenCode Personal - Atualizar", "/F"], {
+    stdio: "ignore",
+    windowsHide: true,
+  }).once("error", () => {})
+}
+
 export function setupPersonalUpdater(stop: () => Promise<void>): UpdaterController {
   const logger = getLogger()
-  const scripts = ROOT ? join(ROOT, "script", "personal-desktop") : ""
-  const enabled = app.isPackaged && !!BUN && existsSync(BUN) && existsSync(join(scripts, "update.ts"))
+  const scripts = SCRIPTS
+  const enabled = buildsFromSource()
   let state: UpdaterState = enabled ? { status: "idle" } : { status: "disabled" }
   let pending: Promise<UpdaterState> | undefined
   const listeners = new Set<(state: UpdaterState) => void>()

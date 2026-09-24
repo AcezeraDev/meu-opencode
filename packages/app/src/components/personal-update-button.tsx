@@ -6,9 +6,10 @@ import { useUpdaterAction } from "./updater-action"
 import "./personal-update-button.css"
 
 /**
- * Personal desktop builds rebuild the app from the local checkout, so their
- * update button is always in the titlebar: it compiles the current code (or
- * waits for the watcher's build) and then turns into "Restart".
+ * Personal desktop builds keep their update button in the titlebar. Where the
+ * code lives it compiles the current code (or waits for the watcher's build);
+ * on another PC it downloads the newest published build. Either way it then
+ * turns into "Restart".
  */
 export function PersonalUpdateButton() {
   const platform = usePlatform()
@@ -24,6 +25,8 @@ export function PersonalUpdateButton() {
   /** "Building · interface · 3 min" while a build runs, so a long one plainly moves on. */
   const building = () => {
     const current = state()
+    // A build from the checkout has no version yet; a published one being downloaded does.
+    if (current?.status === "downloading" && current.version) return language.t("settings.updates.action.downloading")
     if (current?.status !== "downloading" || !current.step) return language.t("settings.updates.action.building")
     const minutes = current.started ? Math.max(0, Math.floor((now() - current.started) / 60_000)) : 0
     return language.t("titlebar.personalUpdate.progress", {
@@ -45,6 +48,8 @@ export function PersonalUpdateButton() {
     const current = state()
     if (current?.status === "ready")
       return language.t("titlebar.personalUpdate.readyTooltip", { version: current.version })
+    if (current?.status === "downloading" && current.version)
+      return language.t("titlebar.personalUpdate.downloadingTooltip", { version: current.version })
     if (current?.status === "downloading") return language.t("titlebar.personalUpdate.buildingTooltip")
     if (current?.status === "error") return current.message
     return language.t("titlebar.personalUpdate.tooltip")

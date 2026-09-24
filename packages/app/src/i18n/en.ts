@@ -931,9 +931,10 @@ export const dict = {
   "titlebar.personalUpdate.step.server": "server",
   "titlebar.personalUpdate.step.interface": "interface",
   "titlebar.personalUpdate.step.installer": "installer",
-  "titlebar.personalUpdate.tooltip": "Build the app from your local code and update",
+  "titlebar.personalUpdate.tooltip": "Update to the newest version",
   "titlebar.personalUpdate.buildingTooltip": "Building a new version from your local code. This takes a few minutes.",
-  "titlebar.personalUpdate.readyTooltip": "New version built {{version}}. Restart to install it.",
+  "titlebar.personalUpdate.readyTooltip": "New version ready ({{version}}). Restart to install it.",
+  "titlebar.personalUpdate.downloadingTooltip": "Downloading version {{version}} published on GitHub.",
 
   "common.closeTab": "Close tab",
   "common.dismiss": "Dismiss",

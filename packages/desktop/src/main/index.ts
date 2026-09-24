@@ -32,7 +32,7 @@ import {
   type SidecarListener,
 } from "./server"
 import { setupAutoUpdater, showUpdaterDialog } from "./updater"
-import { setupPersonalUpdater } from "./personal-updater"
+import { buildsFromSource, retireReleaseTask, setupPersonalUpdater } from "./personal-updater"
 import { safeWebContentsURL } from "./window-state"
 import {
   getLastFocusedWindow,
@@ -277,7 +277,11 @@ const main = Effect.gen(function* () {
   app.setAsDefaultProtocolClient("opencode")
   registerRendererProtocol()
   setDockIcon()
-  const updater = PERSONAL ? setupPersonalUpdater(stopSidecars) : setupAutoUpdater(stopSidecars)
+  // A personal build compiles itself where its checkout is; on any other PC it
+  // follows the GitHub Release like the official app follows its own.
+  const compiles = PERSONAL && buildsFromSource()
+  if (PERSONAL && !compiles && process.platform === "win32") retireReleaseTask()
+  const updater = compiles ? setupPersonalUpdater(stopSidecars) : setupAutoUpdater(stopSidecars)
   const menuDeps = {
     trigger: (id: string) => {
       const win = getLastFocusedWindow()
@@ -320,7 +324,7 @@ const main = Effect.gen(function* () {
   registerWslIpcHandlers(wslServers)
   void updater.start()
   // A personal build's check compiles the app, so it only runs when asked.
-  if (!PERSONAL) {
+  if (!compiles) {
     const updateTimer = setInterval(() => void updater.check(), 10 * 60 * 1000)
     updateTimer.unref()
     app.once("will-quit", () => clearInterval(updateTimer))

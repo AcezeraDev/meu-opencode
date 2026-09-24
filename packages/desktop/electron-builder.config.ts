@@ -141,14 +141,25 @@ function getConfig() {
     case "dev": {
       if (personal) {
         const personalBase = getBase("ai.opencode.desktop.personal")
+        // Each build gets its own version (script/personal-desktop/update.ts), so
+        // a PC updating from the Release can tell a new build from the one it has.
+        const version = process.env.OPENCODE_PERSONAL_BUILD_VERSION
         return {
           ...personalBase,
           appId: "ai.opencode.desktop.personal",
           productName: "OpenCode Personal",
-          artifactName: "opencode-personal-${os}-${arch}.${ext}",
+          // The name instalar.ps1 and latest.yml point at, the same for every build.
+          artifactName: "OpenCodePersonalSetup.${ext}",
           // The install folder and updater cache are named after the package, so a
           // distinct name keeps this build from overwriting the official app's files.
-          extraMetadata: { ...personalBase.extraMetadata, name: "opencode-personal" },
+          extraMetadata: { ...personalBase.extraMetadata, name: "opencode-personal", ...(version ? { version } : {}) },
+          // Where PCs without the checkout get new builds (script/personal-desktop/release.ts
+          // uploads them). A fixed tag keeps the URL the same; "latest" names latest.yml.
+          publish: {
+            provider: "generic" as const,
+            url: "https://github.com/AcezeraDev/meu-opencode/releases/download/personal-latest",
+            channel: "latest",
+          },
         }
       }
       return {

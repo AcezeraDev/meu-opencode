@@ -20,6 +20,14 @@ export const PENDING = path.join(HOME, "OpenCodePersonalSetup.exe")
 export const BUILD_LOCK = path.join(HOME, "update.lock")
 export const INSTALL_LOCK = path.join(HOME, "install.lock")
 /**
+ * Builds waiting to go up to the GitHub Release, one folder per build version
+ * (update.ts copies them here, release.ts uploads the newest and drops the rest).
+ */
+export const RELEASES = path.join(HOME, "releases")
+export const RELEASE_LOCK = path.join(HOME, "release.lock")
+/** The files electron-builder writes for one build that the Release serves. */
+export const RELEASE_FILES = ["OpenCodePersonalSetup.exe", "OpenCodePersonalSetup.exe.blockmap", "latest.yml"]
+/**
  * Present on a PC that follows the published code instead of being where it is
  * written (instalar.ps1 creates it): updates come from `git pull` there, not
  * from files changing on disk.
