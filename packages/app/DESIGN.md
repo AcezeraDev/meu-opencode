@@ -1,19 +1,27 @@
 ---
 name: OpenCode Personal
-description: Bench-oscilloscope instrument world for a personal AI coding agent.
+description: Colored spaces for a personal AI coding agent; the app takes on the tone of the project you are in.
 colors:
-  screen: "#0b0f12"
-  canvas-deep: "#050709"
-  bezel-01: "#11161a"
-  bezel-02: "#171e23"
-  bezel-03: "#1f272d"
-  bezel-04: "#283238"
-  readout: "#e6edf3"
-  channel-edit: "#3fd0e0"
-  channel-user: "#c9d3dc"
-  channel-warn: "#f5b33c"
-  channel-error: "#ff5a4e"
-  trace: "oklch(0.8 0.16 190)"
+  space-purple: "#9b7bff"
+  space-blue: "#5b8cff"
+  space-cyan: "#2fc4de"
+  space-green: "#34cc88"
+  space-yellow: "#f0bd45"
+  space-orange: "#ff8a4c"
+  space-red: "#ff5d6c"
+  space-pink: "#ff66b8"
+  space-gray: "#9aa3b2"
+  space-on: "#0b0b10"
+  ground-deep: "#07080b"
+  panel-base: "#111217"
+  layer-01: "#17181e"
+  layer-02: "#1d1e26"
+  layer-03: "#25262f"
+  layer-04: "#2e2f3a"
+  readout: "#eef0f6"
+  user-mark: "#c7cede"
+  error: "#ff5a4e"
+  warn: "#f5b33c"
 typography:
   ui:
     fontFamily: "Inter Variable, ui-sans-serif, system-ui, sans-serif"
@@ -22,15 +30,14 @@ typography:
     lineHeight: 1.5
   title:
     fontFamily: "Inter Variable, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "15px"
+    fontSize: "14px"
     fontWeight: 600
-    lineHeight: "21px"
-    letterSpacing: "-0.011em"
+    letterSpacing: "-0.012em"
   readout:
     fontFamily: "var(--font-family-mono)"
     fontSize: "12px"
     fontWeight: 400
-    lineHeight: "16px"
+    fontFeature: "tnum"
   label:
     fontFamily: "var(--font-family-mono)"
     fontSize: "10px"
@@ -38,140 +45,209 @@ typography:
     lineHeight: "12px"
     letterSpacing: "0.06em"
 rounded:
-  control: "6px"
-  action: "7px"
-  strip: "10px"
-  panel: "12px"
-  sheet: "16px"
+  xs: "4px"
+  sm: "6px"
+  md: "8px"
+  row: "9px"
+  project-row: "11px"
+  lg: "12px"
+  panel: "14px"
+  xl: "16px"
+  card: "18px"
+  hero: "20px"
   full: "999px"
 spacing:
-  cell: "6px"
+  chip-gap: "6px"
   row: "8px"
-  group: "14px"
-  section: "24px"
+  inset: "10px"
+  group: "12px"
+  nav-pad: "14px"
 components:
-  measurement-strip:
-    backgroundColor: "{colors.bezel-01}"
+  titlebar-tab:
+    backgroundColor: "{colors.ground-deep}"
+    textColor: "{colors.user-mark}"
+    rounded: "{rounded.row}"
+  titlebar-tab-active:
+    backgroundColor: "{colors.layer-01}"
     textColor: "{colors.readout}"
-    rounded: "{rounded.strip}"
-    height: "34px"
-    padding: "0 12px 0 8px"
-  instrument-panel:
-    backgroundColor: "{colors.bezel-01}"
+    rounded: "{rounded.row}"
+  session-card:
+    backgroundColor: "{colors.panel-base}"
     textColor: "{colors.readout}"
     rounded: "{rounded.panel}"
-    padding: "12px"
-  panel-action:
-    backgroundColor: "{colors.bezel-03}"
+  composer:
+    backgroundColor: "{colors.layer-01}"
     textColor: "{colors.readout}"
-    rounded: "{rounded.action}"
-    height: "28px"
-  panel-action-hover:
-    backgroundColor: "{colors.bezel-04}"
+    rounded: "{rounded.card}"
+  send-button:
+    backgroundColor: "{colors.space-purple}"
+    textColor: "{colors.space-on}"
+    rounded: "{rounded.full}"
+  home-project-row:
+    backgroundColor: "{colors.layer-01}"
+    textColor: "{colors.readout}"
+    rounded: "{rounded.project-row}"
+    height: "34px"
+  settings-search:
+    backgroundColor: "{colors.panel-base}"
+    textColor: "{colors.readout}"
+    rounded: "{rounded.md}"
+    height: "34px"
+    padding: "0 10px"
+  settings-nav-item:
+    textColor: "{colors.user-mark}"
+    rounded: "{rounded.row}"
+    height: "32px"
+  settings-list:
+    backgroundColor: "{colors.layer-01}"
+    textColor: "{colors.readout}"
+    rounded: "{rounded.panel}"
+  chip:
+    backgroundColor: "{colors.layer-02}"
+    textColor: "{colors.readout}"
+    rounded: "{rounded.full}"
+    height: "24px"
+    padding: "0 10px"
 ---
 
 # Design System: OpenCode Personal
 
 ## Overview
 
-**Creative North Star: "The Bench Oscilloscope"**
+**Creative North Star: "Colored Spaces"**
 
-Every AI response is a live signal measured on an instrument screen. The chat sits on a phosphor-black screen under a faint, static graticule; the chrome around it is opaque instrument bezel. While the agent works, the screen comes alive: an RGB trace runs around the chat's edge, a measurement strip reads the signal above the composer, and each finished response leaves its measurements behind as a footer.
+Every project is a space with a color of its own, and the app takes on the tone of the space you are in. The ground and every panel lean toward that hue; the color itself lands only on what is yours and active: the open tab, the selected project or settings page, focus, and the send button. You know where you are by color alone. Home, which belongs to no project, is the violet space.
 
-The app stays open all day, so the world is calm at rest and expressive only while something is happening. Color and motion always report a state; nothing moves just to decorate.
+The world is built from one variable. `html[data-space]` (set by the tab in use through `enterSpace`) picks `--space` from nine hues, and every neutral, border, wash and accent derives from it with `color-mix`, so a new space is one line. Surfaces are rounded cards (14 to 20px) lifted off a near-black ground with soft shadows that have a real offset. The app stays open all day, so it is calm at rest: backgrounds never move, Lite mode (on by default) stops continuous animation, and the optional RGB cycle for live work exists only when the user turns it on and Lite mode is off.
+
+It refuses the grey chat app with one static blue accent. Tokens live in `packages/ui/src/v2/styles/scope.css`; the shell's use of them lives in `packages/app/src/spaces.css`.
 
 **Key Characteristics:**
-- Phosphor-black screen with a graticule that never moves.
-- One RGB trace color that cycles continuously, reserved for what is live or active.
-- Fixed channel colors for everything that is not live (edits, prompts, warnings, errors).
-- Monospace readouts in fixed slots, with unused leading zeros drawn as ghosts.
-- Live readouts dissolve into a per-response summary when a turn ends.
+- Nine space hues; one of them is the app's accent at any moment, chosen by the project in use.
+- Near-black neutrals tinted 6 to 10% toward the space hue; no pure grey surfaces.
+- The space color marks only what is yours and active; everything else stays in tinted neutrals.
+- Rounded cards with soft offset shadows and a hairline in the space tone.
+- A quiet wash of the space color at the top of the session card and the composer, painted once.
+- Errors and warnings keep fixed colors in every space.
 
 ## Colors
 
-Dark scheme is primary; the light scheme ("print mode") inverts to a near-white screen with the same rules. Tokens live in `packages/ui/src/v2/styles/scope.css`.
+A multi-accent system where exactly one accent is live at a time: the space you are in.
 
 ### Primary
-- **Trace** (`--chroma`, `oklch(L C var(--chroma-hue))`): the live signal. Its hue cycles through the full wheel (6s, 14s or 28s per turn, from Settings). The token value above is its resting hue when RGB is off or motion is reduced.
+- **The Space** (`--space`): the active project's hue, one of the nine below. It fills the send button, the focus ring, the active tab tint, the selected project row and settings page, text selection, caret, scrollbars and native controls. Derived tones: **Space Ink** (`--space-ink`, space mixed 82% toward white in dark, 72% toward ink in light) for accent text and icons; **Space Soft** (16%), **Space Line** (42%) and **Space Wash** (28% dark, 10% light) as translucent layers; **On Space** (`space-on`) for text on a space fill.
+- **Violet Space** (`space-purple`): the default and home space.
+- **Blue, Cyan, Green, Yellow, Orange, Red, Pink Spaces** (`space-blue` … `space-pink`): the eight hues a project can own. Tuned to read on the dark ground and as a fill.
+- **Slate Space** (`space-gray`): only for a project someone explicitly chose grey for; never auto-assigned.
 
-### Secondary
-- **Edit channel** (`#3fd0e0`): file edits in the overview bar, focus outlines, the daily spend meter.
+A project's color resolves as: explicit pick in project settings, else the color the layout auto-assigned, else a stable hash of its folder over the eight chromatic spaces. Every view of a project shows the same color.
 
 ### Tertiary
-- **Warn channel** (`#f5b33c`) and **Error channel** (`#ff5a4e`): context above 70% / 90%, spend near / over the daily limit, errors. They never cycle.
+- **Error** (`error`, light scheme `#d92d20`) and **Warn** (`warn`, light scheme `#b7791f`): fixed state colors, identical in every space, never cycled.
 
 ### Neutral
-- **Screen** (`#0b0f12`) under the graticule, **Canvas deep** (`#050709`) behind panels, **Bezels 01–04** (`#11161a` → `#283238`) for raised instrument surfaces, **Readout** (`#e6edf3`) for measured values, **User channel** (`#c9d3dc`) for prompt markers.
+- **Deep Ground** (`ground-deep`, mixed 7% toward the space): the window behind every card.
+- **Panel Base** (`panel-base`, 6%): session card and inputs.
+- **Layers 01 to 04** (`layer-01` … `layer-04`, 7 to 10%): composer, lists, nav, raised controls, one step lighter each.
+- **Borders** muted / base / strong: white at 5 / 8 / 15% mixed 12 / 16 / 22% toward the space.
+- **Readout** (`readout`): measured values in mono. **User Mark** (`user-mark`): prompt markers and quiet text.
+
+The hex values above are the neutral bases before the space tint; the built value is always `color-mix(in oklab, var(--space) N%, base)`. The light scheme mirrors the same structure on a near-white ground (`#ffffff` to `#d4d8e1` bases).
 
 ### Named Rules
-**The Trace Law.** Only what is live or active wears the RGB trace: the chat edge while responding, the send/stop button, the active tab, the CH1 chip, the live overview marker, the primary "compact now" action. Everything else uses a fixed channel color.
+**The Yours-and-Active Rule.** The space color marks only what is yours and active: the active tab, focus, the send button, the selected project, the selected settings page. Everything else, including hovers, stays in space-tinted neutrals (hover tints stay at 9 to 12%).
 
-**The Still Screen Rule.** Backgrounds never animate. A moving layer behind panels would make every blur and repaint recompute each frame in an app that stays open all day.
+**The One Space Rule.** The app wears one space at a time. The only other hues on screen are each tab's and project row's own color (`--own-space`), shown at a faint 10% tint when inactive and filled at 22 to 24% when selected.
+
+**The Fixed State Rule.** Errors and warnings never take the space color and never cycle.
 
 ## Typography
 
-**UI:** Inter Variable (13px/440 for body, 15px/600 for titles).
-**Readouts and labels:** the project monospace (`--font-family-mono`), tabular numerals.
+**UI Font:** Inter Variable (with ui-sans-serif, system-ui)
+**Readout/Label Font:** the project monospace (`--font-family-mono`), tabular numerals
+
+**Character:** A dense, quiet sans at 13px for everything you read, with a mono voice reserved for numbers that are measured.
 
 ### Hierarchy
-- **Title** (600, 15px, 21px): session title in context views.
-- **UI** (440, 13px): messages, rows, settings.
-- **Readout** (400, 12px mono, tabular): measured values: time, tokens, speed, cost, percentages.
-- **Label** (500, 10px mono, uppercase, 0.06em): the name of the measurement next to its readout.
+- **Title** (600, 14px, -0.012em): session title on the session card, settings page titles.
+- **UI** (440, 13px, 1.5): messages, rows, settings, inputs. Section index items drop to 12.5px, chips to 12px.
+- **Readout** (400, 12px mono, tabular): measured values such as today's spend, tokens, time. Utility class `.scope-readout`, with unused leading zeros in `.scope-readout-ghost`.
+- **Label** (500, 10px mono, uppercase, 0.06em): the name of a measurement, set beside its readout. Utility class `.scope-label`.
 
 ### Named Rules
-**The Fixed Slot Rule.** Numbers that change while you watch sit in fixed digit slots (`00:42`, `038 tok/s`, `014`), with the unused leading zeros drawn in the ghost color, so values never jitter.
-
-**The Label-Beside Rule.** A measurement label sits beside its value on the same line, never as a small heading above a big number.
+**The Label-Beside Rule.** A mono label sits on the same line as its readout (`HOJE R$ 0,00`), never as a small heading above a title or section.
 
 ## Layout
 
-The chat column is centered on the screen; instruments dock to its edges instead of floating over content. The measurement strip docks above the composer; the per-response summary closes each turn; the overview bar runs inside the timeline's 16px right padding and hides below 640px wide. Wide panels place context-tab sections side by side through container queries.
+A titlebar strip of tab pills across the top; below it, the session card and the review/side panels sit side by side on the deep ground with a few pixels of gap, each a separate rounded card. The composer floats at the bottom of the session card as a card of its own. Home centers a hero composer with example chips, then lists projects (a left column of 34px rows) beside their sessions (a search field and session rows). Settings is a centered dialog: a search-first left nav (search, "also in" page chips, grouped pages, General's section index on a space-tinted rail) and a content column of rounded lists.
+
+Rhythm is tight: 6px chip gaps, 8 to 10px row insets, 12 to 14px panel padding. Narrow titlebar tabs collapse to their avatar (container query at 64px) and show close only on hover.
 
 ## Elevation & Depth
 
-Instrument surfaces are opaque (no backdrop blur). Depth comes from bezel steps (01 → 04) and soft drop shadows on floating panels (`0 16px 40px rgb(0 0 0 / 0.3)`). The only glow in the world belongs to the trace.
+A hybrid of tonal layering and soft lifted shadows. Surfaces step up through Layers 01 to 04; cards add shadows with a real vertical offset plus a 1px ring in the space-tinted border. There is no backdrop blur and no texture. Selected pills and rows cast a colored shadow in their own space; the send button carries a small glow in the space color.
+
+### Shadow Vocabulary
+- **Raised** (`--v2-elevation-raised`, dark: `0 1px 0 rgb(255 255 255 / 0.035) inset, 0 2px 4px rgb(0 0 0 / 0.3), 0 10px 28px -10px rgb(0 0 0 / 0.6), 0 0 0 1px border-muted`): the session card.
+- **Floating** (`--v2-elevation-floating`, dark: `... 0 6px 14px rgb(0 0 0 / 0.35), 0 24px 56px -16px rgb(0 0 0 / 0.7), 0 0 0 1px border-base`): composer and home hero composer.
+- **Overlay** (`--v2-elevation-overlay`, dark: `... 0 12px 28px rgb(0 0 0 / 0.4), 0 40px 80px -20px rgb(0 0 0 / 0.75), 0 0 0 1px border-base`): dialogs, settings.
+- **Own-space lift** (`0 6px 16px -8px` / `0 8px 20px -12px` of the element's own space at 70 to 80%): the active tab and the selected project row.
+
+### Named Rules
+**The Still Ground Rule.** Backgrounds never animate. The top wash on the session card and the workspace glow (two radial gradients of the space at 14% and 8%) are painted once.
 
 ## Shapes
 
-Controls 6px, panel actions 7px, strips 10px, panels 12px, full-screen sheets 16px, meters fully rounded. Tick lines and rules are 1px; dashed rules separate measured summaries from content.
+Soft, consistent rounding that grows with the surface: 7 to 9px for pills, nav items and index rows; 10 to 12px for search fields, project and session rows; 14px for panels and settings lists; 18px for the composer and settings dialog; 20px for the home hero composer; fully round for chips and example prompts. Base scale from Tailwind: 4 / 6 / 8 / 12 / 16 / 20px. Project avatars are rounded squares carrying the project's initial on its space color, not dots.
 
 ## Components
 
+### Titlebar tabs
+Soft pills (9px). Inactive tabs keep a faint 10% tint of their own space over the deep ground; the open tab fills with 24% of its space over Layer 01, a 42% inset ring and an own-space lift, with base text. The pill is the only "you are here" marker; no underline. Squeezed tabs keep the avatar.
+
+### Session card
+A rounded panel (14px) on Panel Base with the Raised shadow and a space wash at its top (28% at 0, 5% at 180px, clear by 420px). The sticky title takes the wash's tone so it never cuts the wash with a hard line.
+
+### Composer
+A floating card (18px) on Layer 01 with an 8% space gradient at its top, the Floating shadow and a 22% space inset ring. On focus the ring rises to 58% and a 4px outer ring at 14% appears. The home hero composer is the same at 20px with a 10% gradient.
+
 ### Buttons
-Send / stop is lit with the trace (solid trace fill with a glow when ready to send; a faint trace tint with trace-colored icon while stopping). Panel actions are bezel-03 fills with a 0.97 press scale; the primary action takes a trace-tinted fill.
+- **Send:** solid space fill with dark text (`#04070a`), a 70% ring and a small 18px glow; presses to 0.94 scale. While stopping it drops to a 16% space tint with space-colored icon. Disabled it is a neutral grey disc.
+- **Home send:** space fill, On Space text, soft own-color shadow.
 
-### Response trace
-While the agent works, a phosphor beam laps the chat panel's edge clockwise, starting under the composer, at a constant 600px/s (corners included) with a short fading tail; its first lap writes a 1px frame in the trace color. The only halo is a small bloom around the beam's head. It fades in 240ms, fades out 520ms, and every loop stops when it is out. Reduced motion keeps only the static frame.
+### Chips
+Fully round, 24px, 12px text. Example prompts on home turn 16% space on hover. Settings "also in" chips sit at 18% space, 30% on hover.
 
-### Measurement strip
-34px strip above the composer while the agent works: CH1 chip, TIME, RATE with its trace, STEP, STEPS, COST. It sweeps in from the left, holds its last values when the turn ends and dissolves into the response summary.
+### Inputs / Fields
+Settings search: 34px, 10px radius, Panel Base with a base-border inset. Focus: 60% space inset plus a 3px ring at 18%. Placeholder in faint text; the search is accent-insensitive and hides rows it leaves out.
 
-### Response summary
-A dashed-rule footer under each finished turn with DURATION, TOOLS, FILES, OUTPUT, RATE and COST; a fresh one settles in with a trace sweep along its rule.
+### Navigation
+Settings nav items are 32px, 9px radius. Hover 10% space over Layer 02; the selected page 22% space with a 38% inset ring, base text and a Space Ink icon. General's section index sits under it on a 1px rail at 30% space, 26px rows, 12.5px muted text.
 
-### Overview bar
-The acquisition overview turned vertical: ticks for prompts (user channel), edits (edit channel), errors (error channel), the live head (trace), and a window for what is on screen. Click to jump; hover prompts to read them.
+### Home project rows
+34px rows, 11px radius, 10px gap between avatar and name. Hover 12% of their own space; selected fills 22% own space over Layer 01 with a 40% inset ring and an own-space lift. Picking one tints the whole app. Session rows are 12px radius with a 9% space hover.
 
-### Context ring and spend readout
-The composer ring reads context use (trace, then warn, then error); its panel offers compaction. The titlebar readout shows today's spend across sessions; its panel sets the daily limit. Both panels render in a portal anchored to their control.
+### Settings lists
+Rounded groups (14px) on Layer 01 with a muted-border inset and a soft drop (`0 8px 20px -14px rgb(0 0 0 / 0.5)`).
 
-### Softkeys
-Holding Ctrl for 650ms raises a sheet of every shortcut available, grouped by area; releasing Ctrl or pressing any other key closes it.
+### Live work
+What is live wears `--chroma`: the space color by default, or a cycling OKLCH hue (6s / 14s / 28s per turn) when the user enables the RGB cycle and Lite mode is off. Reduced motion and Lite mode keep it on the space color.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** give anything live the trace color, and take it away when it stops being live.
-- **Do** put changing numbers in fixed slots with ghost zeros.
-- **Do** dock instruments to the edges of the content they measure.
-- **Do** animate only transform and opacity on small layers, and pause loops when their owner is inactive.
-- **Do** keep reduced motion meaningful: stop cycling and movement, keep state colors.
+- **Do** derive every new color from `--space` with `color-mix`; a new surface should change tone when the space changes.
+- **Do** give the space color only to what is yours and active: active tab, focus, send, selected project or page.
+- **Do** show a project's own color through `--own-space` on its tab and row, faint when inactive, filled when selected.
+- **Do** lift cards with the Raised / Floating / Overlay shadows and step surfaces through Layers 01 to 04.
+- **Do** keep errors at `#ff5a4e` and warnings at `#f5b33c` (dark) in every space.
+- **Do** respect Lite mode (on by default): continuous animations stop, one-shot ones finish in 1ms, spinners stay.
+- **Do** set mono labels beside their readouts, in fixed digit slots.
 
 ### Don't:
-- **Don't** animate backgrounds, the graticule, or anything under large surfaces.
-- **Don't** cycle the color of errors, warnings or edits.
-- **Don't** set a small label above a big number (hero-metric); put the label beside the value.
-- **Don't** reintroduce translucent glass or backdrop blur on panels.
-- **Don't** add a trace or glow to static, non-live elements for decoration.
-- **Don't** paint the whole hue wheel at once or blur a wide band along a panel edge; the trace is one crisp line in the current hue (the old rotating rainbow halo read as a clumsy 3D bevel).
+- **Don't** animate backgrounds, washes or the workspace glow.
+- **Don't** run the RGB cycle unless the user turned it on and Lite mode is off.
+- **Don't** paint the space color on hovers, idle rows or decoration beyond a 12% tint.
+- **Don't** add texture, grids or backdrop blur to panels.
+- **Don't** replace project avatars with dots or glyphs; they are rounded squares with the project's initial.
+- **Don't** use a mono uppercase label as a kicker above a heading.

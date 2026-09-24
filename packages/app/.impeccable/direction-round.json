@@ -1,196 +1,264 @@
 {
-  "title": "Escolha o mundo visual do seu OpenCode",
-  "question": "O sorteio escolheu o Osciloscópio de bancada. Fique com ele, pegue uma alternativa ou sorteie de novo. (Uma 5ª opção, a cidade pixel RGB da eBoy, ficou na reserva do novo sorteio.)",
-  "options": [
-    {
-      "id": "assigned",
-      "label": "Osciloscópio de bancada",
-      "kicker": "THE ROLL",
-      "lineage": "osciloscópios digitais de laboratório",
-      "thesis": "Cada resposta da IA é um sinal ao vivo, medido na tela enquanto acontece.",
-      "palette": [
-        "#0b0e10",
-        "#262c31",
-        "#f5c542",
-        "#3fd0e0",
-        "#e04fd0",
-        "#e8ecef"
-      ],
-      "materials": [
-        "grade graticulada calma",
-        "traço de fósforo RGB com persistência",
-        "leituras de medição em fonte mono"
-      ],
-      "viewport": "Chat no centro sobre a grade; enquanto a IA responde, um traço RGB percorre a borda do chat e uma faixa de medições mostra tempo, tokens/s, ferramenta atual e custo; à direita, a barra de visão geral da sessão (o minimapa).",
-      "risk": "Pode parecer técnico demais se a grade e as leituras chamarem mais atenção que as mensagens.",
-      "raised": [
-        {
-          "from": "challenger-origami",
-          "raise": "As etapas da IA ficam numeradas numa coluna de margem fixa, e cada uma deixa marca visível."
-        },
-        {
-          "from": "challenger-cloud-quarry",
-          "raise": "Ao fim do turno, o painel ao vivo se dissolve no resumo da resposta, sem sumir de repente."
+  "at": "2026-09-24",
+  "seed": "cb192234",
+  "mode": "operate",
+  "scope": "direction",
+  "assignedIndex": 6,
+  "answer": {
+    "optionId": "model-pick",
+    "label": "Espaços coloridos por projeto",
+    "channel": "structured question (decision page unanswered: browser pane hidden)"
+  },
+  "payload": {
+    "title": "Escolha o visual novo do OpenCode Personal",
+    "question": "Todas as opções seguem o que você pediu: moderno com cor, cantos arredondados, cartões suaves. Muda como a cor organiza o app. Fique com a primeira, pegue outra, ou peça outra rodada.",
+    "options": [
+      {
+        "id": "assigned",
+        "label": "Cor que diz o estado",
+        "kicker": "A RODADA",
+        "lineage": "quadros de status coloridos (Linear, Height), Windows 11",
+        "thesis": "Cada sessão e projeto usa a cor do que está acontecendo: trabalhando, esperando você, pronta ou com erro.",
+        "palette": [
+          "#14121c",
+          "#1e1b2b",
+          "#8b7cff",
+          "#35d0a6",
+          "#ffb547",
+          "#ff6b81"
+        ],
+        "materials": [
+          "cartões arredondados de 14px",
+          "degradê suave violeta→ciano no que está ao vivo",
+          "pílulas de status coloridas"
+        ],
+        "viewport": "Barra lateral em cartões: cada projeto com sua bolinha de cor e as sessões em linhas com a pílula de estado; a conversa num cartão central; o compositor flutuando embaixo com o degradê ao vivo.",
+        "risk": "Se tudo ganhar cor, a cor para de dizer algo; exige disciplina: neutro por padrão, cor só em estado e no que você está.",
+        "raised": [
+          {
+            "from": "challenger-wayfinding",
+            "raise": "Na barra lateral, o destino que você segue fica sempre destacado e cada nível mostra só as escolhas seguintes (projeto → sessões), como uma placa de aeroporto."
+          },
+          {
+            "from": "challenger-splitflap",
+            "raise": "As linhas de sessão têm colunas fixas (nome, estado, hora): o estado muda de cor sem a linha pular de lugar."
+          },
+          {
+            "from": "challenger-onebit",
+            "raise": "Configurações viram um índice de categorias em cartões com busca no topo; a categoria aberta fica marcada sem ambiguidade."
+          }
+        ],
+        "wireframe": {
+          "cols": 12,
+          "rows": 10,
+          "regions": [
+            {
+              "label": "projetos (cor)",
+              "x": 0,
+              "y": 0,
+              "w": 1,
+              "h": 10,
+              "accent": true
+            },
+            {
+              "label": "sessões + estado",
+              "x": 1,
+              "y": 0,
+              "w": 2,
+              "h": 10
+            },
+            {
+              "label": "barra de título",
+              "x": 3,
+              "y": 0,
+              "w": 9,
+              "h": 1
+            },
+            {
+              "label": "conversa (cartão)",
+              "x": 3,
+              "y": 1,
+              "w": 9,
+              "h": 7
+            },
+            {
+              "label": "compositor ao vivo",
+              "x": 4,
+              "y": 8,
+              "w": 7,
+              "h": 2,
+              "accent": true
+            }
+          ]
         }
+      },
+      {
+        "id": "model-pick",
+        "label": "Espaços coloridos por projeto",
+        "kicker": "IMPECCABLE’S PICK",
+        "lineage": "espaços do navegador Arc",
+        "thesis": "Cada projeto é um espaço com sua própria cor; trocar de projeto troca o tom do app inteiro.",
+        "palette": [
+          "#101018",
+          "#2a1f4d",
+          "#ff7a59",
+          "#5b8cff",
+          "#3ddc97",
+          "#f5f3ff"
+        ],
+        "materials": [
+          "fundo tingido pela cor do projeto",
+          "cartões translúcidos leves",
+          "degradês largos"
+        ],
+        "viewport": "Barra lateral tingida da cor do projeto atual, com os outros projetos como bolinhas no rodapé; a conversa em cartão claro sobre esse tom.",
+        "risk": "É a direção mais comum para 'estilo Arc'; e fundo colorido grande custa mais para desenhar num app aberto o dia todo.",
+        "wireframe": {
+          "cols": 12,
+          "rows": 10,
+          "regions": [
+            {
+              "label": "sessões no tom do projeto",
+              "x": 0,
+              "y": 0,
+              "w": 3,
+              "h": 9,
+              "accent": true
+            },
+            {
+              "label": "projetos (bolinhas)",
+              "x": 0,
+              "y": 9,
+              "w": 3,
+              "h": 1
+            },
+            {
+              "label": "conversa",
+              "x": 3,
+              "y": 0,
+              "w": 9,
+              "h": 8
+            },
+            {
+              "label": "compositor",
+              "x": 4,
+              "y": 8,
+              "w": 7,
+              "h": 2
+            }
+          ]
+        }
+      },
+      {
+        "id": "challenger-wayfinding",
+        "label": "Placas de aeroporto",
+        "verdict": "competitive",
+        "lineage": "sinalização amarela de aeroporto (Schiphol)",
+        "thesis": "Navegar é ler placas: faixas amarelas com o próximo passo e o destino seguido sempre destacado.",
+        "palette": [
+          "#ffcc00",
+          "#111111",
+          "#ffffff",
+          "#2b2b2b"
+        ],
+        "materials": [
+          "faixas amarelas chapadas",
+          "pictogramas brancos em quadrados pretos"
+        ],
+        "viewport": "Faixa amarela no topo com projeto › sessão; a lateral mostra só as escolhas do nível atual com números grandes.",
+        "case": "Ótimo para achar as coisas (sua maior dor), mas amarelo e preto fogem do 'moderno com cor' suave que você escolheu.",
+        "risk": "Cansa a vista num app aberto o dia inteiro se o amarelo tomar áreas grandes."
+      },
+      {
+        "id": "challenger-splitflap",
+        "label": "Painel de estação",
+        "verdict": "declined",
+        "lineage": "painel de letras que viram",
+        "palette": [
+          "#0d0d0d",
+          "#f2f2f2",
+          "#ffb000",
+          "#c0392b"
+        ],
+        "materials": [
+          "placas pretas",
+          "letras em células fixas"
+        ],
+        "thesis": "Sessões como partidas num painel.",
+        "viewport": "Tabela de sessões com colunas fixas.",
+        "risk": "Frio e retrô, longe do moderno com cor.",
+        "case": "Não conversa com o jeito que você usa o app.",
+        "kept": "Colunas fixas: o estado muda sem a linha pular."
+      },
+      {
+        "id": "challenger-onebit",
+        "label": "Desktop de 1 bit",
+        "verdict": "declined",
+        "lineage": "primeiros Macs",
+        "palette": [
+          "#000000",
+          "#ffffff",
+          "#808080"
+        ],
+        "materials": [
+          "pontilhado",
+          "janelas com borda de 1px"
+        ],
+        "thesis": "Tudo em preto e branco pontilhado.",
+        "viewport": "Janelas sobrepostas.",
+        "risk": "Sem cor nenhuma.",
+        "case": "Contradiz o pedido de cor.",
+        "kept": "Estado claro: o item escolhido fica marcado sem ambiguidade."
+      },
+      {
+        "id": "challenger-busytown",
+        "label": "Cidade em corte",
+        "verdict": "declined",
+        "lineage": "livros ilustrados em corte",
+        "palette": [
+          "#f7f2e8",
+          "#c8412b",
+          "#f2c230",
+          "#4f8a3b"
+        ],
+        "materials": [
+          "guache",
+          "etiquetas em tudo"
+        ],
+        "thesis": "O app como uma cidade ilustrada.",
+        "viewport": "Cena contínua com prédios abertos.",
+        "risk": "Infantil para uma ferramenta de trabalho.",
+        "case": "Bonito, mas atrapalha a tarefa.",
+        "kept": "Tudo com rótulo claro."
+      }
+    ],
+    "reroll": {
+      "registers": [
+        "safer",
+        "bolder"
       ]
     },
-    {
-      "id": "model-pick",
-      "label": "Gabinete gamer com vidro temperado",
-      "kicker": "IMPECCABLE’S PICK",
-      "lineage": "PCs montados com fans e fitas RGB sincronizadas",
-      "thesis": "O app como gabinete aberto: as luzes RGB mostram a IA trabalhando.",
-      "palette": [
-        "#0a0a0c",
-        "#9aa0a6",
-        "#ff2d55",
-        "#34c759",
-        "#0a84ff",
-        "#bf5af2"
-      ],
-      "materials": [
-        "vidro temperado",
-        "alumínio escovado",
-        "fita de LED endereçável"
-      ],
-      "viewport": "Painéis como componentes atrás de vidro; faixas de LED correm pelas bordas e aceleram quando a IA responde.",
-      "risk": "É a leitura mais literal de RGB e a mais próxima do visual gamer que muitos apps já usam."
+    "buildPath": {
+      "value": "code",
+      "toggle": false
     },
-    {
-      "id": "challenger-seven-segment",
-      "label": "Displays de sete segmentos",
-      "verdict": "competitive",
-      "lineage": "relógios de cabeceira, placares e painéis de micro-ondas",
-      "thesis": "Toda informação viva vira dígitos acesos numa máscara fixa.",
+    "canon": true,
+    "canonCard": {
+      "label": "O padrão da categoria",
+      "thesis": "Um app de chat com IA como os outros, bem feito: cinza escuro e um acento azul.",
       "palette": [
-        "#0c0c0c",
-        "#ff3b30",
-        "#ffb000",
-        "#30d158"
+        "#0f1115",
+        "#1a1d23",
+        "#3b82f6",
+        "#e5e7eb"
       ],
       "materials": [
-        "segmentos de LED",
-        "células apagadas visíveis"
+        "grade limpa",
+        "cantos de 8px"
       ],
-      "viewport": "Chat limpo com uma régua de dígitos no topo: tempo, tokens/s, custo e gasto do dia acendendo segmento a segmento.",
-      "case": "Encaixa muito bem nos números (painel ao vivo, gasto do dia), mas é fraco para dar vida ao chat inteiro.",
-      "risk": "Fica com cara de brinquedo retrô se os dígitos dominarem o texto.",
-      "hero": "https://impeccable.style/worlds/cards/signals-instruments-seven-segment-alarm-clock-hero.webp"
+      "viewport": "Barra lateral cinza, conversa central, compositor embaixo.",
+      "risk": "Igual a todo mundo, de propósito."
     },
-    {
-      "id": "challenger-crt-arcade",
-      "label": "Tela de fliperama CRT",
-      "verdict": "competitive",
-      "lineage": "gabinetes de arcade com tubo e scanlines",
-      "thesis": "O app como tela de arcade: brilho de fósforo e cor com regras de jogo.",
-      "palette": [
-        "#050505",
-        "#ff004d",
-        "#00e436",
-        "#29adff",
-        "#ffec27"
-      ],
-      "materials": [
-        "scanlines",
-        "bloom de fósforo"
-      ],
-      "viewport": "Chat com moldura de tubo, títulos em pixel e brilho que pulsa enquanto a IA responde.",
-      "case": "Conversa com o seu gosto por RGB e jogos, mas perde na leitura de código e textos longos.",
-      "risk": "Fontes em pixel cansam em sessões longas.",
-      "hero": "https://impeccable.style/worlds/cards/medium-native-crt-arcade-pixel-glow-hero.webp"
-    },
-    {
-      "id": "challenger-transit",
-      "label": "Mapa de metrô noturno",
-      "verdict": "competitive",
-      "lineage": "diagramas de metrô em esmalte",
-      "thesis": "A sessão como linha de metrô: mensagens são estações, ferramentas são baldeações.",
-      "palette": [
-        "#0f1b3d",
-        "#f4f1ea",
-        "#e0301e",
-        "#2f6fdb",
-        "#f2a900",
-        "#1e9e5a"
-      ],
-      "materials": [
-        "esmalte azul-noite",
-        "linhas a 45 graus"
-      ],
-      "viewport": "Chat à esquerda; à direita a linha da sessão com estações clicáveis, e a linha atual acesa em RGB.",
-      "case": "Muito claro para navegar sessões longas, mas conversa menos com o brilho RGB que você pediu.",
-      "risk": "Vira enfeite se as linhas não forem navegáveis de verdade.",
-      "hero": "https://impeccable.style/worlds/cards/wayfinding-cartography-signage-midnight-transit-diagram-hero.webp"
-    },
-    {
-      "id": "challenger-origami",
-      "label": "Dobradura de tsuru",
-      "verdict": "declined",
-      "lineage": "sequências de origami",
-      "thesis": "Cada passo dobra o anterior até formar a peça.",
-      "palette": [
-        "#c8102e",
-        "#f3efe6",
-        "#1a1a1a",
-        "#c9a227"
-      ],
-      "materials": [
-        "papel washi",
-        "vincos visíveis"
-      ],
-      "viewport": "Etapas numeradas numa coluna de margem ao lado de uma única vista.",
-      "case": "Pouca ligação com o seu mundo de código e RGB.",
-      "kept": "Etapas numeradas em coluna fixa, cada uma deixando marca visível.",
-      "risk": "O papel vermelho briga com o RGB.",
-      "hero": "https://impeccable.style/worlds/cards/paper-folds-pleats-deployable-orizuru-crane-sequence-hero.webp"
-    },
-    {
-      "id": "challenger-cloud-quarry",
-      "label": "Pedreira de nuvens",
-      "verdict": "declined",
-      "lineage": "mundos surreais impossíveis",
-      "thesis": "Blocos temporários que se dissolvem de forma previsível.",
-      "palette": [
-        "#f4f6f8",
-        "#7fb3e6",
-        "#6b7280",
-        "#c0c7cf"
-      ],
-      "materials": [
-        "blocos de nuvem",
-        "vazios azuis"
-      ],
-      "viewport": "Blocos de trabalho que viram chuva ao terminar.",
-      "case": "Surreal demais para uma ferramenta de uso diário.",
-      "kept": "O painel ao vivo se dissolve no resumo quando o turno termina.",
-      "risk": "Pouca clareza para trabalho.",
-      "hero": "https://impeccable.style/worlds/cards/dream-surreal-impossible-worlds-cloud-quarry-hero.webp"
-    }
-  ],
-  "reroll": {
-    "registers": [
-      "safer",
-      "bolder"
-    ]
-  },
-  "buildPath": {
-    "value": "code"
-  },
-  "canon": true,
-  "canonCard": {
-    "label": "O padrão da categoria",
-    "thesis": "O visual que todo app de IA para programar usa, feito com capricho.",
-    "palette": [
-      "#0d0d0f",
-      "#e6e6e6",
-      "#7c5cff"
-    ],
-    "materials": [
-      "superfícies neutras",
-      "um único acento animado"
-    ],
-    "viewport": "Chat central, painel lateral e um acento RGB discreto.",
-    "risk": "Fica igual a qualquer outro app de IA."
-  },
-  "steer": true
+    "steer": true
+  }
 }

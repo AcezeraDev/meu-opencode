@@ -11,7 +11,7 @@ import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { MenuV2 } from "@opencode-ai/ui/v2/menu-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
-import { getProjectAvatarVariant, type HomeProjectSelection, type LocalProject } from "@/context/layout"
+import { getProjectAvatarVariant, projectSpace, type HomeProjectSelection, type LocalProject } from "@/context/layout"
 import { ServerConnection } from "@/context/server"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
@@ -473,6 +473,7 @@ function HomeProjectRow(
   return (
     <div
       ref={sortable.ref}
+      data-space={projectSpace(props.project)}
       class="group/project relative flex h-7 min-w-0 items-center rounded-[6px]"
       classList={{ "z-10": sortable.isDragSource() }}
       onContextMenu={(event) => {
@@ -613,7 +614,7 @@ function HomeProjectAvatar(props: { project: LocalProject; outline?: boolean }) 
     <ProjectAvatar
       fallback={name()}
       src={props.outline ? undefined : getProjectAvatarSource(props.project.id, props.project.icon)}
-      variant={props.outline ? "outline" : getProjectAvatarVariant(props.project.icon?.color)}
+      variant={props.outline ? "outline" : getProjectAvatarVariant(props.project.icon?.color, props.project.worktree)}
     />
   )
 }

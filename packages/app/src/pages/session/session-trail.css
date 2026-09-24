@@ -123,15 +123,15 @@
 }
 
 .session-trail-step[data-status="running"] .session-trail-node {
-  background: color-mix(in srgb, var(--v2-blue-600) 26%, transparent);
+  background: color-mix(in srgb, var(--space) 26%, transparent);
   box-shadow:
-    0 0 0 4px color-mix(in srgb, var(--v2-blue-600) 15%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--v2-blue-600) 60%, transparent);
+    0 0 0 4px color-mix(in srgb, var(--space) 15%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--space) 60%, transparent);
   animation: session-trail-pulse 1.6s ease-in-out infinite;
 }
 
 .session-trail-step[data-status="running"]::before {
-  background: linear-gradient(var(--v2-blue-600), transparent);
+  background: linear-gradient(var(--space), transparent);
 }
 
 .session-trail-step[data-status="pending"] .session-trail-node {
@@ -167,8 +167,8 @@
 }
 
 .session-trail-step-button[data-active] {
-  background: color-mix(in srgb, var(--v2-blue-600) 12%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v2-blue-600) 32%, transparent);
+  background: color-mix(in srgb, var(--space) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--space) 32%, transparent);
 }
 
 .session-trail-step-button:focus-visible {
@@ -224,7 +224,7 @@
 }
 
 .session-trail-detail[data-status="running"] .session-trail-status-dot {
-  background: var(--v2-blue-600);
+  background: var(--space);
   animation: session-trail-pulse 1.6s ease-in-out infinite;
 }
 

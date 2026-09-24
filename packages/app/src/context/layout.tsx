@@ -16,6 +16,7 @@ import { same } from "@/utils/same"
 import { createScrollPersistence, type SessionScroll } from "./layout-scroll"
 import { createPathHelpers } from "./file/path"
 import type { ProjectAvatarVariant } from "@opencode-ai/ui/v2/project-avatar-v2"
+import { rememberAssignedColor } from "./project-space"
 import { migrateLegacySessionStateKeys, ServerScope, SessionStateKey } from "@/utils/server-scope"
 import { createSessionKeyReader, ensureSessionKey, pruneSessionKeys } from "./layout-helpers"
 import { requireServerKey } from "@/utils/session-route"
@@ -47,23 +48,7 @@ export function getAvatarColors(key?: string) {
   }
 }
 
-export function getProjectAvatarVariant(key?: string): ProjectAvatarVariant {
-  if (key === "mint") return "cyan"
-  if (key === "lime") return "green"
-  if (
-    key === "orange" ||
-    key === "yellow" ||
-    key === "cyan" ||
-    key === "green" ||
-    key === "red" ||
-    key === "pink" ||
-    key === "blue" ||
-    key === "purple" ||
-    key === "gray"
-  )
-    return key
-  return "gray"
-}
+export { enterSpace, getProjectAvatarVariant, projectSpace } from "./project-space"
 
 type SessionView = {
   scroll: Record<string, SessionScroll>
@@ -559,6 +544,7 @@ export const { use: useLayout, provider: LayoutProvider } = createSimpleContext(
           used.add(color)
           setColors(worktree, color)
         }
+        rememberAssignedColor(worktree, color)
         if (!project.id) continue
 
         const requested = colorRequested.get(worktree)

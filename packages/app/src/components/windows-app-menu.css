@@ -6,7 +6,7 @@
 
 [data-component="dropdown-menu-content"].desktop-app-menu,
 [data-component="dropdown-menu-sub-content"].desktop-app-menu {
-  --menu-accent: var(--v2-blue-600, var(--border-interactive-base));
+  --menu-accent: var(--space, var(--border-interactive-base));
   --menu-text: var(--v2-text-text-base, var(--text-strong));
   --menu-muted: var(--v2-text-text-muted, var(--text-weak));
   --menu-faint: var(--v2-text-text-faint, var(--text-weaker));

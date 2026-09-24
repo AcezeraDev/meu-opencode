@@ -5,7 +5,7 @@
   --sc-line: var(--v2-border-border-muted, var(--border-weak-base));
   --sc-track: var(--v2-background-bg-layer-02, var(--surface-base));
   --sc-well: var(--v2-background-bg-layer-01, var(--surface-base));
-  --sc-accent: var(--v2-blue-600, var(--syntax-info));
+  --sc-accent: var(--space, var(--syntax-info));
   --sc-warning: var(--v2-state-fg-warning, var(--syntax-warning));
   --sc-danger: var(--v2-state-fg-danger, var(--syntax-critical));
   --sc-ease: var(--ease-out-expo, cubic-bezier(0.16, 1, 0.3, 1));

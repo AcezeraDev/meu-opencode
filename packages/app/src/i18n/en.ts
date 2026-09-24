@@ -1021,6 +1021,9 @@ export const dict = {
 
   "app.name.desktop": "OpenCode Desktop",
 
+  "settings.search.placeholder": "Search settings",
+  "settings.search.alsoIn": "Also in",
+  "settings.search.empty": "No General setting mentions “{{query}}”.",
   "settings.section.desktop": "Desktop",
   "settings.section.server": "Server",
   "settings.tab.general": "General",

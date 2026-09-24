@@ -10,6 +10,7 @@ import { useGlobal } from "@/context/global"
 import { useLanguage } from "@/context/language"
 import { ServerConnection, serverName } from "@/context/server"
 import { displayName, projectForSession } from "@/pages/layout/helpers"
+import { enterSpace, projectSpace, type ProjectAvatarVariant } from "@/context/layout"
 import { SessionTabAvatar } from "@/pages/layout/session-tab-avatar"
 import type { Session } from "@opencode-ai/sdk/v2"
 import { canOpenTabRename, forwardTabRef } from "./titlebar-tab-gesture"
@@ -60,6 +61,15 @@ export function TabNavItem(props: {
     return projectForSession(session, serverCtx()?.projects.list() ?? [])
   })
   const title = createMemo(() => props.session()?.title ?? props.fallbackTitle)
+  /** The tab's project color: its pill wears it, and the app takes it on while the tab is open. */
+  const space = createMemo(() => {
+    const session = props.session()
+    if (!session) return
+    return projectSpace(project(), session.directory)
+  })
+  createEffect(() => {
+    if (props.active && space()) enterSpace(space())
+  })
 
   const projectName = createMemo(() => {
     const session = props.session()
@@ -188,6 +198,7 @@ export function TabNavItem(props: {
       class="group relative flex h-7 w-full min-w-0 select-none flex-row items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-[6px] px-1.5 [container-type:inline-size]"
       classList={{ invisible: props.hidden }}
       data-active={props.active}
+      data-space={space()}
       data-dragging={props.dragging}
       data-state={props.active || props.pressed ? "pressed" : undefined}
       onMouseDown={(event) => {
@@ -347,6 +358,8 @@ export function DraftTabItem(props: {
   ref?: Ref<HTMLDivElement>
   href: string
   title: string
+  /** The project color of the folder the draft is for. */
+  space?: ProjectAvatarVariant
   active?: boolean
   onNavigate: () => void
   onClose: () => void
@@ -361,12 +374,16 @@ export function DraftTabItem(props: {
     event.stopPropagation()
     props.onClose()
   }
+  createEffect(() => {
+    if (props.active && props.space) enterSpace(props.space)
+  })
   return (
     <div
       ref={(el) => forwardTabRef(props.ref, el)}
       data-titlebar-tab
       data-slot="titlebar-tab-item"
       data-active={props.active}
+      data-space={props.space}
       data-dragging={props.dragging}
       data-state={props.active || props.pressed ? "pressed" : undefined}
       class="group relative flex h-7 w-full min-w-0 flex-row items-center gap-1.5 overflow-hidden rounded-[6px] px-1.5 [container-type:inline-size] whitespace-nowrap"

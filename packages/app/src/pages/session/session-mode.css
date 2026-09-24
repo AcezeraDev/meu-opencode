@@ -148,8 +148,8 @@
 }
 
 .session-rail-row[data-state="running"] .session-rail-dot {
-  background: var(--v2-blue-600);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--v2-blue-600) 22%, transparent);
+  background: var(--space);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--space) 22%, transparent);
   animation: session-rail-pulse 1.6s ease-in-out infinite;
 }
 

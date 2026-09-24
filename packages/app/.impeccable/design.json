@@ -1,117 +1,154 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-17T06:30:00.000Z",
+  "generatedAt": "2026-09-24T00:00:00Z",
   "title": "Design System: OpenCode Personal",
   "extensions": {
     "colorMeta": {
-      "trace": {
-        "role": "primary",
-        "displayName": "RGB Trace",
-        "canonical": "oklch(0.8 0.16 var(--chroma-hue))",
-        "tonalRamp": ["oklch(0.25 0.08 190)", "oklch(0.35 0.1 190)", "oklch(0.45 0.12 190)", "oklch(0.55 0.14 190)", "oklch(0.65 0.15 190)", "oklch(0.75 0.16 190)", "oklch(0.85 0.12 190)", "oklch(0.95 0.05 190)"]
-      },
-      "channel-edit": { "role": "secondary", "displayName": "Edit Channel" },
-      "channel-warn": { "role": "tertiary", "displayName": "Warn Channel" },
-      "channel-error": { "role": "tertiary", "displayName": "Error Channel" },
-      "channel-user": { "role": "neutral", "displayName": "User Channel" },
-      "screen": { "role": "neutral", "displayName": "Phosphor Screen" },
-      "canvas-deep": { "role": "neutral", "displayName": "Canvas Deep" },
-      "bezel-01": { "role": "neutral", "displayName": "Bezel 01" },
-      "bezel-02": { "role": "neutral", "displayName": "Bezel 02" },
-      "bezel-03": { "role": "neutral", "displayName": "Bezel 03" },
-      "bezel-04": { "role": "neutral", "displayName": "Bezel 04" },
-      "readout": { "role": "neutral", "displayName": "Readout" }
+      "space-purple": { "role": "primary", "displayName": "Violet Space", "canonical": "#9b7bff", "tonalRamp": ["oklch(25% 0.1 290)", "oklch(35% 0.14 290)", "oklch(45% 0.17 290)", "oklch(55% 0.19 290)", "oklch(65% 0.18 290)", "oklch(75% 0.13 290)", "oklch(85% 0.08 290)", "oklch(95% 0.03 290)"] },
+      "space-blue": { "role": "primary", "displayName": "Blue Space", "canonical": "#5b8cff", "tonalRamp": ["oklch(25% 0.09 265)", "oklch(35% 0.13 265)", "oklch(45% 0.16 265)", "oklch(55% 0.18 265)", "oklch(65% 0.17 265)", "oklch(75% 0.12 265)", "oklch(85% 0.07 265)", "oklch(95% 0.03 265)"] },
+      "space-cyan": { "role": "primary", "displayName": "Cyan Space", "canonical": "#2fc4de", "tonalRamp": ["oklch(25% 0.05 215)", "oklch(35% 0.08 215)", "oklch(45% 0.1 215)", "oklch(55% 0.12 215)", "oklch(65% 0.13 215)", "oklch(75% 0.12 215)", "oklch(85% 0.08 215)", "oklch(95% 0.03 215)"] },
+      "space-green": { "role": "primary", "displayName": "Green Space", "canonical": "#34cc88", "tonalRamp": ["oklch(25% 0.06 160)", "oklch(35% 0.09 160)", "oklch(45% 0.12 160)", "oklch(55% 0.14 160)", "oklch(65% 0.15 160)", "oklch(75% 0.14 160)", "oklch(85% 0.09 160)", "oklch(95% 0.03 160)"] },
+      "space-yellow": { "role": "primary", "displayName": "Yellow Space", "canonical": "#f0bd45", "tonalRamp": ["oklch(25% 0.05 80)", "oklch(35% 0.08 80)", "oklch(45% 0.1 80)", "oklch(55% 0.12 80)", "oklch(65% 0.14 80)", "oklch(75% 0.14 80)", "oklch(85% 0.1 80)", "oklch(95% 0.04 80)"] },
+      "space-orange": { "role": "primary", "displayName": "Orange Space", "canonical": "#ff8a4c", "tonalRamp": ["oklch(25% 0.07 45)", "oklch(35% 0.1 45)", "oklch(45% 0.13 45)", "oklch(55% 0.16 45)", "oklch(65% 0.17 45)", "oklch(75% 0.14 45)", "oklch(85% 0.08 45)", "oklch(95% 0.03 45)"] },
+      "space-red": { "role": "primary", "displayName": "Red Space", "canonical": "#ff5d6c", "tonalRamp": ["oklch(25% 0.08 20)", "oklch(35% 0.12 20)", "oklch(45% 0.15 20)", "oklch(55% 0.18 20)", "oklch(65% 0.19 20)", "oklch(75% 0.14 20)", "oklch(85% 0.08 20)", "oklch(95% 0.03 20)"] },
+      "space-pink": { "role": "primary", "displayName": "Pink Space", "canonical": "#ff66b8", "tonalRamp": ["oklch(25% 0.08 350)", "oklch(35% 0.12 350)", "oklch(45% 0.15 350)", "oklch(55% 0.18 350)", "oklch(65% 0.19 350)", "oklch(75% 0.14 350)", "oklch(85% 0.08 350)", "oklch(95% 0.03 350)"] },
+      "space-gray": { "role": "primary", "displayName": "Slate Space", "canonical": "#9aa3b2", "tonalRamp": ["oklch(25% 0.015 260)", "oklch(35% 0.018 260)", "oklch(45% 0.02 260)", "oklch(55% 0.022 260)", "oklch(65% 0.022 260)", "oklch(75% 0.02 260)", "oklch(85% 0.012 260)", "oklch(95% 0.005 260)"] },
+      "space-on": { "role": "neutral", "displayName": "On Space", "canonical": "#0b0b10" },
+      "ground-deep": { "role": "neutral", "displayName": "Deep Ground", "canonical": "color-mix(in oklab, var(--space) 7%, #07080b)" },
+      "panel-base": { "role": "neutral", "displayName": "Panel Base", "canonical": "color-mix(in oklab, var(--space) 6%, #111217)" },
+      "layer-01": { "role": "neutral", "displayName": "Layer 01", "canonical": "color-mix(in oklab, var(--space) 7%, #17181e)" },
+      "layer-02": { "role": "neutral", "displayName": "Layer 02", "canonical": "color-mix(in oklab, var(--space) 8%, #1d1e26)" },
+      "layer-03": { "role": "neutral", "displayName": "Layer 03", "canonical": "color-mix(in oklab, var(--space) 9%, #25262f)" },
+      "layer-04": { "role": "neutral", "displayName": "Layer 04", "canonical": "color-mix(in oklab, var(--space) 10%, #2e2f3a)" },
+      "readout": { "role": "neutral", "displayName": "Readout", "canonical": "#eef0f6" },
+      "user-mark": { "role": "neutral", "displayName": "User Mark", "canonical": "#c7cede" },
+      "error": { "role": "tertiary", "displayName": "Error", "canonical": "#ff5a4e" },
+      "warn": { "role": "tertiary", "displayName": "Warn", "canonical": "#f5b33c" }
     },
     "typographyMeta": {
-      "ui": { "displayName": "UI", "purpose": "Messages, rows and settings." },
-      "title": { "displayName": "Title", "purpose": "Session titles in context views." },
-      "readout": { "displayName": "Readout", "purpose": "Measured values in fixed slots." },
-      "label": { "displayName": "Label", "purpose": "Measurement names beside their readouts." }
+      "ui": { "displayName": "UI", "purpose": "Messages, rows, settings, inputs." },
+      "title": { "displayName": "Title", "purpose": "Session title on the session card, settings page titles." },
+      "readout": { "displayName": "Readout", "purpose": "Measured values in fixed digit slots (.scope-readout)." },
+      "label": { "displayName": "Label", "purpose": "Name of a measurement, beside its readout (.scope-label)." }
     },
     "shadows": [
-      { "name": "floating-panel", "value": "0 16px 40px rgb(0 0 0 / 0.3)", "purpose": "Context ring and spend panels." },
-      { "name": "strip", "value": "0 8px 24px rgb(0 0 0 / 0.18)", "purpose": "Measurement strip above the composer." },
-      { "name": "trace-glow", "value": "0 0 8px var(--chroma)", "purpose": "Only live elements glow, in the trace color." }
+      { "name": "raised", "value": "0 1px 0 rgb(255 255 255 / 0.035) inset, 0 2px 4px rgb(0 0 0 / 0.3), 0 10px 28px -10px rgb(0 0 0 / 0.6), 0 0 0 1px var(--v2-border-border-muted)", "purpose": "Session card." },
+      { "name": "floating", "value": "0 1px 0 rgb(255 255 255 / 0.05) inset, 0 6px 14px rgb(0 0 0 / 0.35), 0 24px 56px -16px rgb(0 0 0 / 0.7), 0 0 0 1px var(--v2-border-border-base)", "purpose": "Composer and home hero composer." },
+      { "name": "overlay", "value": "0 1px 0 rgb(255 255 255 / 0.05) inset, 0 12px 28px rgb(0 0 0 / 0.4), 0 40px 80px -20px rgb(0 0 0 / 0.75), 0 0 0 1px var(--v2-border-border-base)", "purpose": "Dialogs and settings." },
+      { "name": "own-space-lift", "value": "inset 0 0 0 1px color-mix(in oklab, var(--own-space) 42%, transparent), 0 6px 16px -8px color-mix(in oklab, var(--own-space) 70%, transparent)", "purpose": "Active titlebar tab and selected project row." },
+      { "name": "space-focus", "value": "inset 0 0 0 1px color-mix(in oklab, var(--space) 58%, transparent), 0 0 0 4px color-mix(in oklab, var(--space) 14%, transparent)", "purpose": "Composer and search focus ring." },
+      { "name": "send-glow", "value": "0 0 0 1px color-mix(in srgb, var(--chroma) 70%, transparent), 0 0 18px -4px var(--chroma)", "purpose": "Send button when ready." }
     ],
     "motion": [
-      { "name": "chroma-cycle", "value": "hue 0deg to 360deg, linear, 6s / 14s / 28s", "purpose": "The trace hue; one phase shared by every live element." },
-      { "name": "ease-out-expo", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Entrances: strip sweep, summary settle, panel pop." },
-      { "name": "trace-spin", "value": "rotate 1turn, 9s (wheel) / 2.4s (comet), linear", "purpose": "The response trace around the chat edge; compositor-only." },
-      { "name": "strip-dissolve", "value": "440ms opacity + translateY(6px) + blur(4px)", "purpose": "Live readouts handing over to the response summary." }
+      { "name": "state-ease", "value": "140ms to 160ms ease-out", "purpose": "Background, color and shadow changes on tabs, rows, nav, focus." },
+      { "name": "send-press", "value": "transform 120ms ease-out, scale(0.94)", "purpose": "Send button press." },
+      { "name": "chroma-cycle", "value": "14s linear infinite (6s fast, 28s slow)", "purpose": "Optional RGB cycle on live elements; only when enabled and Lite mode is off; off under reduced motion." },
+      { "name": "lite-mode", "value": "animation/transition-duration: 1ms, iteration-count: 1", "purpose": "Default on; stops continuous animation, spinners exempt." }
     ],
-    "breakpoints": [{ "name": "overview-hidden", "value": "640px" }]
+    "breakpoints": [
+      { "name": "tab-avatar-only", "value": "64px (container)" }
+    ]
   },
   "components": [
     {
-      "name": "Measurement Strip",
-      "kind": "custom",
-      "refersTo": "measurement-strip",
-      "description": "Live readouts docked above the composer while the agent works.",
-      "html": "<div class=\"ds-strip\"><span class=\"ds-chip\"><span class=\"ds-led\"></span>CH1</span><span class=\"ds-cell\"><span class=\"ds-label\">TIME</span><span class=\"ds-readout\"><span class=\"ds-ghost\">0</span>0:42</span></span><span class=\"ds-cell\"><span class=\"ds-label\">RATE</span><span class=\"ds-readout\"><span class=\"ds-ghost\">0</span>38</span><span class=\"ds-unit\">tok/s</span></span><span class=\"ds-cell ds-step\"><span class=\"ds-label\">STEP</span><span>editing app.tsx</span></span><span class=\"ds-cell\"><span class=\"ds-label\">COST</span><span class=\"ds-readout\">$0.0123</span></span></div>",
-      "css": ".ds-strip{display:flex;align-items:center;gap:14px;height:34px;padding:0 12px 0 8px;border:1px solid rgb(170 200 225 / .1);border-radius:10px;background:#11161a;color:#e6edf3;font-family:Inter,system-ui,sans-serif;font-size:12px}.ds-chip{display:inline-flex;align-items:center;gap:6px;height:20px;padding:0 7px 0 6px;border-radius:6px;font:600 10px ui-monospace,monospace;letter-spacing:.06em;color:oklch(.8 .16 190);background:oklch(.8 .16 190 / .12);box-shadow:inset 0 0 0 1px oklch(.8 .16 190 / .4)}.ds-led{width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor}.ds-cell{display:inline-flex;align-items:baseline;gap:6px}.ds-step{flex:1;min-width:0}.ds-label{font:500 10px ui-monospace,monospace;letter-spacing:.06em;text-transform:uppercase;color:#5b6875}.ds-readout{font:12px ui-monospace,monospace;font-variant-numeric:tabular-nums}.ds-ghost{color:rgb(180 210 235 / .16)}.ds-unit{font:10px ui-monospace,monospace;color:#5b6875}"
-    },
-    {
-      "name": "Panel Action",
-      "kind": "button",
-      "refersTo": "panel-action",
-      "description": "Actions inside instrument panels; the primary one takes the trace tint.",
-      "html": "<div class=\"ds-actions\"><button class=\"ds-action ds-action-primary\">Compact now</button><button class=\"ds-action\">Details</button></div>",
-      "css": ".ds-actions{display:flex;gap:6px;width:260px}.ds-action{flex:1;height:28px;border:0;border-radius:7px;font:500 12px Inter,system-ui,sans-serif;color:#e6edf3;background:#1f272d;transition:background-color .15s ease-out,transform .12s ease-out}.ds-action:hover{background:#283238}.ds-action:active{transform:scale(.97)}.ds-action:focus-visible{outline:2px solid #3fd0e0;outline-offset:1px}.ds-action-primary{background:color-mix(in srgb,oklch(.8 .16 190) 20%,#171e23);box-shadow:inset 0 0 0 1px oklch(.8 .16 190 / .45)}"
-    },
-    {
-      "name": "Response Summary",
-      "kind": "custom",
-      "refersTo": "instrument-panel",
-      "description": "Dashed-rule measurement footer under each finished response.",
-      "html": "<div class=\"ds-stats\"><span><span class=\"ds-l\">DURATION</span><span class=\"ds-v\"><span class=\"ds-g\">0</span>2:22</span></span><span><span class=\"ds-l\">TOOLS</span><span class=\"ds-v\"><span class=\"ds-g\">0</span>14</span></span><span><span class=\"ds-l\">COST</span><span class=\"ds-v\">$0.0189</span></span></div>",
-      "css": ".ds-stats{display:flex;flex-wrap:wrap;gap:4px 16px;padding:8px 0 2px;border-top:1px dashed rgb(170 200 225 / .1);width:420px}.ds-stats>span{display:inline-flex;align-items:baseline;gap:6px}.ds-l{font:500 10px ui-monospace,monospace;letter-spacing:.06em;color:#5b6875}.ds-v{font:11.5px ui-monospace,monospace;font-variant-numeric:tabular-nums;color:#8b98a5}.ds-g{color:rgb(180 210 235 / .16)}"
-    },
-    {
-      "name": "Spend Readout",
-      "kind": "chip",
-      "refersTo": "panel-action",
-      "description": "Titlebar readout of today's model spend; amber near the limit, red past it.",
-      "html": "<button class=\"ds-spend\"><span class=\"ds-l\">TODAY</span><span class=\"ds-v\">US$ 0,03</span></button>",
-      "css": ".ds-spend{display:inline-flex;align-items:baseline;gap:6px;height:24px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:#8b98a5;font-size:11px;line-height:24px}.ds-spend:hover{background:rgb(255 255 255 / .06)}.ds-spend:focus-visible{outline:2px solid #3fd0e0;outline-offset:1px}.ds-l{font:500 10px ui-monospace,monospace;letter-spacing:.06em}.ds-v{font:11px ui-monospace,monospace;color:#e6edf3}"
-    },
-    {
-      "name": "Active Tab Trace",
+      "name": "Titlebar Tab",
       "kind": "nav",
-      "refersTo": "measurement-strip",
-      "description": "The active session tab carries a 2px trace line.",
-      "html": "<div class=\"ds-tab\">Session<span class=\"ds-tab-trace\"></span></div>",
-      "css": ".ds-tab{position:relative;display:inline-flex;align-items:center;height:28px;padding:0 14px;border-radius:8px;background:#171e23;color:#e6edf3;font:13px Inter,system-ui,sans-serif}.ds-tab-trace{position:absolute;left:10px;right:10px;bottom:-2px;height:2px;border-radius:2px;background:oklch(.8 .16 190);box-shadow:0 0 10px oklch(.8 .16 190)}"
+      "refersTo": "titlebar-tab-active",
+      "description": "Soft pills; inactive keep a faint tint of their own space, the open one fills with it.",
+      "html": "<div class=\"ds-tabs\"><button class=\"ds-tab\" style=\"--own-space:#34cc88\"><span class=\"ds-avatar\">S</span>Demo</button><button class=\"ds-tab ds-tab-active\" style=\"--own-space:#9b7bff\"><span class=\"ds-avatar\">O</span>App redesign</button></div>",
+      "css": ".ds-tabs { display: flex; gap: 6px; padding: 6px; background: #07080b; } .ds-tab { display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 12px 0 6px; border: 0; border-radius: 9px; font: 440 13px 'Inter Variable', system-ui, sans-serif; color: #c7cede; background: color-mix(in oklab, var(--own-space) 10%, #07080b); transition: background-color 160ms ease-out, box-shadow 160ms ease-out; } .ds-tab:hover { background: color-mix(in oklab, var(--own-space) 16%, #17181e); } .ds-tab-active { color: #eef0f6; background: color-mix(in oklab, var(--own-space) 24%, #17181e); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--own-space) 42%, transparent), 0 6px 16px -8px color-mix(in oklab, var(--own-space) 70%, transparent); } .ds-avatar { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 4px; background: var(--own-space); color: #0b0b10; font-size: 10px; font-weight: 600; }"
+    },
+    {
+      "name": "Composer",
+      "kind": "input",
+      "refersTo": "composer",
+      "description": "Floating card that lights in the space color while you write; send filled with the space.",
+      "html": "<div class=\"ds-composer\" tabindex=\"0\"><div class=\"ds-composer-text\">Ask anything, / for commands</div><button class=\"ds-send\" aria-label=\"Send\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\"><path d=\"M12 19V5M5 12l7-7 7 7\"/></svg></button></div>",
+      "css": ".ds-composer { --space: #9b7bff; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; min-height: 96px; padding: 14px; border-radius: 18px; background: linear-gradient(180deg, color-mix(in oklab, var(--space) 8%, transparent), transparent 65%), color-mix(in oklab, var(--space) 7%, #17181e); box-shadow: 0 6px 14px rgb(0 0 0 / 0.35), 0 24px 56px -16px rgb(0 0 0 / 0.7), inset 0 0 0 1px color-mix(in oklab, var(--space) 22%, transparent); transition: box-shadow 160ms ease-out; outline: none; } .ds-composer:focus-within, .ds-composer:focus-visible { box-shadow: 0 6px 14px rgb(0 0 0 / 0.35), 0 24px 56px -16px rgb(0 0 0 / 0.7), inset 0 0 0 1px color-mix(in oklab, var(--space) 58%, transparent), 0 0 0 4px color-mix(in oklab, var(--space) 14%, transparent); } .ds-composer-text { align-self: flex-start; font: 440 13px 'Inter Variable', system-ui, sans-serif; color: rgb(238 240 246 / 0.5); } .ds-send { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 999px; background: var(--space); color: #04070a; box-shadow: 0 0 0 1px color-mix(in srgb, var(--space) 70%, transparent), 0 0 18px -4px var(--space); transition: transform 120ms ease-out; } .ds-send:active { transform: scale(0.94); }"
+    },
+    {
+      "name": "Session Card",
+      "kind": "card",
+      "refersTo": "session-card",
+      "description": "Rounded panel with a still wash of the space color at its top.",
+      "html": "<section class=\"ds-session\"><h1>App redesign</h1><p>Conversation timeline</p></section>",
+      "css": ".ds-session { --space: #9b7bff; min-height: 220px; padding: 16px 18px; border-radius: 14px; background-color: color-mix(in oklab, var(--space) 6%, #111217); background-image: linear-gradient(180deg, color-mix(in oklab, var(--space) 28%, transparent) 0, color-mix(in oklab, var(--space) 5%, transparent) 180px, transparent 420px); background-repeat: no-repeat; box-shadow: 0 1px 0 rgb(255 255 255 / 0.035) inset, 0 2px 4px rgb(0 0 0 / 0.3), 0 10px 28px -10px rgb(0 0 0 / 0.6), 0 0 0 1px color-mix(in oklab, var(--space) 12%, rgb(255 255 255 / 0.05)); font-family: 'Inter Variable', system-ui, sans-serif; color: #eef0f6; } .ds-session h1 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.012em; } .ds-session p { margin: 12px 0 0; font-size: 13px; color: #c7cede; }"
+    },
+    {
+      "name": "Home Project Row",
+      "kind": "custom",
+      "refersTo": "home-project-row",
+      "description": "Projects listed as spaces; hover tints, selected fills with the project's own color.",
+      "html": "<div class=\"ds-projects\"><button class=\"ds-project\" style=\"--own-space:#34cc88\"><span class=\"ds-avatar\">S</span>Scope demo</button><button class=\"ds-project ds-project-selected\" style=\"--own-space:#9b7bff\"><span class=\"ds-avatar\">O</span>opencode</button></div>",
+      "css": ".ds-projects { display: flex; flex-direction: column; gap: 2px; width: 240px; } .ds-project { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border: 0; border-radius: 11px; background: transparent; font: 440 13px 'Inter Variable', system-ui, sans-serif; color: #c7cede; text-align: left; transition: background-color 160ms ease-out, color 160ms ease-out; } .ds-project:hover { background: color-mix(in oklab, var(--own-space) 12%, transparent); } .ds-project-selected { color: #eef0f6; background: color-mix(in oklab, var(--own-space) 22%, #17181e); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--own-space) 40%, transparent), 0 8px 20px -12px color-mix(in oklab, var(--own-space) 80%, transparent); } .ds-avatar { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; background: var(--own-space); color: #0b0b10; font-size: 10px; font-weight: 600; }"
+    },
+    {
+      "name": "Settings Search",
+      "kind": "input",
+      "refersTo": "settings-search",
+      "description": "Search-first settings field; focus lights in the space color.",
+      "html": "<label class=\"ds-search\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"11\" cy=\"11\" r=\"7\"/><path d=\"m20 20-3.5-3.5\"/></svg><input placeholder=\"Search settings\"></label>",
+      "css": ".ds-search { --space: #9b7bff; display: flex; align-items: center; gap: 8px; width: 220px; height: 34px; padding: 0 10px; border-radius: 10px; background: color-mix(in oklab, var(--space) 6%, #111217); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--space) 16%, rgb(255 255 255 / 0.08)); color: #8a8f9c; transition: box-shadow 140ms ease-out; } .ds-search:focus-within { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--space) 60%, transparent), 0 0 0 3px color-mix(in oklab, var(--space) 18%, transparent); } .ds-search input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: #eef0f6; font: 440 13px 'Inter Variable', system-ui, sans-serif; caret-color: var(--space); }"
+    },
+    {
+      "name": "Settings Nav Item",
+      "kind": "nav",
+      "refersTo": "settings-nav-item",
+      "description": "The page you are on wears the space color; hover stays a faint tint.",
+      "html": "<nav class=\"ds-nav\"><button class=\"ds-nav-item ds-nav-selected\">General</button><button class=\"ds-nav-item\">Shortcuts</button><button class=\"ds-nav-item\">Models</button></nav>",
+      "css": ".ds-nav { --space: #9b7bff; display: flex; flex-direction: column; gap: 4px; width: 200px; padding: 14px 12px; background: linear-gradient(180deg, color-mix(in oklab, var(--space) 10%, transparent), transparent 55%), color-mix(in oklab, var(--space) 7%, #17181e); } .ds-nav-item { height: 32px; padding: 0 10px; border: 0; border-radius: 9px; background: transparent; color: #c7cede; font: 440 13px 'Inter Variable', system-ui, sans-serif; text-align: left; transition: background-color 140ms ease-out, color 140ms ease-out; } .ds-nav-item:hover:not(.ds-nav-selected) { background: color-mix(in oklab, var(--space) 10%, #1d1e26); } .ds-nav-item:focus-visible { outline: 2px solid var(--space); outline-offset: 1px; } .ds-nav-selected { color: #eef0f6; background: color-mix(in oklab, var(--space) 22%, #1d1e26); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--space) 38%, transparent); }"
+    },
+    {
+      "name": "Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Round chips for example prompts and settings 'also in' pages.",
+      "html": "<div class=\"ds-chips\"><button class=\"ds-chip\">Fix broken tests</button><button class=\"ds-chip ds-chip-page\">Models</button></div>",
+      "css": ".ds-chips { --space: #9b7bff; display: flex; gap: 6px; } .ds-chip { height: 24px; padding: 0 10px; border: 0; border-radius: 999px; background: color-mix(in oklab, var(--space) 8%, #1d1e26); color: #c7cede; font: 440 12px 'Inter Variable', system-ui, sans-serif; } .ds-chip:hover { background: color-mix(in oklab, var(--space) 16%, #17181e); color: #eef0f6; } .ds-chip-page { background: color-mix(in oklab, var(--space) 18%, #1d1e26); color: #eef0f6; } .ds-chip-page:hover { background: color-mix(in oklab, var(--space) 30%, #1d1e26); }"
+    },
+    {
+      "name": "Readout",
+      "kind": "custom",
+      "refersTo": "readout",
+      "description": "Mono label beside its measured value, digits in fixed slots.",
+      "html": "<span class=\"ds-readout\"><span class=\"ds-label\">Today</span> R$ <span class=\"ds-ghost\">0</span>0,00</span>",
+      "css": ".ds-readout { font: 400 12px ui-monospace, 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; color: #eef0f6; white-space: nowrap; } .ds-label { margin-right: 6px; font-size: 10px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: #8a8f9c; } .ds-ghost { color: rgb(220 226 240 / 0.18); }"
     }
   ],
   "narrative": {
-    "northStar": "The Bench Oscilloscope",
-    "overview": "Every AI response is a live signal measured on an instrument screen. The chat sits on a phosphor-black screen under a faint, static graticule; the chrome around it is opaque instrument bezel. While the agent works, the screen comes alive: an RGB trace runs around the chat's edge, a measurement strip reads the signal above the composer, and each finished response leaves its measurements behind as a footer.\n\nThe app stays open all day, so the world is calm at rest and expressive only while something is happening. Color and motion always report a state; nothing moves just to decorate.",
+    "northStar": "Colored Spaces",
+    "overview": "Every project is a space with a color of its own, and the app takes on the tone of the space you are in. The ground and every panel lean toward that hue; the color itself lands only on what is yours and active: the open tab, the selected project or settings page, focus, and the send button. You know where you are by color alone. Home, which belongs to no project, is the violet space.\n\nThe world is built from one variable. `html[data-space]` (set by the tab in use through `enterSpace`) picks `--space` from nine hues, and every neutral, border, wash and accent derives from it with `color-mix`, so a new space is one line. Surfaces are rounded cards (14 to 20px) lifted off a near-black ground with soft shadows that have a real offset. The app stays open all day, so it is calm at rest: backgrounds never move, Lite mode (on by default) stops continuous animation, and the optional RGB cycle for live work exists only when the user turns it on and Lite mode is off.\n\nIt refuses the grey chat app with one static blue accent. Tokens live in `packages/ui/src/v2/styles/scope.css`; the shell's use of them lives in `packages/app/src/spaces.css`.",
     "keyCharacteristics": [
-      "Phosphor-black screen with a graticule that never moves.",
-      "One RGB trace color that cycles continuously, reserved for what is live or active.",
-      "Fixed channel colors for everything that is not live (edits, prompts, warnings, errors).",
-      "Monospace readouts in fixed slots, with unused leading zeros drawn as ghosts.",
-      "Live readouts dissolve into a per-response summary when a turn ends."
+      "Nine space hues; one of them is the app's accent at any moment, chosen by the project in use.",
+      "Near-black neutrals tinted 6 to 10% toward the space hue; no pure grey surfaces.",
+      "The space color marks only what is yours and active; everything else stays in tinted neutrals.",
+      "Rounded cards with soft offset shadows and a hairline in the space tone.",
+      "A quiet wash of the space color at the top of the session card and the composer, painted once.",
+      "Errors and warnings keep fixed colors in every space."
     ],
     "rules": [
-      { "name": "The Trace Law", "body": "Only what is live or active wears the RGB trace: the chat edge while responding, the send/stop button, the active tab, the CH1 chip, the live overview marker, the primary \"compact now\" action. Everything else uses a fixed channel color.", "section": "colors" },
-      { "name": "The Still Screen Rule", "body": "Backgrounds never animate. A moving layer behind panels would make every blur and repaint recompute each frame in an app that stays open all day.", "section": "colors" },
-      { "name": "The Fixed Slot Rule", "body": "Numbers that change while you watch sit in fixed digit slots (`00:42`, `038 tok/s`, `014`), with the unused leading zeros drawn in the ghost color, so values never jitter.", "section": "typography" },
-      { "name": "The Label-Beside Rule", "body": "A measurement label sits beside its value on the same line, never as a small heading above a big number.", "section": "typography" }
+      { "name": "The Yours-and-Active Rule", "body": "The space color marks only what is yours and active: the active tab, focus, the send button, the selected project, the selected settings page. Everything else, including hovers, stays in space-tinted neutrals (hover tints stay at 9 to 12%).", "section": "colors" },
+      { "name": "The One Space Rule", "body": "The app wears one space at a time. The only other hues on screen are each tab's and project row's own color (`--own-space`), shown at a faint 10% tint when inactive and filled at 22 to 24% when selected.", "section": "colors" },
+      { "name": "The Fixed State Rule", "body": "Errors and warnings never take the space color and never cycle.", "section": "colors" },
+      { "name": "The Label-Beside Rule", "body": "A mono label sits on the same line as its readout (`HOJE R$ 0,00`), never as a small heading above a title or section.", "section": "typography" },
+      { "name": "The Still Ground Rule", "body": "Backgrounds never animate. The top wash on the session card and the workspace glow (two radial gradients of the space at 14% and 8%) are painted once.", "section": "elevation" }
     ],
     "dos": [
-      "Do give anything live the trace color, and take it away when it stops being live.",
-      "Do put changing numbers in fixed slots with ghost zeros.",
-      "Do dock instruments to the edges of the content they measure.",
-      "Do animate only transform and opacity on small layers, and pause loops when their owner is inactive.",
-      "Do keep reduced motion meaningful: stop cycling and movement, keep state colors."
+      "**Do** derive every new color from `--space` with `color-mix`; a new surface should change tone when the space changes.",
+      "**Do** give the space color only to what is yours and active: active tab, focus, send, selected project or page.",
+      "**Do** show a project's own color through `--own-space` on its tab and row, faint when inactive, filled when selected.",
+      "**Do** lift cards with the Raised / Floating / Overlay shadows and step surfaces through Layers 01 to 04.",
+      "**Do** keep errors at `#ff5a4e` and warnings at `#f5b33c` (dark) in every space.",
+      "**Do** respect Lite mode (on by default): continuous animations stop, one-shot ones finish in 1ms, spinners stay.",
+      "**Do** set mono labels beside their readouts, in fixed digit slots."
     ],
     "donts": [
-      "Don't animate backgrounds, the graticule, or anything under large surfaces.",
-      "Don't cycle the color of errors, warnings or edits.",
-      "Don't set a small label above a big number (hero-metric); put the label beside the value.",
-      "Don't reintroduce translucent glass or backdrop blur on panels.",
-      "Don't add a trace or glow to static, non-live elements for decoration."
+      "**Don't** animate backgrounds, washes or the workspace glow.",
+      "**Don't** run the RGB cycle unless the user turned it on and Lite mode is off.",
+      "**Don't** paint the space color on hovers, idle rows or decoration beyond a 12% tint.",
+      "**Don't** add texture, grids or backdrop blur to panels.",
+      "**Don't** replace project avatars with dots or glyphs; they are rounded squares with the project's initial.",
+      "**Don't** use a mono uppercase label as a kicker above a heading."
     ]
   }
 }

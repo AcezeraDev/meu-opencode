@@ -20,6 +20,7 @@ import { showToast } from "@/utils/toast"
 import { canStartTabDrag, isTabCloseTarget } from "./titlebar-tab-gesture"
 import { adjacentTabKey, mergeVisibleTabOrder } from "./titlebar-tab-order"
 import type { Session } from "@opencode-ai/sdk/v2"
+import { projectSpace } from "@/context/layout"
 
 function SessionTabSlot(props: {
   tab: SessionTab
@@ -203,6 +204,7 @@ function DraftTabSlot(props: {
         }}
         href={tabHref(props.tab)}
         title={props.title}
+        space={projectSpace(undefined, props.tab.worktree ?? props.tab.directory)}
         onNavigate={() => props.onNavigate(ref)}
         onClose={props.onClose}
         active={props.active()}

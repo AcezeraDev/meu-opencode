@@ -63,7 +63,7 @@ export function DialogEditProjectV2(props: { project: LocalProject; server: Serv
                     url: props.project.icon?.url,
                     override: model.store.iconOverride,
                   })}
-                  variant={getProjectAvatarVariant(model.store.color)}
+                  variant={getProjectAvatarVariant(model.store.color, props.project.worktree)}
                   class="!size-16 [&_[data-slot=project-avatar-surface]]:!rounded-[6px] [&_[data-slot=project-avatar-surface]]:!text-[32px]"
                 />
                 <span

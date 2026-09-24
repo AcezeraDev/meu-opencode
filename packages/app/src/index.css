@@ -2,6 +2,7 @@
 @import "@opencode-ai/session-ui/styles";
 @import "@opencode-ai/ui/v2/styles/tailwind.css";
 @import "@opencode-ai/ui/v2/styles/scope.css";
+@import "./spaces.css";
 @import "tw-animate-css";
 
 @font-face {

@@ -41,7 +41,7 @@ export function SessionTabAvatarView(props: {
     <ProjectAvatar
       fallback={displayName(props.project ?? { worktree: props.directory })}
       src={getProjectAvatarSource(props.project?.id, props.project?.icon)}
-      variant={getProjectAvatarVariant(props.project?.icon?.color)}
+      variant={getProjectAvatarVariant(props.project?.icon?.color, props.project?.worktree ?? props.directory)}
       unread={props.unread}
     />
   )

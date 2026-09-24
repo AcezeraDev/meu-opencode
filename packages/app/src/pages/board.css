@@ -91,8 +91,8 @@
 }
 
 .session-board-chip[data-active] {
-  background: color-mix(in srgb, var(--v2-blue-600) 18%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v2-blue-600) 38%, transparent);
+  background: color-mix(in srgb, var(--space) 18%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--space) 38%, transparent);
   color: var(--v2-text-text-accent);
 }
 
@@ -104,9 +104,9 @@
   padding: 0 14px;
   border: 0;
   border-radius: 10px;
-  background: var(--v2-blue-600);
+  background: var(--space);
   box-shadow:
-    0 6px 18px color-mix(in srgb, var(--v2-blue-600) 45%, transparent),
+    0 6px 18px color-mix(in srgb, var(--space) 45%, transparent),
     inset 0 1px 0 rgb(255 255 255 / 0.25);
   color: #fff;
   font-size: 12.5px;
@@ -178,7 +178,7 @@
 }
 
 .session-board-column[data-state="running"] .session-board-dot {
-  background: var(--v2-blue-600);
+  background: var(--space);
   animation: session-board-pulse 1.6s ease-in-out infinite;
 }
 
@@ -234,7 +234,7 @@
 }
 
 .session-board-card[data-state="running"] {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--v2-blue-600) 35%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--space) 35%, transparent);
 }
 
 .session-board-card[data-state="waiting"] {
@@ -321,7 +321,7 @@
   display: block;
   height: 100%;
   border-radius: 4px;
-  background: linear-gradient(90deg, var(--v2-blue-600), var(--v2-blue-500));
+  background: linear-gradient(90deg, var(--space), color-mix(in oklab, var(--space) 70%, white));
   transition: width var(--duration-slow, 380ms) var(--ease-out-expo, ease-out);
 }
 

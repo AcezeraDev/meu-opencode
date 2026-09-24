@@ -1,8 +1,8 @@
 /*
  * Session workspace
  * --------------------------------------------------------------------------
- * A calm, layered canvas for long-running developer work. The workspace keeps
- * the scope/instrument identity, but pushes texture and chrome behind content.
+ * A calm, layered canvas for long-running developer work, in the colored
+ * spaces world: the ground and the panel lean toward the project's color.
  */
 
 [data-component="session-workspace"] {
@@ -11,8 +11,8 @@
   --workspace-panel-highlight: color-mix(in srgb, white 5%, transparent);
   isolation: isolate;
   background:
-    radial-gradient(circle at 22% -18%, color-mix(in srgb, var(--v2-blue-600) 8%, transparent), transparent 38%),
-    radial-gradient(circle at 88% 112%, color-mix(in srgb, var(--scope-ch-edit) 5%, transparent), transparent 32%),
+    radial-gradient(circle at 22% -18%, color-mix(in oklab, var(--space) 14%, transparent), transparent 42%),
+    radial-gradient(circle at 88% 112%, color-mix(in oklab, var(--space) 8%, transparent), transparent 36%),
     var(--v2-background-bg-deep);
 }
 
@@ -22,14 +22,8 @@
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background-image: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--v2-text-text-base) 10%, transparent) 0.6px,
-    transparent 0.8px
-  );
-  background-size: 24px 24px;
-  opacity: 0.16;
-  mask-image: linear-gradient(to bottom, black, transparent 72%);
+  /* No texture in the spaces world; kept as a hook for the layer order. */
+  display: none;
 }
 
 .session-workspace-panels {
@@ -50,16 +44,16 @@
   animation: session-workspace-panel-in 420ms var(--ease-out-expo, ease-out) both;
 }
 
+/* The space's wash at the top of the card (see .scope-screen in ui scope.css). */
 [data-component="session-workspace-panel"].scope-screen {
-  background-image:
-    radial-gradient(circle, color-mix(in srgb, var(--scope-grid-dot) 56%, transparent) 0.7px, transparent 0.9px),
-    radial-gradient(circle at 50% -10%, color-mix(in srgb, var(--v2-text-text-base) 2.5%, transparent), transparent 46%);
-  background-size:
-    56px 56px,
-    100% 100%;
-  background-position:
-    22px 14px,
-    0 0;
+  background-image: linear-gradient(
+    180deg,
+    var(--space-wash) 0,
+    color-mix(in oklab, var(--space) 5%, transparent) 180px,
+    transparent 420px
+  );
+  background-size: 100% 100%;
+  background-position: 0 0;
 }
 
 [data-component="session-workspace-panel"][data-raised] {

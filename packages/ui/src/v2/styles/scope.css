@@ -1,21 +1,27 @@
 /*
- * Bench oscilloscope — the app's visual world (replaces the glass world).
+ * Colored spaces — the app's visual world (replaces the bench oscilloscope).
  * ----------------------------------------------------------------------------
- * Surfaces are opaque instrument bezels around a phosphor screen with a faint
- * graticule. One color law holds everywhere:
- *   - the RGB trace (--chroma) marks what is live or active and keeps cycling;
- *   - errors, warnings and success keep fixed colors and never cycle.
+ * Every project is a space with a color of its own (its avatar color, or one
+ * picked from its folder when none was chosen). The app takes on the tone of
+ * the space in use: the ground and panels lean toward its hue, and its color
+ * marks what is yours and what is live: the active tab, focus, the send button,
+ * the work in progress. Home, which belongs to no project, is the violet space.
+ *
+ * `html[data-space]` is set by the tab in use (context/layout.tsx enterSpace).
+ * Everything here derives from `--space`, so a new space is one line.
+ *
+ * Errors, warnings and success keep fixed colors whatever the space.
  *
  * Specificity: themes inject `html[data-theme="<id>"] { ... }` at runtime (see
  * ui/src/theme/loader.ts); the doubled attribute selector outranks it.
  */
 
-/* The trace hue. Registered so it can be animated; not inherited, so only the
- * elements that actually show the trace recompute each frame. */
+/* The live color's hue, for the optional RGB cycle (Settings). Registered so
+ * it can be animated; not inherited, so only elements that show it recompute. */
 @property --chroma-hue {
   syntax: "<angle>";
   inherits: false;
-  initial-value: 190deg;
+  initial-value: 280deg;
 }
 
 @keyframes chroma-cycle {
@@ -29,83 +35,157 @@
 
 html[data-theme][data-theme],
 :root {
+  /* The spaces. Tuned to read on the dark ground and as a fill under white. */
+  --space-purple: #9b7bff;
+  --space-blue: #5b8cff;
+  --space-cyan: #2fc4de;
+  --space-green: #34cc88;
+  --space-yellow: #f0bd45;
+  --space-orange: #ff8a4c;
+  --space-red: #ff5d6c;
+  --space-pink: #ff66b8;
+  --space-gray: #9aa3b2;
+  --space: var(--space-purple);
+
   --chroma-period: 14s;
   --chroma-l: 0.62;
   --chroma-c: 0.19;
-  /* Fixed channel colors for things that are not live (edits, markers). */
-  --scope-ch-edit: #0a8fa3;
-  --scope-ch-user: #3b4550;
+}
+
+html[data-space="blue"][data-space] {
+  --space: var(--space-blue);
+}
+html[data-space="cyan"][data-space] {
+  --space: var(--space-cyan);
+}
+html[data-space="green"][data-space] {
+  --space: var(--space-green);
+}
+html[data-space="yellow"][data-space] {
+  --space: var(--space-yellow);
+}
+html[data-space="orange"][data-space] {
+  --space: var(--space-orange);
+}
+html[data-space="red"][data-space] {
+  --space: var(--space-red);
+}
+html[data-space="pink"][data-space] {
+  --space: var(--space-pink);
+}
+html[data-space="gray"][data-space] {
+  --space: var(--space-gray);
+}
+
+/* Light scheme: a bright ground washed with the space; its color darkens to
+ * stay readable as text on white. */
+html[data-theme][data-theme],
+:root {
+  --space-ink: color-mix(in oklab, var(--space) 72%, #10121a);
+  --space-soft: color-mix(in oklab, var(--space) 14%, transparent);
+  --space-line: color-mix(in oklab, var(--space) 36%, transparent);
+  --space-wash: color-mix(in oklab, var(--space) 10%, transparent);
+  --space-on: #ffffff;
+
+  --scope-ch-edit: var(--space);
+  --scope-ch-user: #4a5263;
   --scope-ch-error: #d92d20;
   --scope-ch-warn: #b7791f;
 
-  --scope-screen: #fbfcfc;
-  --scope-grid: rgb(18 40 60 / 0.055);
-  --scope-grid-dot: rgb(18 40 60 / 0.16);
-  --scope-ghost: rgb(18 40 60 / 0.2);
-  --scope-readout: #0d1117;
-  --scope-bezel-line: rgb(18 40 60 / 0.12);
+  --scope-screen: var(--v2-background-bg-base);
+  --scope-grid: transparent;
+  --scope-grid-dot: color-mix(in oklab, var(--space) 30%, rgb(20 24 40 / 0.2));
+  --scope-ghost: rgb(20 24 40 / 0.22);
+  --scope-readout: #10121a;
+  --scope-bezel-line: color-mix(in oklab, var(--space) 14%, rgb(20 24 40 / 0.1));
 
-  --v2-background-bg-deep: #e7ebee;
-  --v2-background-bg-base: #fbfcfc;
-  --v2-background-bg-layer-01: #f2f4f6;
-  --v2-background-bg-layer-02: #e8ecef;
-  --v2-background-bg-layer-03: #dce2e7;
-  --v2-background-bg-layer-04: #cfd7dd;
-  --v2-border-border-muted: rgb(18 40 60 / 0.08);
-  --v2-border-border-base: rgb(18 40 60 / 0.13);
-  --v2-border-border-strong: rgb(18 40 60 / 0.24);
+  --v2-background-bg-deep: color-mix(in oklab, var(--space) 9%, #e9ebf1);
+  --v2-background-bg-base: color-mix(in oklab, var(--space) 2%, #ffffff);
+  --v2-background-bg-layer-01: color-mix(in oklab, var(--space) 4%, #f5f6f9);
+  --v2-background-bg-layer-02: color-mix(in oklab, var(--space) 6%, #eceef3);
+  --v2-background-bg-layer-03: color-mix(in oklab, var(--space) 8%, #e1e4eb);
+  --v2-background-bg-layer-04: color-mix(in oklab, var(--space) 10%, #d4d8e1);
+  --v2-background-bg-accent: var(--space);
+  --v2-border-border-muted: color-mix(in oklab, var(--space) 10%, rgb(20 24 40 / 0.07));
+  --v2-border-border-base: color-mix(in oklab, var(--space) 14%, rgb(20 24 40 / 0.11));
+  --v2-border-border-strong: color-mix(in oklab, var(--space) 20%, rgb(20 24 40 / 0.2));
+  --v2-border-border-focus: var(--space);
+  --v2-text-text-accent: var(--space-ink);
+  --v2-text-text-accent-hover: color-mix(in oklab, var(--space-ink) 85%, #000000);
+  --v2-icon-icon-accent: var(--space-ink);
+  --v2-icon-icon-accent-hover: color-mix(in oklab, var(--space-ink) 85%, #000000);
+  --v2-overlay-simple-overlay-hover: color-mix(in oklab, var(--space) 8%, rgb(20 24 40 / 0.04));
+  --v2-overlay-simple-overlay-pressed: color-mix(in oklab, var(--space) 14%, rgb(20 24 40 / 0.06));
 
-  /* Glass tokens still read by older components now describe opaque bezels. */
-  --glass-canvas: #e7ebee;
-  --glass-surface-weak: #f2f4f6;
-  --glass-surface: #f7f8f9;
-  --glass-surface-strong: #fbfcfc;
-  --glass-float: #fbfcfc;
-  --glass-float-solid: #fbfcfc;
-  --glass-border: rgb(18 40 60 / 0.12);
-  --glass-border-strong: rgb(18 40 60 / 0.2);
+  /* Depth: soft shadows with a real offset, and a hairline in the space tone. */
+  --v2-elevation-raised:
+    0 1px 2px rgb(20 24 40 / 0.06), 0 6px 18px -6px rgb(20 24 40 / 0.14), 0 0 0 1px var(--v2-border-border-muted);
+  --v2-elevation-floating:
+    0 4px 10px rgb(20 24 40 / 0.08), 0 18px 40px -12px rgb(20 24 40 / 0.22), 0 0 0 1px var(--v2-border-border-base);
+  --v2-elevation-overlay:
+    0 8px 20px rgb(20 24 40 / 0.1), 0 32px 64px -16px rgb(20 24 40 / 0.3), 0 0 0 1px var(--v2-border-border-base);
+
+  /* Glass tokens still read by older components now describe the space's panels. */
+  --glass-canvas: var(--v2-background-bg-deep);
+  --glass-surface-weak: var(--v2-background-bg-layer-01);
+  --glass-surface: var(--v2-background-bg-base);
+  --glass-surface-strong: var(--v2-background-bg-base);
+  --glass-float: var(--v2-background-bg-base);
+  --glass-float-solid: var(--v2-background-bg-base);
+  --glass-border: var(--v2-border-border-base);
+  --glass-border-strong: var(--v2-border-border-strong);
   --glass-highlight: rgb(255 255 255 / 0.8);
-  --glass-scrim: rgb(10 14 18 / 0.32);
+  --glass-scrim: rgb(12 14 24 / 0.36);
   --glass-filter: none;
   --glass-filter-sm: none;
   --glass-filter-lg: none;
 }
 
+/* Dark scheme (the one used all day): a near-black ground leaning toward the
+ * space's hue, panels one step lighter, the space color bright on top. */
 @media (prefers-color-scheme: dark) {
   html[data-theme][data-theme],
   :root {
-    --chroma-l: 0.8;
-    --chroma-c: 0.16;
-    --scope-ch-edit: #3fd0e0;
-    --scope-ch-user: #c9d3dc;
+    --chroma-l: 0.78;
+    --chroma-c: 0.17;
+    --space-ink: color-mix(in oklab, var(--space) 82%, #ffffff);
+    --space-soft: color-mix(in oklab, var(--space) 16%, transparent);
+    --space-line: color-mix(in oklab, var(--space) 42%, transparent);
+    --space-wash: color-mix(in oklab, var(--space) 28%, transparent);
+    --space-on: #0b0b10;
+
+    --scope-ch-user: #c7cede;
     --scope-ch-error: #ff5a4e;
     --scope-ch-warn: #f5b33c;
+    --scope-grid-dot: color-mix(in oklab, var(--space) 40%, rgb(255 255 255 / 0.1));
+    --scope-ghost: rgb(220 226 240 / 0.18);
+    --scope-readout: #eef0f6;
+    --scope-bezel-line: color-mix(in oklab, var(--space) 16%, rgb(255 255 255 / 0.07));
 
-    --scope-screen: #0b0f12;
-    --scope-grid: rgb(140 180 210 / 0.045);
-    --scope-grid-dot: rgb(160 200 230 / 0.13);
-    --scope-ghost: rgb(180 210 235 / 0.16);
-    --scope-readout: #e6edf3;
-    --scope-bezel-line: rgb(170 200 225 / 0.1);
+    --v2-background-bg-deep: color-mix(in oklab, var(--space) 7%, #07080b);
+    --v2-background-bg-base: color-mix(in oklab, var(--space) 6%, #111217);
+    --v2-background-bg-layer-01: color-mix(in oklab, var(--space) 7%, #17181e);
+    --v2-background-bg-layer-02: color-mix(in oklab, var(--space) 8%, #1d1e26);
+    --v2-background-bg-layer-03: color-mix(in oklab, var(--space) 9%, #25262f);
+    --v2-background-bg-layer-04: color-mix(in oklab, var(--space) 10%, #2e2f3a);
+    --v2-border-border-muted: color-mix(in oklab, var(--space) 12%, rgb(255 255 255 / 0.05));
+    --v2-border-border-base: color-mix(in oklab, var(--space) 16%, rgb(255 255 255 / 0.08));
+    --v2-border-border-strong: color-mix(in oklab, var(--space) 22%, rgb(255 255 255 / 0.15));
+    --v2-text-text-accent-hover: #ffffff;
+    --v2-icon-icon-accent-hover: #ffffff;
+    --v2-overlay-simple-overlay-hover: color-mix(in oklab, var(--space) 10%, rgb(255 255 255 / 0.05));
+    --v2-overlay-simple-overlay-pressed: color-mix(in oklab, var(--space) 18%, rgb(255 255 255 / 0.08));
 
-    --v2-background-bg-deep: #050709;
-    --v2-background-bg-base: #0b0f12;
-    --v2-background-bg-layer-01: #11161a;
-    --v2-background-bg-layer-02: #171e23;
-    --v2-background-bg-layer-03: #1f272d;
-    --v2-background-bg-layer-04: #283238;
-    --v2-border-border-muted: rgb(170 200 225 / 0.07);
-    --v2-border-border-base: rgb(170 200 225 / 0.11);
-    --v2-border-border-strong: rgb(170 200 225 / 0.2);
+    --v2-elevation-raised:
+      0 1px 0 rgb(255 255 255 / 0.035) inset, 0 2px 4px rgb(0 0 0 / 0.3), 0 10px 28px -10px rgb(0 0 0 / 0.6),
+      0 0 0 1px var(--v2-border-border-muted);
+    --v2-elevation-floating:
+      0 1px 0 rgb(255 255 255 / 0.05) inset, 0 6px 14px rgb(0 0 0 / 0.35), 0 24px 56px -16px rgb(0 0 0 / 0.7),
+      0 0 0 1px var(--v2-border-border-base);
+    --v2-elevation-overlay:
+      0 1px 0 rgb(255 255 255 / 0.05) inset, 0 12px 28px rgb(0 0 0 / 0.4), 0 40px 80px -20px rgb(0 0 0 / 0.75),
+      0 0 0 1px var(--v2-border-border-base);
 
-    --glass-canvas: #050709;
-    --glass-surface-weak: #11161a;
-    --glass-surface: #12181c;
-    --glass-surface-strong: #141a1f;
-    --glass-float: #12181c;
-    --glass-float-solid: #12181c;
-    --glass-border: rgb(170 200 225 / 0.12);
-    --glass-border-strong: rgb(170 200 225 / 0.2);
     --glass-highlight: rgb(255 255 255 / 0.05);
     --glass-scrim: rgb(0 0 0 / 0.55);
   }
@@ -116,8 +196,25 @@ html {
   background-color: var(--v2-background-bg-deep);
 }
 
-/* Anything that shows the live trace color opts in with data-chroma. */
+/* The browser's own parts wear the space too. */
+::selection {
+  background: color-mix(in oklab, var(--space) 34%, transparent);
+}
+
+html {
+  accent-color: var(--space);
+  caret-color: var(--space);
+  scrollbar-color: color-mix(in oklab, var(--space) 26%, rgb(128 128 140 / 0.35)) transparent;
+}
+
+/* What is live wears `--chroma`: the space's color, or the cycling RGB hue when
+ * it is on in Settings and Lite mode is off. */
 [data-chroma] {
+  --chroma: var(--space);
+  --chroma-soft: var(--space-soft);
+}
+
+html:not([data-lite]):not([data-chroma-off]) [data-chroma] {
   --chroma: oklch(var(--chroma-l) var(--chroma-c) var(--chroma-hue));
   --chroma-soft: oklch(var(--chroma-l) var(--chroma-c) var(--chroma-hue) / 0.18);
   animation: chroma-cycle var(--chroma-period) linear infinite;
@@ -131,35 +228,25 @@ html[data-chroma-speed="fast"] {
   --chroma-period: 6s;
 }
 
-/* RGB off (or reduced motion): the trace holds one hue instead of cycling. */
-html[data-chroma-off] [data-chroma] {
-  animation: none;
-}
-
 @media (prefers-reduced-motion: reduce) {
   [data-chroma] {
-    animation: none;
+    animation: none !important;
   }
 }
 
 /*
- * The phosphor screen: the chat surface sits on a static graticule. The grid is
- * painted once; content scrolls over it like a signal over the screen glass.
+ * The session's card: a quiet wash of the space color at its top, painted once
+ * and never animated, over the panel color.
  */
 .scope-screen {
-  background-color: var(--scope-screen);
-  background-image:
-    radial-gradient(circle, var(--scope-grid-dot) 0.9px, transparent 1.2px),
-    linear-gradient(to right, var(--scope-grid) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--scope-grid) 1px, transparent 1px);
-  background-size:
-    48px 48px,
-    48px 48px,
-    48px 48px;
-  background-position:
-    -0.5px -0.5px,
-    0 0,
-    0 0;
+  background-color: var(--v2-background-bg-base);
+  background-image: linear-gradient(
+    180deg,
+    var(--space-wash) 0,
+    color-mix(in oklab, var(--space) 5%, transparent) 180px,
+    transparent 420px
+  );
+  background-repeat: no-repeat;
 }
 
 /* Readouts: measurement digits in fixed slots, leading zeros drawn as ghosts. */

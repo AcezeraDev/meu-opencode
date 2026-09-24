@@ -13,7 +13,7 @@
   border-radius: 50%;
   pointer-events: none;
   translate: -50% -50%;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--v2-blue-600) 24%, transparent), transparent);
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--space) 24%, transparent), transparent);
   animation: new-session-glow 9s var(--ease-soft, ease-in-out) infinite alternate;
 }
 

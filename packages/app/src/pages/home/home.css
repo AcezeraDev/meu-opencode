@@ -63,8 +63,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 11px;
-  background: var(--v2-blue-600);
-  box-shadow: 0 6px 18px color-mix(in srgb, var(--v2-blue-600) 50%, transparent);
+  background: var(--space);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--space) 50%, transparent);
   color: #fff;
 }
 
@@ -129,7 +129,7 @@
 }
 
 .home-hero-board:hover {
-  background: color-mix(in srgb, var(--v2-blue-600) 12%, transparent);
+  background: color-mix(in srgb, var(--space) 12%, transparent);
   color: var(--v2-text-text-accent-hover);
 }
 

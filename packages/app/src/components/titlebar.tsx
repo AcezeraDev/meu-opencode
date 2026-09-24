@@ -21,7 +21,7 @@ import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 
-import { LayoutRoute, useLayout } from "@/context/layout"
+import { enterSpace, LayoutRoute, projectSpace, useLayout } from "@/context/layout"
 import { usePlatform } from "@/context/platform"
 import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
@@ -239,6 +239,23 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
             }
 
             const currentTab = () => matchRoute(layout.route())
+
+            // Home with no project picked goes back to the app's own color; a tab
+            // entering its project's space is handled by the tab itself.
+            createEffect(() => {
+              const route = layout.route()
+              // On home, the project picked in the list is the space you are looking at.
+              if (route.type === "home") {
+                const selected = layout.home.selection().directory
+                enterSpace(
+                  selected
+                    ? projectSpace(layout.projects.list().find((item) => item.worktree === selected), selected)
+                    : undefined,
+                )
+              }
+              if (route.type === "dir-new-sesssion")
+                enterSpace(projectSpace(layout.projects.list().find((item) => item.worktree === route.dir), route.dir))
+            })
 
             createEffect(() => {
               const route = layout.route()

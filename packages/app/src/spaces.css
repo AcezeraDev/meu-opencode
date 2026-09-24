@@ -1,0 +1,364 @@
+/*
+ * Colored spaces: how the shell wears the space color (tokens live in
+ * ui/src/v2/styles/scope.css). The rule of the world: the space of what you are
+ * in colors the active tab, the selected project, focus and the main action;
+ * everything else stays in the space-tinted neutrals.
+ *
+ * Rules start with `html` to outrank the components' own stylesheets, which
+ * load after this one.
+ */
+
+/* An element that belongs to a project (a tab, a project row) carries that
+ * project's color as --own-space, whatever space the app is in. */
+[data-space="purple"]:not(html) {
+  --own-space: var(--space-purple);
+}
+[data-space="blue"]:not(html) {
+  --own-space: var(--space-blue);
+}
+[data-space="cyan"]:not(html) {
+  --own-space: var(--space-cyan);
+}
+[data-space="green"]:not(html) {
+  --own-space: var(--space-green);
+}
+[data-space="yellow"]:not(html) {
+  --own-space: var(--space-yellow);
+}
+[data-space="orange"]:not(html) {
+  --own-space: var(--space-orange);
+}
+[data-space="red"]:not(html) {
+  --own-space: var(--space-red);
+}
+[data-space="pink"]:not(html) {
+  --own-space: var(--space-pink);
+}
+[data-space="gray"]:not(html) {
+  --own-space: var(--space-gray);
+}
+
+/* ── Titlebar tabs ──────────────────────────────────────────────────────────
+ * Tabs are soft pills. The open one is filled with its project's color, so the
+ * strip reads as a row of spaces and you can tell where you are at a glance. */
+html [data-titlebar-tab] {
+  border-radius: 9px;
+  transition:
+    background-color 160ms ease-out,
+    box-shadow 160ms ease-out;
+}
+
+html [data-titlebar-tab][data-active="true"] {
+  --tab-base: color-mix(in oklab, var(--own-space, var(--space)) 24%, var(--v2-background-bg-layer-01));
+  --tab-overlay: transparent;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--own-space, var(--space)) 42%, transparent),
+    0 6px 16px -8px color-mix(in oklab, var(--own-space, var(--space)) 70%, transparent);
+}
+
+html [data-titlebar-tab][data-active="true"] [data-slot="tab-link"] {
+  color: var(--v2-text-text-base);
+}
+
+/* The other tabs keep a faint tint of their own space, so the strip reads as a
+ * row of spaces. */
+html [data-titlebar-tab][data-space]:not([data-active="true"]):not(:hover):not([data-state="pressed"]) {
+  --tab-base: color-mix(in oklab, var(--own-space) 10%, var(--v2-background-bg-deep));
+}
+
+/* A tab squeezed to its avatar keeps the avatar (which space it is); the close
+ * button shows on hover instead of covering it. */
+@container (max-width: 64px) {
+  html [data-titlebar-tab]:not(:hover) [data-slot="tab-close"] {
+    display: none;
+  }
+}
+
+/* The pill already says which tab is open; the underline would repeat it. */
+html .scope-tab-trace {
+  display: none;
+}
+
+/* ── Session card ──────────────────────────────────────────────────────────
+ * The conversation sits on a rounded card lifted off the ground, washed with
+ * the space color at its top. */
+html [data-component="session-workspace-panel"].scope-screen {
+  border-radius: 16px;
+  box-shadow: var(--v2-elevation-raised);
+}
+
+/* The session title sticks to the top over the scrolling timeline with a fade
+ * of its own; it takes the wash's tone there, or it would cut the wash off in
+ * a hard line under the title. */
+html .scope-screen [data-session-title] {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--v2-background-bg-base), var(--space) 24%) 0,
+    color-mix(in oklab, var(--v2-background-bg-base), var(--space) 20%) 48px,
+    transparent
+  );
+}
+
+@media (prefers-color-scheme: light) {
+  html .scope-screen [data-session-title] {
+    background: linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--v2-background-bg-base), var(--space) 9%) 0,
+      color-mix(in oklab, var(--v2-background-bg-base), var(--space) 7%) 48px,
+      transparent
+    );
+  }
+}
+
+/* The composer is a card of its own that lights in the space color while you
+ * write in it. */
+html [data-component="prompt-input-v2"]:not([data-dock-border-underlay]) {
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--space) 8%, transparent), transparent 65%),
+    var(--v2-background-bg-layer-01);
+  box-shadow:
+    var(--v2-elevation-floating),
+    inset 0 0 0 1px color-mix(in oklab, var(--space) 22%, transparent);
+  transition: box-shadow 160ms ease-out;
+}
+
+html [data-component="prompt-input-v2"]:not([data-dock-border-underlay]):focus-within {
+  box-shadow:
+    var(--v2-elevation-floating),
+    inset 0 0 0 1px color-mix(in oklab, var(--space) 58%, transparent),
+    0 0 0 4px color-mix(in oklab, var(--space) 14%, transparent);
+}
+
+/* ── Home ──────────────────────────────────────────────────────────────────
+ * Projects are listed as spaces: each row wears its own color dot and fill
+ * when picked, and picking one tints the whole app with it. */
+html div:has(> [data-component="home-project-row"]) {
+  height: 34px;
+  border-radius: 11px;
+}
+
+html [data-component="home-project-row"] {
+  border-radius: 11px;
+  gap: 10px;
+  transition:
+    background-color 160ms ease-out,
+    color 160ms ease-out;
+}
+
+html [data-component="home-project-row"]:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--own-space, var(--space)) 12%, transparent);
+}
+
+html div:has(> [data-component="home-project-row"][data-selected]) {
+  background: color-mix(in oklab, var(--own-space, var(--space)) 22%, var(--v2-background-bg-layer-01));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--own-space, var(--space)) 40%, transparent),
+    0 8px 20px -12px color-mix(in oklab, var(--own-space, var(--space)) 80%, transparent);
+}
+
+html div:has(> [data-component="home-project-row"][data-selected]) [data-component="home-project-row"] {
+  color: var(--v2-text-text-base);
+  background: transparent;
+}
+
+html [data-component="home-session-row"] {
+  border-radius: 12px;
+}
+
+html [data-component="home-session-row"]:hover {
+  background: color-mix(in oklab, var(--space) 9%, var(--v2-background-bg-layer-01));
+}
+
+/* The home composer is the front door: a card that lights in the space color. */
+html .home-hero-composer {
+  border-radius: 20px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--space) 10%, transparent),
+      transparent 70%
+    ),
+    var(--v2-background-bg-layer-01);
+  box-shadow:
+    var(--v2-elevation-floating),
+    inset 0 0 0 1px color-mix(in oklab, var(--space) 22%, transparent);
+}
+
+html .home-hero-composer:hover:not(:disabled),
+html .home-hero-composer:focus-visible {
+  box-shadow:
+    var(--v2-elevation-floating),
+    inset 0 0 0 1px color-mix(in oklab, var(--space) 55%, transparent),
+    0 0 0 4px color-mix(in oklab, var(--space) 16%, transparent);
+}
+
+html .home-hero-send {
+  background: var(--space);
+  box-shadow: 0 6px 18px -4px color-mix(in oklab, var(--space) 70%, transparent);
+  color: var(--space-on);
+}
+
+html .home-hero-example {
+  border-radius: 999px;
+}
+
+html .home-hero-example:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--space) 16%, var(--v2-background-bg-layer-01));
+  color: var(--v2-text-text-base);
+}
+
+/* ── Settings ──────────────────────────────────────────────────────────────
+ * Search first, then the pages, with General's sections listed under it. The
+ * page you are on wears the space color. */
+html [data-component="dialog-v2"][data-variant="settings"] [data-slot="dialog-container"] {
+  border-radius: 18px;
+  box-shadow: var(--v2-elevation-overlay);
+}
+
+html [data-component="tabs-v2"][data-variant="settings"][data-orientation="vertical"] [data-slot="tabs-v2-list"] {
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--space) 10%, transparent), transparent 55%),
+    var(--v2-background-bg-layer-01);
+  padding: 14px 12px;
+}
+
+html [data-component="tabs-v2"][data-variant="settings"][data-orientation="vertical"] [data-slot="tabs-v2-trigger-wrapper"] {
+  height: 32px;
+  border-radius: 9px;
+  transition:
+    background-color 140ms ease-out,
+    color 140ms ease-out;
+}
+
+html [data-component="tabs-v2"][data-variant="settings"][data-orientation="vertical"]
+  [data-slot="tabs-v2-trigger-wrapper"]:hover:not(:disabled):not(:has([data-selected])) {
+  background-color: color-mix(in oklab, var(--space) 10%, var(--v2-background-bg-layer-02));
+}
+
+html [data-component="tabs-v2"][data-variant="settings"][data-orientation="vertical"]
+  [data-slot="tabs-v2-trigger-wrapper"]:has([data-selected]) {
+  background-color: color-mix(in oklab, var(--space) 22%, var(--v2-background-bg-layer-02));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--space) 38%, transparent);
+  color: var(--v2-text-text-base);
+}
+
+html [data-component="tabs-v2"][data-variant="settings"][data-orientation="vertical"]
+  [data-slot="tabs-v2-trigger-wrapper"]:has([data-selected])
+  [data-component="icon"] {
+  color: var(--space-ink);
+}
+
+.settings-v2-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  background: var(--v2-background-bg-base);
+  box-shadow: inset 0 0 0 1px var(--v2-border-border-base);
+  color: var(--v2-icon-icon-muted);
+  transition: box-shadow 140ms ease-out;
+}
+
+.settings-v2-search:focus-within {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--space) 60%, transparent),
+    0 0 0 3px color-mix(in oklab, var(--space) 18%, transparent);
+}
+
+.settings-v2-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--v2-text-text-base);
+  font-size: 13px;
+}
+
+.settings-v2-search input::placeholder {
+  color: var(--v2-text-text-faint);
+}
+
+.settings-v2-search input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+.settings-v2-search-pages {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-inline: 4px;
+  font-size: 12px;
+  color: var(--v2-text-text-muted);
+}
+
+.settings-v2-search-pages button {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--space) 18%, var(--v2-background-bg-layer-02));
+  color: var(--v2-text-text-base);
+  font-size: 12px;
+}
+
+.settings-v2-search-pages button:hover {
+  background: color-mix(in oklab, var(--space) 30%, var(--v2-background-bg-layer-02));
+}
+
+/* General's sections, listed under it to jump to. */
+.settings-v2-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 2px 0 4px 17px;
+  padding-left: 10px;
+  border-left: 1px solid color-mix(in oklab, var(--space) 30%, var(--v2-border-border-base));
+}
+
+.settings-v2-sections button {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 7px;
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--v2-text-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-v2-sections button:hover {
+  background: color-mix(in oklab, var(--space) 12%, transparent);
+  color: var(--v2-text-text-base);
+}
+
+.settings-v2-search-empty {
+  margin: 40px 40px 0;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: var(--v2-background-bg-layer-01);
+  color: var(--v2-text-text-muted);
+  font-size: 13px;
+}
+
+/* A row or section the search leaves out. */
+html [data-filtered-out] {
+  display: none !important;
+}
+
+html [data-component="settings-v2-list"] {
+  border-radius: 14px;
+  background-color: var(--v2-background-bg-layer-01);
+  box-shadow:
+    inset 0 0 0 1px var(--v2-border-border-muted),
+    0 8px 20px -14px rgb(0 0 0 / 0.5);
+}
+
+html .settings-v2-section-title {
+  scroll-margin-top: 96px;
+}
