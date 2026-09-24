@@ -2,6 +2,7 @@ import { createEffect, createMemo, createSignal, Index, onCleanup, onMount, Show
 import { useLanguage } from "@/context/language"
 import { createBrowserFeed, type BrowserActivity } from "./browser-feed"
 import { createFramePainter, type FramePainter } from "./frame-painter"
+import { BrowserHistory } from "./browser-history"
 import "./browser-pane.css"
 
 /**
@@ -96,6 +97,8 @@ const AGENT_ACTIVE_MS = 6000
 
 export function BrowserPane(props: {
   directory: Accessor<string | undefined>
+  /** The session whose browser steps are summed up and shown under the live view. */
+  sessionID?: Accessor<string | undefined>
   onClose: () => void
   /** Whether the session is running, so the pane can offer to stop it. */
   working?: Accessor<boolean>
@@ -513,6 +516,8 @@ export function BrowserPane(props: {
           </button>
         </Show>
       </div>
+
+      <Show when={props.sessionID}>{(sessionID) => <BrowserHistory sessionID={sessionID()} />}</Show>
     </section>
   )
 }

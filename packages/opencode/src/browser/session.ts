@@ -135,6 +135,8 @@ interface State {
   headless: boolean
   /** Whether tabs fail requests to `BLOCKED_HOSTS`. */
   block: boolean
+  /** Whether cookie banners are answered by refusing non-essential cookies. */
+  cookies: boolean
   timeout: number
   viewport: { width: number; height: number }
   profileDir: string
@@ -214,6 +216,8 @@ export interface Interface {
   readonly handoff: (url: string, options?: { once?: boolean }) => Effect.Effect<Handoff>
   /** Whether this session launches its own browser or drives the person's through the extension. */
   readonly mode: () => Effect.Effect<"process" | "extension">
+  /** Whether cookie banners are answered for the agent, refusing non-essential cookies. */
+  readonly rejectsCookies: () => Effect.Effect<boolean>
   /**
    * Takes a tab back from a PDF it landed on, to the page it was on, so the
    * agent can carry on there. Driving the person's own browser this is also
@@ -255,7 +259,12 @@ function attachError(s: State, targetId: string, error: unknown) {
       `Tab ${targetId} shows a PDF (${url || "unknown address"}), which the browser does not let extensions drive. To read it, call browser_navigate with its URL: PDFs are downloaded and read directly.`,
     )
   }
-  if (/^(chrome|brave|edge|about|devtools|chrome-extension):/i.test(url) || /chrome-extension:\/\//i.test(reason)) {
+  // A blank tab can be driven: failing to attach to one is the extension
+  // dropping out, which must read as that, not as a page that is off limits.
+  if (
+    (/^(chrome|brave|edge|about|devtools|chrome-extension):/i.test(url) && !/^about:blank/i.test(url)) ||
+    /chrome-extension:\/\//i.test(reason)
+  ) {
     return new Error(`Tab ${targetId} shows a browser page (${url}), which extensions may not drive. Use another tab.`)
   }
   return error instanceof Error ? error : new Error(reason)
@@ -374,6 +383,7 @@ const layer = Layer.effect(
           // live view is open.
           headless: mode === "extension" ? false : (options.headless ?? true),
           block: options.block ?? true,
+          cookies: options.rejectCookies ?? true,
           timeout: options.timeout ?? DEFAULT_TIMEOUT,
           viewport: {
             width: options.viewport?.width ?? DEFAULT_VIEWPORT.width,
@@ -405,7 +415,8 @@ const layer = Layer.effect(
 
     /** Whether a browser is currently driveable, whichever transport backs it. */
     function live(s: State) {
-      return s.mode === "extension" ? s.bridge?.connected === true : s.connection?.connected === true
+      if (s.mode === "extension") return s.bridge?.connected === true || s.bridge?.recovering === true
+      return s.connection?.connected === true
     }
 
     /**
@@ -706,14 +717,20 @@ const layer = Layer.effect(
      */
     async function trackExtension(s: State) {
       const bridge = s.bridge
-      if (!bridge?.connected || s.unbridge) return
+      if (!bridge?.connected) return
+      // Back after dropping out: the tabs were kept, but the list may be stale.
+      if (s.unbridge) {
+        s.targets = await bridge.listTargets().catch(() => s.targets)
+        return
+      }
       const offTarget = bridge.onTarget((event) => onBridgeTarget(s, event))
       const offState = bridge.onState(() => {
         if (bridge.connected)
           void trackExtension(s)
             .then(() => changed(s))
             .catch(() => {})
-        else void teardown(s)
+        // A drop of a few seconds keeps the tabs; only giving up lets go of them.
+        else if (!bridge.recovering) void teardown(s)
       })
       s.unbridge = () => {
         offTarget()
@@ -857,7 +874,9 @@ const layer = Layer.effect(
         // this state was built), and it retries within a few seconds.
         const bridge = s.bridge
         if (bridge && !bridge.connected && bridge.paired) {
-          yield* Effect.promise(() => bridge.whenConnected(EXTENSION_WAIT).catch(() => {}))
+          // Dropped out moments ago, it usually comes back within the time its tabs are kept.
+          const wait = bridge.recovering ? EXTENSION_WAIT * 2 : EXTENSION_WAIT
+          yield* Effect.promise(() => bridge.whenConnected(wait).catch(() => {}))
         }
         if (!s.bridge?.connected) {
           yield* Effect.die(
@@ -1086,6 +1105,10 @@ const layer = Layer.effect(
       return (yield* InstanceState.get(state)).mode
     })
 
+    const rejectsCookies: Interface["rejectsCookies"] = Effect.fn("Browser.rejectsCookies")(function* () {
+      return (yield* InstanceState.get(state)).cookies
+    })
+
     const leavePdf: Interface["leavePdf"] = Effect.fn("Browser.leavePdf")(function* (tab: Tab) {
       const s = yield* InstanceState.get(state)
       if (s.mode === "process") {
@@ -1172,6 +1195,7 @@ const layer = Layer.effect(
       input,
       handoff,
       mode,
+      rejectsCookies,
       leavePdf,
     })
   }),

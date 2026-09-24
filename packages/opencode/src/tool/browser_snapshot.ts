@@ -1,6 +1,7 @@
 import { Effect, Schema } from "effect"
 import { Browser } from "@/browser/session"
 import { BrowserPage } from "@/browser/page"
+import { BrowserPdf } from "@/browser/pdf"
 import * as Tool from "./tool"
 import DESCRIPTION from "./browser_snapshot.txt"
 
@@ -47,6 +48,17 @@ export const BrowserSnapshotTool = Tool.define(
           const url = yield* Effect.promise(() => tab.url())
           yield* ctx.metadata({ title: url, metadata: { format, url } })
 
+          // The viewer of a downloaded PDF draws pages, which read as nothing
+          // but headings; the file's text is what there is to read.
+          const viewed = yield* Effect.promise(() => BrowserPdf.readViewed(url).catch(() => undefined))
+          if (viewed) {
+            return {
+              output: [viewed, "", "The tab shows this PDF page by page; take a browser_screenshot to see figures or pages without text."].join("\n"),
+              title: `PDF ${url}`,
+              metadata: { format: "pdf", url, page: "pdf" },
+            }
+          }
+
           if (format === "text") {
             const result = yield* Effect.promise(() => tab.text())
             return {
@@ -84,7 +96,7 @@ export const BrowserSnapshotTool = Tool.define(
             title: result.title || result.url,
             metadata: { format, url: result.url, refs: result.refs, page: "outline" },
           }
-        }).pipe(Effect.orDie),
+        }).pipe(BrowserPage.retryDropped, Effect.orDie),
     }
   }),
 )

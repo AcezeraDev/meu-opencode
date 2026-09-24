@@ -7,6 +7,7 @@ import { BrowserInstall } from "@/browser/install"
 import { Config } from "@/config/config"
 import { InstanceState } from "@/effect/instance-state"
 import { Truncate } from "@/tool/truncate"
+import { Question } from "@/question"
 import { Agent } from "../../src/agent/agent"
 import { BrowserActTool } from "../../src/tool/browser_act"
 import { BrowserBatchTool } from "../../src/tool/browser_batch"
@@ -70,7 +71,7 @@ const server = Bun.serve({
 afterAll(() => server.stop(true))
 
 const it = testEffect(
-  LayerNode.compile(LayerNode.group([Browser.node, Truncate.node, Agent.node]), [
+  LayerNode.compile(LayerNode.group([Browser.node, Truncate.node, Agent.node, Question.node]), [
     [
       Config.node,
       TestConfig.layer({

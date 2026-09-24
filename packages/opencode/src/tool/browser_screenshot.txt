@@ -9,6 +9,11 @@ and more precise.
 Pass `ref` or `selector` to capture a single element, or `fullPage` to capture the
 entire scrollable page instead of just the viewport.
 
+Pass `marks: true` to have every element you can act on drawn as a numbered box:
+the number is its ref (12 is ref_12), usable right away with browser_act. The
+result lists the boxes with their names too. Useful when the outline alone does
+not say which button is which: icons, colors, drag-and-drop, a crowded layout.
+
 The result also lists the text the screenshot shows, top to bottom, so it can be
-read even without seeing the image. To act on the page, you still need refs from
-browser_snapshot.
+read even without seeing the image. Without marks, acting on the page still needs
+refs from browser_snapshot.

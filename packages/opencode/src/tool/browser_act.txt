@@ -72,7 +72,8 @@ automatically, and the result says what they said.
 
 Elements inside frames of the same site (embedded quizzes and activities) have
 refs in the outline and are acted on the same way. A click that opens a PDF
-returns the PDF's text and brings the tab back to where it was.
+downloads it, returns its text and shows it in the tab in a viewer you can
+screenshot; browser_navigate back returns to the page it came from.
 
 Elements inside open shadow DOM are also included and act like ordinary refs.
 Closed shadow roots are deliberately inaccessible to page JavaScript, so their

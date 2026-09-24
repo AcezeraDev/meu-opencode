@@ -10,6 +10,7 @@ import { BrowserPdf } from "../../src/browser/pdf"
 import { BrowserSnapshot, type SnapshotResult } from "../../src/browser/snapshot"
 import { Tab } from "../../src/browser/tab"
 import { makePdf } from "../fixture/pdf"
+import { makeDocx } from "../fixture/office"
 
 const PAGE = `<!doctype html>
 <html>
@@ -132,6 +133,13 @@ const DIALOG = `<!doctype html>
 
 const PDF = makePdf(["Material da aula", "Formas normais"])
 
+/** A lesson that shows its material inside the page, as Moodle's "resource" pages can. */
+const EMBEDDED = `<!doctype html><html><head><title>Recurso</title></head><body>
+  <h1>Material</h1>
+  <object data="/doc.pdf" type="application/pdf" width="600" height="400" title="Material da aula"></object>
+  <iframe src="/doc.pdf#page=2" width="600" height="400"></iframe>
+</body></html>`
+
 /** Serves the quiz, a public PDF, and one that needs the cookie /login sets. */
 const web = Bun.serve({
   port: 0,
@@ -145,6 +153,37 @@ const web = Bun.serve({
     if (url.pathname === "/island") return html(ISLAND)
     if (url.pathname === "/covered") return html(COVERED)
     if (url.pathname === "/dialog") return html(DIALOG)
+    if (url.pathname === "/embedded") return html(EMBEDDED)
+    if (url.pathname === "/resource")
+      return html(`<title>Recurso</title><a id="file" href="/mod/resource/view.php?id=5">Apostila da aula</a>`)
+    // Like Moodle: the link says nothing of the file, which comes as an attachment.
+    if (url.pathname === "/mod/resource/view.php")
+      return new Response(makeDocx(["Apostila", "Capítulo 1: normalização"]), {
+        headers: {
+          "content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "content-disposition": 'attachment; filename="Apostila 1.docx"',
+        },
+      })
+    if (url.pathname === "/person/login")
+      return html(`<title>Entrar</title><form><label>Usuário <input name="u"></label><label>Senha <input id="p" type="password"></label><button>Acessar</button></form>`)
+    if (url.pathname === "/person/captcha")
+      return html(`<title>Verificação</title><div class="g-recaptcha" style="width:300px;height:80px"></div>`)
+    if (url.pathname === "/cookies/onetrust")
+      return html(`<title>OT</title><div id="onetrust-banner-sdk"><p>Usamos cookies</p>
+        <button id="onetrust-accept-btn-handler" onclick="document.title='aceitou'">Aceitar todos</button>
+        <button id="onetrust-reject-all-handler" onclick="document.title='recusou';this.parentNode.remove()">Rejeitar todos</button></div>`)
+    if (url.pathname === "/cookies/generic")
+      return html(`<title>G</title><section class="lgpd-aviso"><p>Este site usa cookies.</p>
+        <a href="#" onclick="document.title='aceitou';return false">Aceitar</a>
+        <button onclick="document.title='recusou'">Somente necessários</button></section>`)
+    if (url.pathname === "/cookies/none")
+      return html(`<title>N</title><div role="dialog"><p>Deseja excluir a tarefa?</p>
+        <button onclick="document.title='excluiu'">Confirmar</button><button onclick="document.title='recusou'">Recusar</button></div>`)
+    if (url.pathname === "/links")
+      return html(
+        `<title>Links</title><a href="${url.origin}/mod/quiz/view.php?id=7">Questionário</a>
+        <a href="https://example.com/fora">Fora</a><a href="relativo.html">Relativo</a>`,
+      )
     if (url.pathname === "/doc.pdf") return new Response(PDF, { headers: { "content-type": "application/pdf" } })
     if (url.pathname === "/login") return html("<title>Logged in</title>ok", { "set-cookie": "session=1; Path=/" })
     if (url.pathname === "/private.pdf") {
@@ -467,6 +506,82 @@ describeBrowser("browser over CDP", () => {
     const text = await BrowserPage.readPdf(tab.pdf!, tab)
     expect(text).toContain("type: PDF, 2 pages")
     expect(text).toContain("Formas normais")
+  })
+
+  test("a marked screenshot draws the refs of what is visible and leaves the page as it was", async () => {
+    await tab.navigate(`${webUrl}/quiz`, "load", 20_000)
+    const outline = (await tab.snapshot()).outline
+    const shot = await tab.markedScreenshot()
+    if (process.env["OC_SHOT"]) await Bun.write(process.env["OC_SHOT"], shot.image)
+    expect(shot.image.byteLength).toBeGreaterThan(1000)
+    expect(shot.marked.length).toBeGreaterThan(0)
+    // Every mark is a ref the outline handed out.
+    for (const ref of shot.marked) expect(outline).toContain(`[${ref}`)
+    expect(await tab.evaluate<boolean>("document.getElementById('__oc_marks') === null")).toBe(true)
+  })
+
+  test("a click that downloads a Word file is noticed, and the file is read and kept", async () => {
+    await tab.navigate(`${webUrl}/resource`, "load", 20_000)
+    const started = Date.now()
+    await BrowserPage.perform(tab, { action: "click", selector: "#file" }, 20_000)
+    for (let i = 0; i < 50 && tab.downloadsSince(started).length === 0; i++) await Bun.sleep(100)
+    const [download] = tab.downloadsSince(started)
+    expect(download?.name).toBe("Apostila 1.docx")
+    expect(BrowserPage.documentKind(download!.name)).toBe("docx")
+    const text = await BrowserPage.readOffice(download!.url, "docx", tab, download!.name)
+    expect(text).toContain("type: Word document")
+    expect(text).toContain("Capítulo 1: normalização")
+    expect(text).toMatch(/downloaded to .*Apostila 1\.docx/)
+    // The page stayed where it was.
+    expect(await tab.url()).toBe(`${webUrl}/resource`)
+  })
+
+  test("a password to type or a captcha is said to be the person's to do, and nothing else is", async () => {
+    await tab.navigate(`${webUrl}/person/login`, "load", 20_000)
+    expect(await BrowserPage.personNeeded(tab)).toContain("asks for a password")
+    // Once filled (by the person, say), it is no longer waiting for them.
+    await tab.evaluate("document.getElementById('p').value = 'x'")
+    expect(await BrowserPage.personNeeded(tab)).toBeUndefined()
+
+    await tab.navigate(`${webUrl}/person/captcha`, "load", 20_000)
+    expect(await BrowserPage.personNeeded(tab)).toContain("asks for a captcha")
+
+    await tab.navigate(`${webUrl}/quiz`, "load", 20_000)
+    expect(await BrowserPage.personNeeded(tab)).toBeUndefined()
+  })
+
+  test("a cookie banner is answered by refusing, and nothing that is not one is touched", async () => {
+    await tab.navigate(`${webUrl}/cookies/onetrust`, "load", 20_000)
+    expect(await BrowserPage.refuseCookies(tab)).toContain('"Rejeitar todos"')
+    expect(await tab.title()).toBe("recusou")
+
+    await tab.navigate(`${webUrl}/cookies/generic`, "load", 20_000)
+    expect(await BrowserPage.refuseCookies(tab)).toContain('"Somente necessários"')
+    expect(await tab.title()).toBe("recusou")
+
+    await tab.navigate(`${webUrl}/cookies/none`, "load", 20_000)
+    expect(await BrowserPage.refuseCookies(tab)).toBeUndefined()
+    expect(await tab.title()).toBe("N")
+  })
+
+  test("links to the page's own site show by their path, and a path opens on that site", async () => {
+    await tab.navigate(`${webUrl}/links`, "load", 20_000)
+    const outline = (await tab.snapshot()).outline
+    expect(outline).toContain('link "Questionário" [ref_')
+    expect(outline).toContain("href=/mod/quiz/view.php?id=7]")
+    expect(outline).not.toContain(`href=${webUrl}/mod`)
+    expect(outline).toContain("href=https://example.com/fora]")
+    expect(outline).toContain("href=relativo.html]")
+    expect(await BrowserPage.resolveAddress("/mod/quiz/view.php?id=7", tab)).toBe(`${webUrl}/mod/quiz/view.php?id=7`)
+    expect(await BrowserPage.resolveAddress("https://example.com/", tab)).toBe("https://example.com/")
+    expect(await failure(BrowserPage.resolveAddress("/x"))).toContain("give the full address")
+  })
+
+  test("a PDF embedded in a page is listed with its address to open", async () => {
+    await tab.navigate(`${webUrl}/embedded`, "load", 20_000)
+    const outline = (await tab.snapshot()).outline
+    expect(outline).toContain(`pdf "Material da aula" [href=${webUrl}/doc.pdf]`)
+    expect(outline).toContain(`pdf [href=${webUrl}/doc.pdf#page=2]`)
   })
 
   test("sees inside display: contents wrappers, and divs clicked by script, but not ads", async () => {

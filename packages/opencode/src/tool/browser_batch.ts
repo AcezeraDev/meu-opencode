@@ -2,6 +2,7 @@ import { Effect, Schema } from "effect"
 import { Browser } from "@/browser/session"
 import { BrowserSite } from "@/browser/site"
 import { BrowserPage } from "@/browser/page"
+import { BrowserTrail } from "@/browser/trail"
 import type { SnapshotResult } from "@/browser/snapshot"
 import type { Tab } from "@/browser/tab"
 import { ActionVerifier, type Verdict } from "@/browser/verify"
@@ -41,6 +42,8 @@ interface Metadata {
   page?: string
   /** What the last step that ran was seen to do. */
   outcome?: string
+  /** The step whose picture of the page was kept for the trail. */
+  shot?: string
 }
 
 export const BrowserBatchTool = Tool.define(
@@ -105,7 +108,9 @@ export const BrowserBatchTool = Tool.define(
             failure = "failure" in outcome ? outcome.failure : undefined
             // A step that opened a PDF ends the batch: the page the next steps
             // were meant for is gone, and the PDF is read instead.
-            pdf = yield* BrowserPage.landedOnPdf(browser, tab, before)
+            pdf =
+              (yield* BrowserPage.landedOnPdf(browser, tab, before)) ??
+              ("verdict" in outcome ? yield* BrowserPage.readDownload(browser, tab, started) : undefined)
             if (pdf) {
               if ("verdict" in outcome) verdicts.push(outcome.verdict)
               failure = undefined
@@ -142,7 +147,7 @@ export const BrowserBatchTool = Tool.define(
           const summary = failure
             ? [`Stopped at step ${done + 1} of ${steps.length}: ${failure.message}`, ...report]
             : pdf && done < steps.length
-              ? [`Stopped after step ${done} of ${steps.length}: it opened a PDF.`, ...report]
+              ? [`Stopped after step ${done} of ${steps.length}: it opened a document, which is read below.`, ...report]
               : opened
                 ? [
                     `Stopped after step ${done} of ${steps.length}: it opened a new tab, and the browser switched to it. Continue there with the refs below.`,
@@ -213,6 +218,7 @@ export const BrowserBatchTool = Tool.define(
           const extra = yield* Effect.promise(() =>
             BrowserSite.aside(ctx.sessionID, { steps: described.slice(0, done), from, to: result.url }),
           )
+          BrowserTrail.capture(tab, ctx.sessionID, ctx.callID)
           return {
             output: [...summary, "", change.output, ...extra].join("\n"),
             title,
@@ -227,9 +233,10 @@ export const BrowserBatchTool = Tool.define(
               // For diagnosing a slow batch later; the model never sees these.
               timing: { total: Date.now() - began },
               ...(slow.length ? { slow } : {}),
+              ...(ctx.callID ? { shot: ctx.callID } : {}),
             },
           }
-        }).pipe(Effect.orDie),
+        }).pipe(BrowserPage.explainDropped, Effect.orDie),
     }
   }),
 )

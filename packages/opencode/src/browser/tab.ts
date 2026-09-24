@@ -1,3 +1,5 @@
+import fs from "fs/promises"
+import path from "path"
 import { CDPConnection, ReplacedError, type CDPTransport, type SlowCall } from "./cdp"
 import { BrowserCursor } from "./cursor"
 import { BrowserSnapshot, type RefIdentity, type SnapshotOptions, type SnapshotResult } from "./snapshot"
@@ -43,6 +45,13 @@ export interface Dialog {
   type: string
   message: string
   accepted: boolean
+}
+
+export interface Download {
+  url: string
+  /** The file name the browser would save it under. */
+  name: string
+  at: number
 }
 
 export interface Rect {
@@ -513,6 +522,102 @@ function mask(modifiers: readonly Modifier[]) {
 /** How many moves a drag is made of; enough for a page to follow the pointer. */
 const DRAG_STEPS = 8
 
+/** Larger files are not handed to a page this way; the direct way has no such limit. */
+const MAX_UPLOAD = 25 * 1024 * 1024
+
+/** The files to hand to a page from inside it: name, type and contents. */
+async function readUploads(files: string[]) {
+  return Promise.all(
+    files.map(async (file) => {
+      const bytes = await fs.readFile(file)
+      if (bytes.byteLength > MAX_UPLOAD) throw new Error(`${file} is larger than ${MAX_UPLOAD / 1024 / 1024} MB.`)
+      return { name: path.basename(file), type: MIME[path.extname(file).toLowerCase()] ?? "", data: bytes.toString("base64") }
+    }),
+  )
+}
+
+const MIME: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".txt": "text/plain",
+  ".csv": "text/csv",
+  ".zip": "application/zip",
+  ".mp3": "audio/mpeg",
+  ".mp4": "video/mp4",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+
+/** Runs in the page: puts the files into the input and tells the page, as a person choosing them would. */
+const GIVE_FILES = `(input, files) => {
+  if (!input) throw new Error("no such element")
+  const transfer = new DataTransfer()
+  for (const file of files) {
+    const bytes = Uint8Array.from(atob(file.data), (char) => char.charCodeAt(0))
+    transfer.items.add(new File([bytes], file.name, { type: file.type }))
+  }
+  input.files = transfer.files
+  input.dispatchEvent(new Event("input", { bubbles: true }))
+  input.dispatchEvent(new Event("change", { bubbles: true }))
+  return input.files.length
+}`
+
+/** Draws a numbered box over each visible element with a ref; see `Tab.markedScreenshot`. */
+const MARKS_ON = `(() => {
+  document.getElementById("__oc_marks")?.remove()
+  const layer = document.createElement("div")
+  layer.id = "__oc_marks"
+  layer.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:2147483647"
+  const marked = []
+  // Frames of the same site are part of the page, as in the outline; their
+  // boxes are offset by where the frame sits.
+  const mark = (doc, dx, dy) => {
+    const view = doc.defaultView
+    for (const el of doc.querySelectorAll("[data-oc-ref]")) {
+      const box = el.getBoundingClientRect()
+      if (box.width < 2 || box.height < 2) continue
+      if (box.bottom < 0 || box.right < 0 || box.top > view.innerHeight || box.left > view.innerWidth) continue
+      const left = box.left + dx
+      const top = box.top + dy
+      if (top + box.height < 0 || left + box.width < 0 || top > innerHeight || left > innerWidth) continue
+      const x = Math.min(view.innerWidth - 1, Math.max(0, box.left + box.width / 2))
+      const y = Math.min(view.innerHeight - 1, Math.max(0, box.top + box.height / 2))
+      const onTop = doc.elementFromPoint(x, y)
+      if (onTop && onTop !== el && !el.contains(onTop) && !onTop.contains(el)) continue
+      const ref = el.getAttribute("data-oc-ref")
+      const number = ref.replace("ref_", "")
+      const hue = (Number(number) * 137) % 360
+      const frame = document.createElement("div")
+      frame.style.cssText = "position:fixed;box-sizing:border-box;border-radius:3px;left:" + left + "px;top:" + top + "px;width:" + box.width + "px;height:" + box.height + "px;border:2px solid hsl(" + hue + " 90% 42%)"
+      const tag = document.createElement("div")
+      tag.textContent = number
+      tag.style.cssText = "position:absolute;left:-2px;padding:0 3px;border-radius:3px;color:#fff;font:bold 11px/14px sans-serif;background:hsl(" + hue + " 90% 34%);top:" + (top < 16 ? 0 : -16) + "px"
+      frame.append(tag)
+      layer.append(frame)
+      marked.push(ref)
+    }
+    for (const inner of doc.querySelectorAll("iframe, frame")) {
+      let child = null
+      try {
+        child = inner.contentDocument
+      } catch (error) {}
+      if (!child || !child.documentElement) continue
+      const box = inner.getBoundingClientRect()
+      mark(child, dx + box.left + inner.clientLeft, dy + box.top + inner.clientTop)
+    }
+  }
+  mark(document, 0, 0)
+  document.documentElement.append(layer)
+  return marked
+})()`
+
+const MARKS_OFF = `document.getElementById("__oc_marks")?.remove()`
+
 function push<T>(buffer: T[], entry: T) {
   buffer.push(entry)
   if (buffer.length > BUFFER_LIMIT) buffer.splice(0, buffer.length - BUFFER_LIMIT)
@@ -884,6 +989,8 @@ export class Tab {
   readonly network: NetworkEntry[] = []
   /** Dialogs answered since the model was last told about them. */
   private dialogs: Dialog[] = []
+  /** Files the page started downloading, newest last, so an action that downloaded one can read it. */
+  private downloads: Download[] = []
   /** The last top-level page response, which bot walls give away through. */
   document?: DocumentResponse
   /** The last outline the model was given, so an action can report only what it changed. */
@@ -903,6 +1010,10 @@ export class Tab {
    */
   private pointer = { x: 0, y: 0 }
   private stopCast?: () => void
+  /** What the live view last asked the browser for, to ask again after the tab is attached anew. */
+  private castRequest?: Record<string, unknown>
+  /** Hosts blocked in this tab, for the same reason. */
+  private blockedHosts?: readonly string[]
   /** Live-view input in flight, so events reach the page in the order the hand made them. */
   private inputs: Promise<void> = Promise.resolve()
   /** The action running now, so two tool calls that arrive together do not interleave their input. */
@@ -953,6 +1064,22 @@ export class Tab {
    * Attaches to a tab over a transport that is already connected, such as the
    * one relayed through the browser extension.
    */
+  /** Switches on what a tab needs to be followed: page, script, network and log events. */
+  private static async enable(send: (method: string, params?: Record<string, unknown>) => Promise<unknown>) {
+    await Promise.all([
+      send("Page.enable"),
+      send("Runtime.enable"),
+      send("Network.enable"),
+      send("Log.enable").catch(() => {}),
+      // A tab whose window is covered, as the person's own browser is behind
+      // opencode, counts as hidden: it stops painting, the live view gets no
+      // pictures, the window shows stale half-drawn content when uncovered,
+      // and every input waits seconds for a frame that never comes. Emulating
+      // focus keeps it rendering as if in front. Detaching undoes it.
+      send("Emulation.setFocusEmulationEnabled", { enabled: true }).catch(() => {}),
+    ])
+  }
+
   static async attachTransport(id: string, targetId: string, connection: CDPTransport, hooks: TabHooks = IDLE) {
     const tab = new Tab(id, targetId, connection, hooks)
     await tab.prepare()
@@ -960,18 +1087,16 @@ export class Tab {
   }
 
   private async prepare() {
-    await Promise.all([
-      this.connection.send("Page.enable"),
-      this.connection.send("Runtime.enable"),
-      this.connection.send("Network.enable"),
-      this.connection.send("Log.enable").catch(() => {}),
-      // A tab whose window is covered, as the person's own browser is behind
-      // opencode, counts as hidden: it stops painting, the live view gets no
-      // pictures, the window shows stale half-drawn content when uncovered,
-      // and every input waits seconds for a frame that never comes. Emulating
-      // focus keeps it rendering as if in front. Detaching undoes it.
-      this.connection.send("Emulation.setFocusEmulationEnabled", { enabled: true }).catch(() => {}),
-    ])
+    await Tab.enable((method, params) => this.connection.send(method, params))
+    // The browser extension restarting drops the debugger, and with it every
+    // domain switched on here: the page would go on, but no event would say
+    // so, and each wait for a load would sit out its whole timeout. The tab is
+    // attached again as it was.
+    this.connection.onReattach?.(async (send) => {
+      await Tab.enable(send)
+      if (this.blockedHosts) await Tab.blockWith(send, this.blockedHosts)
+      if (this.castRequest && this.stopCast) await send("Page.startScreencast", this.castRequest).catch(() => {})
+    })
     const tree = await this.connection
       .send<{ frameTree?: { frame?: { id?: string } } }>("Page.getFrameTree")
       .catch(() => undefined)
@@ -1097,6 +1222,18 @@ export class Tab {
       push(this.dialogs, { type, message: asText(params["message"]).slice(0, 300), accepted })
       void this.connection.send("Page.handleJavaScriptDialog", { accept: accepted }).catch(() => {})
     })
+
+    // A link to a file served as an attachment (a Moodle resource, a PDF with
+    // forcedownload) downloads it and leaves the page as it was, so the action
+    // looked like it did nothing. The download says what the file was.
+    this.connection.on("Page.downloadWillBegin", (params) => {
+      push(this.downloads, { url: asText(params["url"]), name: asText(params["suggestedFilename"]), at: Date.now() })
+    })
+  }
+
+  /** Files the page started downloading since `since`, oldest first. */
+  downloadsSince(since: number) {
+    return this.downloads.filter((download) => download.at >= since)
   }
 
   get connected() {
@@ -1922,11 +2059,18 @@ export class Tab {
     })
     const objectId = handle.result?.objectId
     if (!objectId) throw new ElementNotFoundError(selector)
-    try {
-      await this.connection.send("DOM.setFileInputFiles", { files, objectId })
-    } finally {
-      await this.connection.send("Runtime.releaseObject", { objectId }).catch(() => {})
-    }
+    const direct = await this.connection
+      .send("DOM.setFileInputFiles", { files, objectId })
+      .then(
+        () => true,
+        () => false,
+      )
+      .finally(() => this.connection.send("Runtime.releaseObject", { objectId }).catch(() => {}))
+    // Through the person's own browser the extension is not allowed to name a
+    // file on disk (unless they gave it access to file URLs), so the files are
+    // read here and handed to the input from inside the page instead, the way
+    // a page's own drag and drop would.
+    if (!direct) await this.evaluate(`(${GIVE_FILES})(${this.locate(selector)}, ${JSON.stringify(await readUploads(files))})`)
     this.touched()
   }
 
@@ -2418,6 +2562,21 @@ export class Tab {
    * keeps it small on its way through the extension and to the model. The
    * cursor overlay is hidden so the model sees only the page.
    */
+  /**
+   * A screenshot of the viewport with each element the outline gave a ref
+   * drawn over: a box and its number, so a model that sees images can point at
+   * what it sees by ref instead of guessing. Elements covered by something
+   * else are left unmarked. Returns the picture and the refs that were marked.
+   */
+  async markedScreenshot() {
+    const marked = await this.evaluate<string[]>(MARKS_ON).catch(() => [] as string[])
+    try {
+      return { image: await this.screenshot(), marked }
+    } finally {
+      await this.evaluate(MARKS_OFF).catch(() => {})
+    }
+  }
+
   async screenshot(options: { selector?: string; fullPage?: boolean } = {}) {
     const view = await this.viewport()
     const scale = 1 / (view.ratio || 1)
@@ -2459,6 +2618,23 @@ export class Tab {
     return this.evaluate<string>(`(${VISIBLE_TEXT})(${options.fullPage === true}, ${options.max ?? 6000})`).catch(
       () => "",
     )
+  }
+
+  /**
+   * A JPEG of what the tab shows, for the trail of the agent's steps.
+   *
+   * Deliberately no `clip`/`scale`: Chromium shrinks a capture by emulating a
+   * smaller device for a moment, and when that capture never completes (a tab
+   * hidden behind the app, a debugger dropped mid-capture) the real window stays
+   * laid out at the shrunken size, in its top-left corner. The pane scales the
+   * picture down itself.
+   */
+  async thumbnail() {
+    const result = await this.connection.send<ScreenshotResult>("Page.captureScreenshot", {
+      format: "jpeg",
+      quality: 45,
+    })
+    return Buffer.from(result.data, "base64")
   }
 
   /** A JPEG of the viewport as a person would see it, cursor included. */
@@ -2518,7 +2694,7 @@ export class Tab {
       timer = undefined
       off()
     }
-    await this.connection.send("Page.startScreencast", {
+    this.castRequest = {
       format: "jpeg",
       // Each picture crosses the extension relay and the event stream; this is
       // a live view, not a record, and 50 keeps text legible at a smaller size.
@@ -2526,7 +2702,8 @@ export class Tab {
       maxWidth: size ? size.width : 1600,
       maxHeight: size ? size.height : 1200,
       everyNthFrame: 1,
-    })
+    }
+    await this.connection.send("Page.startScreencast", this.castRequest)
   }
 
   async stopScreencast() {
@@ -2620,10 +2797,17 @@ export class Tab {
    * patterns and older only the deprecated wildcard list, so both are tried.
    */
   async block(hosts: readonly string[]) {
+    this.blockedHosts = hosts
+    await Tab.blockWith((method, params) => this.connection.send(method, params), hosts)
+  }
+
+  private static async blockWith(
+    send: (method: string, params?: Record<string, unknown>) => Promise<unknown>,
+    hosts: readonly string[],
+  ) {
     const patterns = hosts.map((host) => `*://${host}/*`)
-    await this.connection
-      .send("Network.setBlockedURLs", { urlPatterns: patterns.map((urlPattern) => ({ urlPattern, block: true })) })
-      .catch(() => this.connection.send("Network.setBlockedURLs", { urls: patterns }))
+    await send("Network.setBlockedURLs", { urlPatterns: patterns.map((urlPattern) => ({ urlPattern, block: true })) })
+      .catch(() => send("Network.setBlockedURLs", { urls: patterns }))
       .catch(() => {})
   }
 

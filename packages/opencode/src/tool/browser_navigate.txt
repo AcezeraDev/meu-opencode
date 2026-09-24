@@ -8,10 +8,30 @@ or has to be interacted with.
 The browser belongs to this conversation, with the user's logins. Do the
 browsing yourself: a subagent (task) cannot see your tabs or use this browser.
 
+Links to the page's own site show in the outline by their path (href=/...);
+such a path given as the url opens on that site.
+
 PDFs: navigating to a PDF (or a link that turns out to be one) returns its text,
-page by page, instead of an outline; the file is downloaded and read directly,
-with the site's session when it needs a login. There is nothing to click in a
-PDF, so read what you need and carry on.
+page by page, instead of an outline. The file is downloaded (with the site's
+session when it needs a login) to the user's Downloads folder and shown in the
+tab in a viewer, one page under the other: take a browser_screenshot there to
+see figures, tables or scanned pages that have no text. A PDF embedded in a
+page shows in the outline as `pdf "name" [href=...]`; navigate to its href to
+read it. There is nothing to click in a PDF, so read what you need and carry on.
+
+Word (.docx), PowerPoint (.pptx) and Excel (.xlsx) files are read the same way:
+navigating to one, or clicking a link that downloads one, returns its text
+(slide by slide, or a sheet's rows as tab-separated lines) and keeps the file in
+the user's Downloads folder; the tab stays where it was.
+
+Logins, captchas and payments are the user's to do. When a page asks for a
+password, card details or a captcha (the result says so), do not type or solve
+them: call this tool with action "ask_user" and a short `reason` in the user's
+language. The user does it in the browser and answers; you get the page as it is
+then and carry on.
+
+Cookie banners are answered for you by refusing non-essential cookies when a
+page opens; the result says when that happened.
 
 By default the tool returns the page outline after navigating, so you usually do
 not need a separate browser_snapshot call. Every actionable element in that

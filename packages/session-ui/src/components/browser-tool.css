@@ -1,0 +1,23 @@
+/* The picture of the page after a browser step: a small thumbnail at the end of
+   the card's line, opening full size on click. Empty until it has loaded. */
+[data-slot="browser-tool-shot"] {
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+[data-slot="browser-tool-shot"] img {
+  display: block;
+  height: 36px;
+  width: auto;
+  max-width: 64px;
+  object-fit: cover;
+  object-position: top left;
+  border-radius: 4px;
+  border: 1px solid var(--border-weak-base, rgba(127, 127, 127, 0.25));
+  cursor: zoom-in;
+}
+
+[data-slot="browser-tool-shot"] img:hover {
+  border-color: var(--border-base, rgba(127, 127, 127, 0.5));
+}

@@ -1,6 +1,7 @@
 import { Effect, Schema } from "effect"
 import { Browser } from "@/browser/session"
 import { BrowserPage } from "@/browser/page"
+import { BrowserTrail } from "@/browser/trail"
 import { ActionVerifier, type Verdict } from "@/browser/verify"
 import { BrowserSite } from "@/browser/site"
 import { BrowserTab } from "@/browser/tab"
@@ -64,6 +65,10 @@ interface Metadata {
   page?: string
   /** What the action was seen to do: confirmed, no visible change, navigation, and so on. */
   outcome?: string
+  /** The step whose picture of the page was kept for the trail. */
+  shot?: string
+  /** The name of the element acted on, for showing the step to the person. */
+  target?: string
 }
 
 export const BrowserActTool = Tool.define(
@@ -104,7 +109,8 @@ export const BrowserActTool = Tool.define(
           // Only this action's slow commands are worth reporting with it.
           tab.takeSlow()
           // What the step did in words that outlive its ref, for noticing a routine.
-          const step = BrowserSite.describeStep(params, params.ref ? tab.identityOf(params.ref) : undefined)
+          const identity = params.ref ? tab.identityOf(params.ref) : undefined
+          const step = BrowserSite.describeStep(params, identity)
           const started = Date.now()
           const outcome = yield* Effect.promise(() =>
             tab
@@ -126,6 +132,16 @@ export const BrowserActTool = Tool.define(
               output: [done, "", pdf.output].join("\n"),
               title: label,
               metadata: { action: params.action, url: pdf.url, page: "pdf" },
+            }
+          }
+          // A link to a file served as a download leaves the page as it was:
+          // the file is what the click got, so that is what is read.
+          const downloaded = failure ? undefined : yield* BrowserPage.readDownload(browser, tab, started)
+          if (downloaded) {
+            return {
+              output: [`${label} downloaded a file.`, "", downloaded.output].join("\n"),
+              title: label,
+              metadata: { action: params.action, url: downloaded.url, page: "pdf" },
             }
           }
           if (failure) throw failure
@@ -182,6 +198,13 @@ export const BrowserActTool = Tool.define(
             }
           }
 
+          // A click that took the tab to another page may have landed on a cookie banner.
+          const cookies =
+            verdict?.outcome === "navigation" && (yield* browser.rejectsCookies())
+              ? yield* Effect.promise(() => BrowserPage.refuseCookies(tab))
+              : undefined
+          const person =
+            verdict?.outcome === "navigation" ? yield* Effect.promise(() => BrowserPage.personNeeded(tab)) : undefined
           const read = Date.now()
           const result = yield* Effect.promise(() => tab.snapshot())
           const change = BrowserPage.changes(tab, result)
@@ -192,8 +215,16 @@ export const BrowserActTool = Tool.define(
           const extra = yield* Effect.promise(() =>
             BrowserSite.aside(ctx.sessionID, { steps: [step], from: url, to: result.url }),
           )
+          BrowserTrail.capture(tab, ctx.sessionID, ctx.callID)
           return {
-            output: [told ? ActionVerifier.render(label, told) : done, "", change.output, ...extra].join("\n"),
+            output: [
+              told ? ActionVerifier.render(label, told) : done,
+              ...(cookies ? [cookies] : []),
+              "",
+              change.output,
+              ...(person ? ["", person] : []),
+              ...extra,
+            ].join("\n"),
             title: label,
             metadata: {
               action: params.action,
@@ -204,10 +235,12 @@ export const BrowserActTool = Tool.define(
               outcome: told?.outcome,
               // For diagnosing a slow action later; the model never sees these.
               timing: { ...tab.timing, snapshot: Date.now() - read, total: Date.now() - started },
+              ...(ctx.callID ? { shot: ctx.callID } : {}),
+              ...(identity?.name ? { target: identity.name } : {}),
               ...(slow.length ? { slow } : {}),
             },
           }
-        }).pipe(Effect.orDie),
+        }).pipe(BrowserPage.explainDropped, Effect.orDie),
     }
   }),
 )

@@ -43,6 +43,7 @@ describe("browser bridge", () => {
       "Network.requestWillBeSent",
       "Network.responseReceived",
       "Page.domContentEventFired",
+      "Page.downloadWillBegin",
       "Page.frameNavigated",
       "Page.frameStartedLoading",
       "Page.frameStoppedLoading",
@@ -234,15 +235,77 @@ describe("browser bridge", () => {
     expect(bridge.connected).toBe(false)
   })
 
-  test("disconnecting fails in-flight calls and closes tabs", async () => {
-    const h = harness()
-    h.auth()
-    const tab = h.bridge.connection("4")
+  test("disconnecting fails in-flight calls, and tabs are let go when the extension does not come back", async () => {
+    const bridge = new Bridge("secret", 60)
+    bridge.accept(
+      () => {},
+      () => {},
+    )
+    bridge.receive(JSON.stringify({ type: "auth", token: "secret" }))
+    let states = 0
+    bridge.onState(() => states++)
+    const tab = bridge.connection("4")
     const inflight = tab.send("Runtime.evaluate", {})
-    h.bridge.disconnect()
+    bridge.disconnect()
     await expect(inflight).rejects.toThrow(/disconnected/)
-    expect(h.bridge.connected).toBe(false)
+    expect(bridge.connected).toBe(false)
+    // Kept for a while, in case the extension comes back.
+    expect(bridge.recovering).toBe(true)
+    expect(tab.connected).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    expect(bridge.recovering).toBe(false)
     expect(tab.connected).toBe(false)
+    // Once when it dropped, once when it was given up on.
+    expect(states).toBe(2)
+  })
+
+  test("a drop of a few seconds keeps the tab: it is attached again and switched back on before the next command", async () => {
+    const tick = async (pred: () => boolean) => {
+      for (let i = 0; i < 200; i++) {
+        if (pred()) return
+        await new Promise((r) => setTimeout(r, 2))
+      }
+      throw new Error("condition never held")
+    }
+    const bridge = new Bridge("secret")
+    bridge.accept(
+      () => {},
+      () => {},
+    )
+    bridge.receive(JSON.stringify({ type: "auth", token: "secret" }))
+    const tab = bridge.connection("9")
+    const resumed: string[] = []
+    tab.onReattach!(async (send) => {
+      await send("Page.enable")
+      resumed.push("Page.enable")
+    })
+
+    // The extension's worker restarts.
+    bridge.disconnect()
+    expect(tab.connected).toBe(true)
+    const done = tab.send("Runtime.evaluate", { expression: "1+1" })
+
+    // It is back a moment later, on a new socket.
+    const sent: any[] = []
+    const link = bridge.accept(
+      (message) => sent.push(message),
+      () => {},
+    )
+    link.receive(JSON.stringify({ type: "auth", token: "secret" }))
+    expect(bridge.recovering).toBe(false)
+
+    await tick(() => sent.length > 0)
+    expect(sent[0]).toMatchObject({ type: "attach", targetId: "9" })
+    link.receive(JSON.stringify({ id: sent[0].id, type: "result", result: {} }))
+    // What the tab had switched on goes out again before anything else.
+    await tick(() => sent.length > 1)
+    expect(sent[1]).toMatchObject({ type: "command", targetId: "9", method: "Page.enable" })
+    link.receive(JSON.stringify({ id: sent[1].id, type: "result", result: {} }))
+    await tick(() => sent.length > 2)
+    expect(sent[2]).toMatchObject({ type: "command", method: "Runtime.evaluate" })
+    link.receive(JSON.stringify({ id: sent[2].id, type: "result", result: { result: { value: 2 } } }))
+    expect(await done).toEqual({ result: { value: 2 } })
+    expect(resumed).toEqual(["Page.enable"])
   })
 })
 

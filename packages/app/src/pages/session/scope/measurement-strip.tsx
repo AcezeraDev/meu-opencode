@@ -103,7 +103,7 @@ export function MeasurementStrip(props: { sessionID?: string; active: boolean })
       <div class="scope-strip" data-leaving={leaving() ? "" : undefined} aria-label={stepLabel(meter.step())}>
         <span class="scope-strip-channel" data-chroma>
           <span class="scope-strip-led" aria-hidden="true" />
-          CH1
+          C1
         </span>
 
         <span class="scope-strip-cell">

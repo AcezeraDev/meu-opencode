@@ -9,7 +9,9 @@ import { SDKProvider } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { decode64 } from "@/utils/base64"
 import { Schema } from "effect"
-import type { ServerConnection } from "@/context/server"
+import { useServer, type ServerConnection } from "@/context/server"
+import { usePlatform } from "@/context/platform"
+import { authTokenFromCredentials } from "@/utils/server"
 import { sessionHref } from "@/utils/session-route"
 import { useServerSync } from "@/context/server-sync"
 
@@ -25,6 +27,30 @@ export function DirectoryDataProvider(
   const params = useParams()
   const sync = useSync()
   const serverSync = useServerSync()
+  const server = useServer()
+  const platform = usePlatform()
+  // The picture of the page kept after a browser step, for the step's card.
+  const browserShot = async (sessionID: string, callID: string) => {
+    const connection = server.current
+    if (!connection) return undefined
+    const url = new URL(
+      `/experimental/browser/trail/${encodeURIComponent(sessionID)}/${encodeURIComponent(callID)}`,
+      connection.http.url,
+    )
+    url.searchParams.set("directory", directory())
+    const headers: Record<string, string> = connection.http.password
+      ? {
+          Authorization: `Basic ${authTokenFromCredentials({
+            username: connection.http.username,
+            password: connection.http.password,
+          })}`,
+        }
+      : {}
+    const response = await (platform.fetch ?? fetch)(url, { headers })
+    if (!response.ok) return undefined
+    const body = (await response.json()) as { image?: string }
+    return body.image
+  }
   const directory = () => (typeof props.directory === "function" ? props.directory() : props.directory)
   const slug = createMemo(() => base64Encode(directory()))
   const href = (sessionID: string) => {
@@ -66,6 +92,7 @@ export function DirectoryDataProvider(
           sessionID={params.id}
           onNavigateToSession={(sessionID: string) => navigate(href(sessionID))}
           onSessionHref={href}
+          onBrowserShot={browserShot}
         >
           <LocalProvider>{props.children}</LocalProvider>
         </DataProvider>

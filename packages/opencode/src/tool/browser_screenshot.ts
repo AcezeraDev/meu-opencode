@@ -14,6 +14,10 @@ export const Parameters = Schema.Struct({
   fullPage: Schema.optional(Schema.Boolean).annotate({
     description: "Capture the whole scrollable page instead of just the viewport.",
   }),
+  marks: Schema.optional(Schema.Boolean).annotate({
+    description:
+      "Draw each element you can act on as a numbered box: the number is its ref (12 is ref_12), usable with browser_act. For the viewport only.",
+  }),
   tab: Schema.optional(Schema.String).annotate({ description: "Tab id to capture. Defaults to the active tab." }),
 })
 
@@ -42,7 +46,17 @@ export const BrowserScreenshotTool = Tool.define(
           yield* ctx.metadata({ title: url, metadata: { url, bytes: 0 } })
 
           const selector = BrowserPage.selectorFor(params)
-          const buffer = yield* Effect.promise(() => tab.screenshot({ selector, fullPage: params.fullPage }))
+          // Marks show refs, so the page is read first for them to be current.
+          const marks = params.marks === true && !selector && params.fullPage !== true
+          if (marks) yield* Effect.promise(() => tab.snapshot())
+          const shot = marks
+            ? yield* Effect.promise(() => tab.markedScreenshot())
+            : { image: yield* Effect.promise(() => tab.screenshot({ selector, fullPage: params.fullPage })), marked: [] }
+          const buffer = shot.image
+          const legend = shot.marked.map((ref) => {
+            const identity = tab.identityOf(ref)
+            return `${ref.replace("ref_", "")}: ${identity?.role ?? "element"}${identity?.name ? ` "${identity.name}"` : ""}`
+          })
           const title = yield* Effect.promise(() => tab.title())
           // Many models cannot see images; the text the picture shows lets
           // them read it anyway, and costs the others little.
@@ -53,6 +67,9 @@ export const BrowserScreenshotTool = Tool.define(
           return {
             output: [
               `Screenshot of ${url} attached.`,
+              ...(legend.length
+                ? ["", "Numbered boxes on it (the number is the ref: 12 is ref_12):", ...legend]
+                : []),
               ...(text ? ["", "Text shown in it, top to bottom (for reading when images cannot be seen):", text] : []),
             ].join("\n"),
             title: title || url,
@@ -65,7 +82,7 @@ export const BrowserScreenshotTool = Tool.define(
               },
             ],
           }
-        }).pipe(Effect.orDie),
+        }).pipe(BrowserPage.retryDropped, Effect.orDie),
     }
   }),
 )

@@ -76,18 +76,49 @@ function pairFakeExtension(options: { targets?: BridgeTarget[]; refuse?: Set<str
     if (expression.includes("getBoundingClientRect")) return reply({ result: { value: ELEMENT } })
     return reply({ result: { value: true } })
   }
-  bridge.accept(
-    (message) => {
-      sent.push(message)
-      queueMicrotask(() => answer(message))
-    },
-    () => {},
-  )
-  bridge.receive(JSON.stringify({ type: "auth", token: TOKEN }))
-  return { bridge, sent }
+  // A new socket each time, as a restarted extension worker opens.
+  const pair = () => {
+    const link = bridge.accept(
+      (message) => {
+        sent.push(message)
+        queueMicrotask(() => answer(message))
+      },
+      () => {},
+    )
+    link.receive(JSON.stringify({ type: "auth", token: TOKEN }))
+  }
+  pair()
+  return { bridge, sent, reconnect: pair }
 }
 
 describe("browser service in extension mode", () => {
+  it.instance(
+    "keeps the agent on the same tab when the extension drops out for a moment",
+    () =>
+      Effect.gen(function* () {
+        const fake = pairFakeExtension()
+        const browser = yield* Browser.Service
+        const tab = yield* browser.tab()
+
+        // The extension's worker restarts, and is back a moment later.
+        fake.bridge.disconnect()
+        setTimeout(fake.reconnect, 100)
+        const again = yield* browser.tab()
+        expect(again).toBe(tab)
+
+        // The next command attaches the same tab again and switches its events back on first.
+        const before = fake.sent.length
+        expect(yield* Effect.promise(() => again.title())).toBe("Example")
+        const after = fake.sent.slice(before)
+        expect(after[0]).toMatchObject({ type: "attach", targetId: "7" })
+        expect(after.some((message) => message.method === "Page.enable")).toBe(true)
+        expect(after.some((message) => message.type === "createTarget")).toBe(false)
+
+        yield* browser.shutdown()
+      }),
+    30_000,
+  )
+
   it.instance(
     "drives the person's own browser at its own size, with the cursor always shown",
     () =>

@@ -81,6 +81,7 @@ export const TAB_EVENTS = [
   "Page.loadEventFired",
   "Page.screencastFrame",
   "Page.javascriptDialogOpening",
+  "Page.downloadWillBegin",
 ] as const
 
 /**

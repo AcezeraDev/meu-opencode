@@ -46,6 +46,9 @@ export type NavigateToSessionFn = (sessionID: string) => void
 
 export type SessionHrefFn = (sessionID: string) => string
 
+/** The picture of the page kept after one of the agent's browser steps, as a data URL. */
+export type BrowserShotFn = (sessionID: string, callID: string) => Promise<string | undefined>
+
 export const { use: useData, provider: DataProvider } = createSimpleContext({
   name: "Data",
   init: (props: {
@@ -54,6 +57,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
     sessionID?: string
     onNavigateToSession?: NavigateToSessionFn
     onSessionHref?: SessionHrefFn
+    onBrowserShot?: BrowserShotFn
   }) => {
     return {
       get store() {
@@ -67,6 +71,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
       },
       navigateToSession: props.onNavigateToSession,
       sessionHref: props.onSessionHref,
+      browserShot: props.onBrowserShot,
     }
   },
 })

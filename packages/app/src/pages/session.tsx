@@ -108,6 +108,7 @@ import "./session/session-chat.css"
 import { SessionTrail } from "./session/session-trail"
 import { ContextRing } from "./session/scope/context-ring"
 import { MeasurementStrip } from "./session/scope/measurement-strip"
+import { SessionResume } from "./session/session-resume"
 import { BrowserPanel } from "./session/browser/browser-panel"
 import { BrowserPane } from "./session/browser/browser-pane"
 import { browserPane } from "./session/browser/pane-state"
@@ -2282,6 +2283,7 @@ export default function Page() {
                 <Show when={newSessionDesign()}>
                   <BrowserPanel directory={() => sdk().directory} docked={desktopBrowserOpen} canDock={isDesktop} />
                   <MeasurementStrip sessionID={params.id} active={!!params.id && busy(params.id)} />
+                  <SessionResume sessionID={params.id} busy={!!params.id && busy(params.id)} />
                 </Show>
               }
               promptInput={
@@ -2449,6 +2451,7 @@ export default function Page() {
                   <div id="browser-pane" class="min-h-0 flex-1">
                     <BrowserPane
                       directory={() => sdk().directory}
+                      sessionID={() => params.id}
                       onClose={() => browserPane.close()}
                       working={() => !!params.id && busy(params.id)}
                       onStop={() => {

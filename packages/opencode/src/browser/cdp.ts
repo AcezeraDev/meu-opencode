@@ -35,6 +35,12 @@ export interface CDPTransport {
   readonly busy?: number
   /** Commands that took unusually long since the last call, for diagnosing a slow action. */
   takeSlow?(): SlowCall[]
+  /**
+   * For a transport that can lose its attachment and get it back (the browser
+   * extension restarting): runs `listener` after each new attachment, with a
+   * send that does not wait for anything, to switch back on what was lost.
+   */
+  onReattach?(listener: (send: (method: string, params?: Record<string, unknown>) => Promise<unknown>) => Promise<unknown>): () => void
 }
 
 export interface SlowCall {

@@ -1,15 +1,160 @@
 import fs from "fs"
 import path from "path"
-import { Effect } from "effect"
+import { Cause, Effect } from "effect"
 import { diffArrays, structuredPatch } from "diff"
 import { convertHTMLToMarkdown } from "@/tool/webfetch"
 import { BrowserBlocked, type Block } from "./blocked"
 import { BrowserPdf } from "./pdf"
+import { Docx } from "@/util/docx"
+import { Office } from "@/util/office"
 import { BrowserSnapshot, type SnapshotResult } from "./snapshot"
 import { BrowserTrace } from "./trace"
 import { ActionVerifier, type Verdict } from "./verify"
 import type { Handoff, Interface, Status } from "./session"
 import { isPreDispatch, type ConsoleEntry, type Modifier, type NetworkEntry, type Tab } from "./tab"
+
+/**
+ * The address to open for what the agent wrote. The outline shows links to the
+ * page's own site by their path, so a path is opened on the site of the page
+ * the tab is on; anything else is taken as written.
+ */
+export async function resolveAddress(url: string, tab?: Tab) {
+  if (!/^\/(?!\/)/.test(url)) return url
+  const base = tab ? await tab.url().catch(() => "") : ""
+  if (!/^https?:\/\//.test(base)) {
+    throw new Error(`${url} is a path on a site, and no web page is open to take the site from; give the full address.`)
+  }
+  return new URL(url, base).href
+}
+
+/**
+ * Runs in the page: answers a cookie banner by refusing non-essential cookies,
+ * and says what it clicked. Known consent tools first, by their own buttons;
+ * then a button whose whole label says "refuse" inside something that is
+ * plainly about cookies. Anything less certain is left alone.
+ */
+const REFUSE_COOKIES = `(() => {
+  const refuse = /^(recusar|rejeitar|recusar tudo|recusar todos|rejeitar tudo|rejeitar todos|recusar cookies|rejeitar cookies|recusar opcionais|apenas necess[aá]rios|somente necess[aá]rios|apenas os necess[aá]rios|usar apenas (os )?cookies necess[aá]rios|continuar sem aceitar|reject|reject all|reject all cookies|decline|decline all|deny|deny all|refuse|refuse all|only necessary|necessary only|necessary cookies only|use necessary cookies only|continue without accepting|rechazar|rechazar todo|tout refuser|alle ablehnen)$/i
+  const known = [
+    "#onetrust-reject-all-handler",
+    "#CybotCookiebotDialogBodyButtonDecline",
+    "#didomi-notice-disagree-button",
+    ".cky-btn-reject",
+    "[data-testid='uc-deny-all-button']",
+    ".fc-cta-do-not-consent",
+    "#truste-consent-required",
+  ]
+  const shown = (el) => {
+    const box = el.getBoundingClientRect()
+    const style = getComputedStyle(el)
+    return box.width > 0 && box.height > 0 && style.visibility !== "hidden" && style.display !== "none"
+  }
+  const label = (el) => (el.innerText || el.getAttribute("aria-label") || el.value || "").replace(/\\s+/g, " ").trim()
+  for (const selector of known) {
+    const button = document.querySelector(selector)
+    if (button && shown(button)) {
+      button.click()
+      return label(button) || "refuse"
+    }
+  }
+  const banners = [...document.querySelectorAll(
+    "[id*=cookie i],[class*=cookie i],[id*=consent i],[class*=consent i],[id*=gdpr i],[class*=gdpr i],[id*=lgpd i],[class*=lgpd i],[aria-label*=cookie i],[role=dialog],[role=alertdialog]",
+  )].filter(shown)
+  for (const banner of banners) {
+    if (/dialog/.test(banner.getAttribute("role") || "") && !/cookie|consent|lgpd|gdpr/i.test(banner.innerText || "")) continue
+    for (const button of banner.querySelectorAll("button, a, [role=button], input[type=button], input[type=submit]")) {
+      const text = label(button)
+      if (text.length < 60 && refuse.test(text) && shown(button)) {
+        button.click()
+        return text
+      }
+    }
+  }
+  return ""
+})()`
+
+/**
+ * Answers a cookie banner on the page the tab just opened by refusing
+ * non-essential cookies. Otherwise the banner covered what the agent came for,
+ * and a step went to it, often clicking Accept. Returns a line for the model
+ * when it answered one.
+ */
+export async function refuseCookies(tab: Tab) {
+  const clicked = await tab.evaluate<string>(REFUSE_COOKIES).catch(() => "")
+  if (!clicked) return undefined
+  await tab.quiet(100, 800).catch(() => {})
+  return `Cookie banner answered for you: clicked "${clicked}", refusing non-essential cookies.`
+}
+
+/**
+ * Runs in the page: what on it is the person's to do, if anything — a
+ * captcha, a password to type, card details. Only what is visible counts, and
+ * a password field someone already filled does not.
+ */
+const NEEDS_PERSON = `(() => {
+  const shown = (el) => {
+    const box = el.getBoundingClientRect()
+    const style = getComputedStyle(el)
+    return box.width > 4 && box.height > 4 && style.visibility !== "hidden" && style.display !== "none"
+  }
+  const any = (selector) => [...document.querySelectorAll(selector)].some(shown)
+  if (any("iframe[src*='recaptcha'], iframe[src*='hcaptcha'], iframe[src*='challenges.cloudflare.com'], .g-recaptcha, .h-captcha, .cf-turnstile")) return "captcha"
+  if (any("input[autocomplete^='cc-'], input[name*='cardnumber' i], input[name*='card_number' i], input[data-card-number]")) return "payment"
+  if ([...document.querySelectorAll("input[type=password]")].some((el) => shown(el) && !el.value)) return "password"
+  return ""
+})()`
+
+const NEEDS = {
+  captcha: "a captcha",
+  password: "a password",
+  payment: "card or payment details",
+}
+
+/**
+ * A line for the model when the page it landed on asks for something that is
+ * the person's to give: it should not type a password or card for them, nor
+ * try to beat a captcha, but hand the page to them and wait.
+ */
+export async function personNeeded(tab: Tab) {
+  const found = (await tab.evaluate<string>(NEEDS_PERSON).catch(() => "")) as keyof typeof NEEDS | ""
+  if (!found) return undefined
+  return `This page asks for ${NEEDS[found]}, which is the user's to do: do not type their password or card details, nor try to solve a captcha. Call browser_navigate with action "ask_user" and a short reason; the user does it in the browser and you carry on after.`
+}
+
+/** What a tool call fails with when the browser extension went away under it. */
+const DROPPED = /browser extension disconnected|extension not connected|can no longer be controlled/i
+
+/** Whether a tool call failed because the browser extension dropped out while it ran. */
+export function dropped(cause: Cause.Cause<unknown>) {
+  return DROPPED.test(String(Cause.squash(cause)))
+}
+
+/**
+ * Runs a read of the page again once when the extension dropped out under it:
+ * reading twice changes nothing, and the tab is still there when it is back.
+ */
+export function retryDropped<A, E, R>(read: Effect.Effect<A, E, R>) {
+  return read.pipe(Effect.catchCause((cause) => (dropped(cause) ? read : Effect.failCause(cause))))
+}
+
+/**
+ * An action cut off by the extension dropping out is not repeated: a click
+ * may already have happened. The model is told what to do instead, since in
+ * real sessions it reloaded the page and lost the answers it had chosen.
+ */
+export function explainDropped<A, E, R>(action: Effect.Effect<A, E, R>) {
+  return action.pipe(
+    Effect.catchCause((cause) =>
+      dropped(cause)
+        ? Effect.die(
+            new Error(
+              "The browser extension dropped out while this ran and is back; the tab was kept as it was, not reloaded. The action may or may not have happened: call browser_snapshot to see the page, then carry on from there. Do not reload the page, which would lose answers already chosen.",
+            ),
+          )
+        : Effect.failCause(cause),
+    ),
+  )
+}
 
 /** Everything the agent can do on a page, shared by browser_act and browser_batch. */
 export const ACTIONS = [
@@ -514,8 +659,9 @@ export async function readPdf(url: string, tab?: Tab) {
 }
 
 /**
- * When an action or a navigation landed on a PDF: its text, read directly,
- * and the tab taken back to the page it was on so the agent can carry on.
+ * When an action or a navigation landed on a PDF: the file downloaded to the
+ * Downloads folder, its text for the model, and the tab showing it in a
+ * viewer the agent can look at, with the page it came from one step back.
  * `before` is the PDF the tab was already showing, which is not news.
  */
 export const landedOnPdf = Effect.fn("BrowserPage.landedOnPdf")(function* (
@@ -525,18 +671,146 @@ export const landedOnPdf = Effect.fn("BrowserPage.landedOnPdf")(function* (
 ) {
   const url = tab.pdf
   if (!url || url === before) return undefined
-  // Read before leaving: in the browser's own viewer the page still has the
-  // site's session for a file behind a login.
-  const text = yield* Effect.promise(() => readPdf(url, tab))
+  // Downloaded before leaving: in the browser's own viewer the page still has
+  // the site's session for a file behind a login.
+  const opened = yield* Effect.promise(() => openPdf(url, tab))
+  // The browser's viewer is left for the page before, so that page is one
+  // step back from the viewer that replaces it.
   const back = yield* browser.leavePdf(tab)
+  if ("failure" in opened) return { url, output: opened.failure }
   const mode = yield* browser.mode()
+  const shown = yield* showPdf(browser, opened, back || mode === "process" ? "same" : "new")
+  if (shown) return { url, output: shown }
   const note = back
     ? "It was a PDF, so its text is above; the tab went back to the page it was on, where you can carry on."
     : mode === "extension"
       ? "It was a PDF, so its text is above. The PDF stays open in the user's browser, out of your reach; your next browser action continues in another tab."
       : "It was a PDF, so its text is above; going back to the previous page failed, so navigate to continue."
-  return { url, output: [text, "", note].join("\n") }
+  return { url, output: [opened.text, "", `Saved to ${opened.file}.`, note].join("\n") }
 })
+
+/** The kinds of file the agent reads for itself when it meets one while browsing. */
+export type DocumentKind = "pdf" | "docx" | "pptx" | "xlsx"
+
+/** Which readable kind of file an address, a file name or a content type is, if any. */
+export function documentKind(name: string, contentType?: string): DocumentKind | undefined {
+  if (contentType) {
+    if (/application\/(x-)?pdf/i.test(contentType)) return "pdf"
+    if (/wordprocessingml\.document/i.test(contentType)) return "docx"
+    if (/presentationml\.presentation/i.test(contentType)) return "pptx"
+    if (/spreadsheetml\.sheet/i.test(contentType)) return "xlsx"
+  }
+  const bare = URL.canParse(name) ? new URL(name).pathname : name
+  const ext = /\.(pdf|docx|pptx|xlsx)$/i.exec(bare)?.[1]?.toLowerCase()
+  return ext as DocumentKind | undefined
+}
+
+const OFFICE = { docx: "a Word document", pptx: "a PowerPoint presentation", xlsx: "an Excel workbook" }
+
+/**
+ * A Word, PowerPoint or Excel file met while browsing: downloaded (with the
+ * page's session when it needs one), kept in the Downloads folder and read.
+ * The browser shows none of these itself, so the tab stays as it is.
+ */
+export async function readOffice(url: string, kind: Exclude<DocumentKind, "pdf">, tab?: Tab, name?: string) {
+  const opened = await BrowserPdf.download(url, tab?.connected ? tab : undefined, Docx.isZip, OFFICE[kind]).then(
+    async (bytes) => {
+      const file = await BrowserPdf.save(url, bytes, undefined, name ?? BrowserPdf.fileName(url, `.${kind}`))
+      const text =
+        kind === "docx"
+          ? [`url: ${url}`, "type: Word document", "", Docx.docxText(bytes) || "(the document has no text)"].join("\n")
+          : Office.render({
+              url,
+              name: file,
+              ...(kind === "pptx" ? { slides: Office.slides(bytes) ?? [] } : { sheets: Office.sheets(bytes) ?? [] }),
+            })
+      return { file, text }
+    },
+    (error: unknown) => ({ failure: error instanceof Error ? error.message : String(error) }),
+  )
+  if ("failure" in opened) return `url: ${url}\n\n${opened.failure} Tell the user to open it themselves.`
+  return [opened.text, "", `It was downloaded to ${opened.file}; the tab was left as it was.`].join("\n")
+}
+
+/**
+ * A file an action made the page download, read for the model: an action
+ * that only downloaded something otherwise looked like it did nothing.
+ */
+export const readDownload = Effect.fn("BrowserPage.readDownload")(function* (
+  browser: Interface,
+  tab: Tab,
+  since: number,
+) {
+  const download = tab.downloadsSince(since).findLast((item) => documentKind(item.name || item.url))
+  if (!download) return undefined
+  const kind = documentKind(download.name || download.url)!
+  const output = yield* readDownloaded(browser, tab, download, kind)
+  return { url: download.url, output }
+})
+
+const readDownloaded = Effect.fn("BrowserPage.readDownloaded")(function* (
+  browser: Interface,
+  tab: Tab,
+  download: { url: string; name: string },
+  kind: DocumentKind,
+) {
+  if (kind !== "pdf") return yield* Effect.promise(() => readOffice(download.url, kind, tab, download.name || undefined))
+  const opened = yield* Effect.promise(() =>
+    BrowserPdf.open(download.url, tab.connected ? tab : undefined, download.name || undefined).catch((error: unknown) => ({
+      failure: `url: ${download.url}\ntype: PDF\n\n${error instanceof Error ? error.message : String(error)} Tell the user to open it themselves.`,
+    })),
+  )
+  if ("failure" in opened) return opened.failure
+  const shown = yield* showPdf(browser, opened, "same")
+  return shown ?? [opened.text, "", `Saved to ${opened.file}.`].join("\n")
+})
+
+/** Downloads, keeps and reads a PDF, turning a failure into text the model can relay. */
+export async function openPdf(url: string, tab?: Tab) {
+  return BrowserPdf.open(url, tab?.connected ? tab : undefined).catch((error: unknown) => ({
+    failure: `url: ${url}\ntype: PDF\n\n${error instanceof Error ? error.message : String(error)} Tell the user to open it themselves.`,
+  }))
+}
+
+/**
+ * Opens a downloaded PDF's viewer in the current tab or a new one and waits
+ * for its pages to be drawn. What the model is told, or undefined when the
+ * viewer could not be shown.
+ */
+export const showPdf = Effect.fn("BrowserPage.showPdf")(function* (
+  browser: Interface,
+  opened: { file: string; text: string; pages: number; viewer?: string },
+  where: "same" | "new",
+) {
+  const viewer = opened.viewer
+  if (!viewer) return undefined
+  const timeout = yield* browser.timeout()
+  const tab = where === "new" ? yield* browser.open() : yield* browser.tab()
+  const ok = yield* Effect.promise(() =>
+    tab
+      .serialize(async () => {
+        await tab.navigate(viewer, "domcontentloaded", timeout)
+        // Drawing is quick, but a screenshot taken before it shows blank pages.
+        const deadline = Date.now() + PDF_DRAW_WAIT
+        while (Date.now() < deadline) {
+          const ready = await tab.evaluate<boolean>("document.documentElement.dataset.ready === '1'").catch(() => false)
+          if (ready) return true
+          await new Promise((resolve) => setTimeout(resolve, 150))
+        }
+        return true
+      })
+      .catch(() => false),
+  )
+  if (!ok) return undefined
+  return [
+    opened.text,
+    "",
+    `The PDF was downloaded to ${opened.file} and is open in the browser tab, in a viewer with one "Página N de ${opened.pages}" heading per page. Its text is above; to look at figures, tables or pages without text, take a browser_screenshot there and scroll with browser_act. browser_navigate back returns to the page you came from.`,
+  ].join("\n")
+})
+
+/** How long a PDF's viewer is given to draw its pages. */
+const PDF_DRAW_WAIT = 8000
 
 /**
  * The tab an action opened (a target=_blank link, a popup), which the browser

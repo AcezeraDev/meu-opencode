@@ -121,6 +121,10 @@ export const WebVideoDefaults = Schema.Record(Schema.String, Schema.Unknown).ann
   identifier: "WebVideoDefaults",
 })
 
+const BrowserTrailShot = Schema.Struct({ image: Schema.optional(Schema.String) }).annotate({
+  identifier: "BrowserTrailShot",
+})
+
 // What the live browser panel needs to draw itself. The frame is a data URL so
 // the panel can render it directly; it is omitted when nothing is open.
 const BrowserTab = Schema.Struct({
@@ -228,6 +232,7 @@ export const ExperimentalPaths = {
   webVideoSettings: "/experimental/web-video/settings",
   browserStatus: "/experimental/browser/status",
   browserFrame: "/experimental/browser/frame",
+  browserTrail: "/experimental/browser/trail/:sessionID/:callID",
   browserStream: "/experimental/browser/stream",
   browserInput: "/experimental/browser/input",
   browserControl: "/experimental/browser/control",
@@ -459,6 +464,18 @@ export const ExperimentalApi = HttpApi.make("experimental")
             identifier: "experimental.browser.status",
             summary: "Get browser status",
             description: "Report whether the built-in browser is running, and which pages it has open.",
+          }),
+        ),
+        HttpApiEndpoint.get("browserTrail", ExperimentalPaths.browserTrail, {
+          params: { sessionID: Schema.String, callID: Schema.String },
+          query: WorkspaceRoutingQuery,
+          success: described(BrowserTrailShot, "The picture of the page after one of the agent's browser steps"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.browser.trail",
+            summary: "Get the picture after a browser step",
+            description:
+              "A small picture of the page as it was after the given browser tool call, for looking back over what the agent did. Empty when none was kept.",
           }),
         ),
         HttpApiEndpoint.get("browserFrame", ExperimentalPaths.browserFrame, {

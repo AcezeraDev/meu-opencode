@@ -2,7 +2,9 @@ import { Effect, Queue } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import * as Socket from "effect/unstable/socket/Socket"
+import fs from "fs/promises"
 import { BrowserBridge } from "@/browser/bridge"
+import { BrowserPdf } from "@/browser/pdf"
 import { BrowserBridgeApi } from "../groups/browser-bridge"
 
 /**
@@ -52,6 +54,29 @@ export const browserBridgeHandlers = HttpApiBuilder.group(BrowserBridgeApi, "bro
           Effect.orDie,
         )
         return HttpServerResponse.empty()
+      }),
+    )
+    .handleRaw(
+      "pdf",
+      Effect.fn("BrowserBridgeHttpApi.pdf")(function* (ctx: { params: { id: string } }) {
+        const page = BrowserPdf.viewerPage(ctx.params.id)
+        if (!page) return HttpServerResponse.empty({ status: 404 })
+        return HttpServerResponse.text(page, {
+          contentType: "text/html; charset=utf-8",
+          headers: { "cache-control": "no-store", "referrer-policy": "no-referrer" },
+        })
+      }),
+    )
+    .handleRaw(
+      "pdfFile",
+      Effect.fn("BrowserBridgeHttpApi.pdfFile")(function* (ctx: { params: { id: string } }) {
+        const file = BrowserPdf.shelved(ctx.params.id)
+        const bytes = file ? yield* Effect.promise(() => fs.readFile(file).catch(() => undefined)) : undefined
+        if (!bytes) return HttpServerResponse.empty({ status: 404 })
+        return HttpServerResponse.uint8Array(bytes, {
+          contentType: "application/pdf",
+          headers: { "cache-control": "no-store" },
+        })
       }),
     ),
   ),

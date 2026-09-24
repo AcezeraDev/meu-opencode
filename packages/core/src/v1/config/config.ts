@@ -212,6 +212,10 @@ export const Info = Schema.Struct({
         description:
           "Block ad, tracker and analytics requests in the tabs the agent drives, so pages load and settle sooner (default: true)",
       }),
+      rejectCookies: Schema.optional(Schema.Boolean).annotate({
+        description:
+          "Answer cookie banners by refusing non-essential cookies when the agent opens a page, instead of leaving it a step to spend (default: true)",
+      }),
       profile: Schema.optional(Schema.String).annotate({
         description:
           'Name of the persistent browser profile. Logins are kept between sessions per profile. Defaults to "default".',

@@ -199,21 +199,24 @@ export const BrowserScriptTool = Tool.define(
                     Effect.gen(function* () {
                       const action = input.action ?? "goto"
                       if (action === "goto" && !input.url) throw new Error("goto needs a url.")
-                      if (action === "goto" && !/^(https?|file):\/\/|^about:blank$/.test(input.url!)) {
+                      const tab = yield* active()
+                      // A path from the outline opens on the site of the page the tab is on.
+                      const url =
+                        action === "goto" ? yield* Effect.promise(() => BrowserPage.resolveAddress(input.url!, tab)) : ""
+                      if (action === "goto" && !/^(https?|file):\/\/|^about:blank$/.test(url)) {
                         throw new Error("The url must start with http://, https:// or file://.")
                       }
                       if (action === "goto") {
                         yield* ctx.ask({
                           permission: "browser",
-                          patterns: [input.url!],
+                          patterns: [url],
                           always: ["*"],
-                          metadata: { action, url: input.url },
+                          metadata: { action, url },
                         })
                       }
-                      const tab = yield* active()
                       yield* Effect.promise(() =>
                         tab.serialize(async () => {
-                          if (action === "goto") await tab.navigate(input.url!, "domcontentloaded", timeout)
+                          if (action === "goto") await tab.navigate(url, "domcontentloaded", timeout)
                           if (action === "back") await tab.history(-1, "domcontentloaded", timeout)
                           if (action === "forward") await tab.history(1, "domcontentloaded", timeout)
                           if (action === "reload") await tab.reload("domcontentloaded", timeout)

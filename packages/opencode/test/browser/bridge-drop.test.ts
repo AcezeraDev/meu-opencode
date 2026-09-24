@@ -9,6 +9,7 @@ import { BrowserBridge } from "@/browser/bridge"
 import { Config } from "@/config/config"
 import { InstanceState } from "@/effect/instance-state"
 import { Truncate } from "@/tool/truncate"
+import { Question } from "@/question"
 import { Agent } from "../../src/agent/agent"
 import { BrowserNavigateTool } from "../../src/tool/browser_navigate"
 import { SessionID, MessageID } from "../../src/session/schema"
@@ -18,7 +19,7 @@ import { pollWithTimeout, testEffect } from "../lib/effect"
 const TOKEN = "bridge-drop-token"
 
 const it = testEffect(
-  LayerNode.compile(LayerNode.group([Browser.node, Truncate.node, Agent.node]), [
+  LayerNode.compile(LayerNode.group([Browser.node, Truncate.node, Agent.node, Question.node]), [
     [
       Config.node,
       TestConfig.layer({

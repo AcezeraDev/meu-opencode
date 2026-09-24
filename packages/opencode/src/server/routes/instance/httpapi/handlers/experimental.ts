@@ -3,6 +3,7 @@ import { Auth } from "@/auth"
 import { Agent } from "@/agent/agent"
 import { BackgroundJob } from "@/background/job"
 import { Browser, type BrowserEvent } from "@/browser/session"
+import { BrowserTrail } from "@/browser/trail"
 import { Config } from "@/config/config"
 import { InstanceState } from "@/effect/instance-state"
 import { RuntimeFlags } from "@/effect/runtime-flags"
@@ -95,6 +96,13 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
 
     const browserStatus = Effect.fn("ExperimentalHttpApi.browserStatus")(function* () {
       return yield* (yield* Browser.Service).status()
+    })
+
+    const browserTrail = Effect.fn("ExperimentalHttpApi.browserTrail")(function* (ctx: {
+      params: { sessionID: string; callID: string }
+    }) {
+      const image = yield* Effect.promise(() => BrowserTrail.read(ctx.params.sessionID, ctx.params.callID))
+      return image ? { image: `data:image/jpeg;base64,${image.toString("base64")}` } : {}
     })
 
     const browserFrame = Effect.fn("ExperimentalHttpApi.browserFrame")(function* () {
@@ -509,6 +517,7 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       .handle("webVideoSettingsUpdate", webVideoSettingsUpdate)
       .handle("browserStatus", browserStatus)
       .handle("browserFrame", browserFrame)
+      .handle("browserTrail", browserTrail)
       .handleRaw("browserStream", browserStream)
       .handle("browserInput", browserInput)
       .handle("browserControl", browserControl)

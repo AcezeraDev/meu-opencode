@@ -72,3 +72,34 @@ export { UiI18nProvider as I18nProvider }
 export function useI18n() {
   return useContext(Context)
 }
+
+const AGENT_KEYS: Record<string, UiI18nKey> = {
+  build: "ui.agent.build",
+  plan: "ui.agent.plan",
+  general: "ui.agent.general",
+  explore: "ui.agent.explore",
+}
+
+const VARIANT_KEYS: Record<string, UiI18nKey> = {
+  default: "ui.variant.default",
+  none: "ui.variant.none",
+  minimal: "ui.variant.minimal",
+  low: "ui.variant.low",
+  medium: "ui.variant.medium",
+  high: "ui.variant.high",
+  xhigh: "ui.variant.xhigh",
+  max: "ui.variant.max",
+}
+
+/** How a built-in agent is called in the person's language; custom agents keep their own name. */
+export function agentLabel(t: (key: UiI18nKey) => string, name: string) {
+  const key = AGENT_KEYS[name]
+  if (key) return t(key)
+  return name.charAt(0).toUpperCase() + name.slice(1)
+}
+
+/** How a reasoning level is called in the person's language; unknown levels keep the provider's name. */
+export function variantLabel(t: (key: UiI18nKey) => string, value: string) {
+  const key = VARIANT_KEYS[value]
+  return key ? t(key) : value
+}

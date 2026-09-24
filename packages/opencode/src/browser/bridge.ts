@@ -49,6 +49,16 @@ const CALL_TIMEOUT = 30_000
 const RECONNECT_WAIT = 8000
 
 /**
+ * How long the agent's tabs are kept for an extension that dropped out. Its
+ * worker restarting, or the browser putting it to sleep, takes the socket down
+ * for a few seconds; letting go of every tab at once lost the page the agent
+ * was on, and in real sessions it went on to reload a quiz, losing the answers
+ * it had chosen, or to open a blank tab that then failed too. Within this
+ * window the same tabs are attached again when the extension is back.
+ */
+const SURVIVE = 20_000
+
+/**
  * How long a command sent to a page may still answer after the page committed
  * another document. A live one answers in milliseconds; this only has to cover
  * the relay being busy.
@@ -136,11 +146,43 @@ class BridgeConnection implements CDPTransport {
   private slow: SlowCall[] = []
   /** Pending `once` waits, failed at once when the tab is lost rather than left to time out. */
   private waiters = new Set<(error: Error) => void>()
+  /** Set when the extension dropped out: the debugger has to be attached again before the next command. */
+  private stale = false
+  private reattaching?: Promise<void>
+  private resumers = new Set<(send: RawSend) => Promise<unknown>>()
 
   constructor(
     private bridge: Bridge,
     readonly targetId: string,
   ) {}
+
+  /**
+   * Runs `listener` each time the debugger is attached to this tab again, with
+   * a `send` that goes straight out: what the tab switched on (its CDP domains,
+   * its live view) is gone with the old attachment and has to be asked for again.
+   */
+  onReattach(listener: (send: RawSend) => Promise<unknown>) {
+    this.resumers.add(listener)
+    return () => this.resumers.delete(listener)
+  }
+
+  /** The extension dropped out; the tab is kept, to be attached again when it is back. */
+  suspend() {
+    if (!this.closed) this.stale = true
+  }
+
+  private reattach() {
+    this.reattaching ??= (async () => {
+      this.stale = false
+      await this.connect()
+      const send: RawSend = (method, params = {}) =>
+        this.bridge.request("command", { targetId: this.targetId, method, params })
+      for (const resume of this.resumers) await resume(send).catch(() => {})
+    })().finally(() => {
+      this.reattaching = undefined
+    })
+    return this.reattaching
+  }
 
   /**
    * Attaches the extension's debugger to this tab, so its events start flowing.
@@ -219,12 +261,14 @@ class BridgeConnection implements CDPTransport {
     // that arrives in that gap waits for the extension instead, and reattaches
     // to this tab before going out, since the debugger went down with it.
     if (!this.bridge.connected) {
-      await this.bridge.whenConnected(RECONNECT_WAIT).catch(() => {
+      await this.bridge.whenConnected(this.bridge.recovering ? this.bridge.keptFor : RECONNECT_WAIT).catch(() => {
         throw new CDPError(method, "not connected")
       })
       if (this.closed) throw new CDPError(method, "not connected")
-      await this.connect()
+      this.stale = true
     }
+    if (this.stale) await this.reattach()
+    else if (this.reattaching) await this.reattaching
     try {
       return await this.bridge.request<T>("command", { targetId: this.targetId, method, params })
     } catch (error) {
@@ -238,7 +282,8 @@ class BridgeConnection implements CDPTransport {
         await this.bridge.whenConnected(RECONNECT_WAIT).catch(() => {
           throw error
         })
-      await this.connect()
+      this.stale = true
+      await this.reattach()
       return this.bridge.request<T>("command", { targetId: this.targetId, method, params })
     }
   }
@@ -289,7 +334,7 @@ class BridgeConnection implements CDPTransport {
   }
 
   get connected() {
-    return !this.closed && this.bridge.connected
+    return !this.closed && (this.bridge.connected || this.bridge.recovering)
   }
 
   /** Fed by the Bridge when a CDP event arrives for this tab. */
@@ -339,6 +384,8 @@ export interface Link {
  * matched to replies by id, CDP events are routed to the right tab's
  * {@link BridgeConnection}, and tab lifecycle is handed to whoever is listening.
  */
+type RawSend = (method: string, params?: Record<string, unknown>) => Promise<unknown>
+
 export class Bridge {
   private write?: (message: object) => void
   private disconnectSocket?: () => void
@@ -350,8 +397,24 @@ export class Bridge {
   private connections = new Map<string, BridgeConnection>()
   private targetListeners = new Set<(event: TargetEvent) => void>()
   private stateListeners = new Set<() => void>()
+  /** Running while tabs are kept for an extension that dropped out; see SURVIVE. */
+  private recovery?: ReturnType<typeof setTimeout>
 
-  constructor(private token: string) {}
+  constructor(
+    private token: string,
+    /** How long tabs are kept for an extension that dropped out; tests shorten it. */
+    private survive = SURVIVE,
+  ) {}
+
+  /** How long tabs are kept for an extension that dropped out. */
+  get keptFor() {
+    return this.survive
+  }
+
+  /** Whether the extension dropped out moments ago and its tabs are still kept for it. */
+  get recovering() {
+    return this.recovery !== undefined
+  }
 
   /** Sets the shared secret an extension must send. Takes effect on the next pairing. */
   configure(token: string) {
@@ -428,6 +491,8 @@ export class Bridge {
       // The extension says why its previous socket ended, which this side cannot see.
       log("auth", { previous: message.previous })
       this.authed = true
+      clearTimeout(this.recovery)
+      this.recovery = undefined
       this.emitState()
       return
     }
@@ -489,8 +554,17 @@ export class Bridge {
     this.authed = false
     for (const waiter of this.pending.values()) waiter.reject(new Error("browser extension disconnected"))
     this.pending.clear()
-    for (const connection of this.connections.values()) connection.drop()
-    this.connections.clear()
+    // Tabs are kept for a while, as the extension usually comes back in seconds.
+    for (const connection of this.connections.values()) connection.suspend()
+    if (this.recovery || this.connections.size === 0) return
+    this.recovery = setTimeout(() => {
+      this.recovery = undefined
+      if (this.connected) return
+      log("gave-up", { tabs: this.connections.size })
+      for (const connection of this.connections.values()) connection.drop()
+      this.connections.clear()
+      this.emitState()
+    }, this.survive)
   }
 
   request<T = unknown>(type: string, extra: Record<string, unknown> = {}): Promise<T> {

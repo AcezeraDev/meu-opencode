@@ -1,0 +1,49 @@
+/* The offer to pick up a task the agent stopped in the middle of, above the composer. */
+.session-resume {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 8px;
+  padding: 8px 8px 8px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--space, var(--border-base)) 40%, transparent);
+  background: color-mix(in oklab, var(--space, var(--surface-base)) 8%, var(--background-base));
+  font-size: 13px;
+  color: var(--text-base);
+}
+
+.session-resume-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.session-resume-go {
+  flex: 0 0 auto;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-weight: 500;
+  color: var(--text-on-interactive-base, #fff);
+  background: var(--space, var(--button-primary-base));
+  cursor: pointer;
+}
+
+.session-resume-go:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.session-resume-close {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--text-weak);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.session-resume-close:hover {
+  color: var(--text-base);
+  background: var(--surface-hover, rgba(127, 127, 127, 0.12));
+}

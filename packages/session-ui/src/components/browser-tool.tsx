@@ -1,6 +1,10 @@
 import { useI18n } from "@opencode-ai/ui/context/i18n"
-import { createMemo, Show } from "solid-js"
+import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { ImagePreview } from "@opencode-ai/ui/image-preview"
+import { createMemo, createResource, createSignal, onCleanup, onMount, Show } from "solid-js"
+import { useData } from "../context/data"
 import { BasicTool } from "./basic-tool"
+import "./browser-tool.css"
 import type { ToolProps } from "./message-part"
 import { ToolStatusTitle } from "./tool-status-title"
 
@@ -113,6 +117,8 @@ export function BrowserToolCard(props: ToolProps) {
       return typeof props.metadata?.host === "string" ? props.metadata.host : ""
     }
     if (props.tool !== "browser_act") return ""
+    const target = props.metadata?.target
+    if (typeof target === "string" && target) return `“${target}”`
     const text = props.input?.text
     if (typeof text === "string" && text) return text
     const ref = props.input?.ref ?? props.input?.selector
@@ -120,6 +126,44 @@ export function BrowserToolCard(props: ToolProps) {
   })
 
   const subtitle = createMemo(() => detail() || (url() ? host(url()) : ""))
+
+  // The picture of the page after this step, fetched once the card is on
+  // screen: a long lesson has hundreds of steps, and most are never looked at.
+  const data = useData()
+  const dialog = useDialog()
+  const [seen, setSeen] = createSignal(false)
+  let holder: HTMLSpanElement | undefined
+  onMount(() => {
+    if (!holder || typeof IntersectionObserver === "undefined") return setSeen(true)
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return
+      setSeen(true)
+      observer.disconnect()
+    })
+    observer.observe(holder)
+    onCleanup(() => observer.disconnect())
+  })
+  const shot = createMemo(() => {
+    const id = props.metadata?.shot
+    return seen() && typeof id === "string" && props.sessionID ? { sessionID: props.sessionID, callID: id } : undefined
+  })
+  // Read through `.latest` with an initial value: reading the resource itself
+  // while it loads suspends the page's <Suspense>, which blanks the whole
+  // screen on every browser step.
+  const [image] = createResource(
+    shot,
+    async (target) => {
+      // The picture is taken just after the step answers, so a card that shows
+      // up right then may ask a moment too early.
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const found = await data.browserShot?.(target.sessionID, target.callID).catch(() => undefined)
+        if (found || !data.browserShot) return found
+        await new Promise((resolve) => setTimeout(resolve, 1200))
+      }
+      return undefined
+    },
+    { initialValue: undefined },
+  )
 
   return (
     <BasicTool
@@ -135,6 +179,21 @@ export function BrowserToolCard(props: ToolProps) {
               <span data-slot="basic-tool-tool-subtitle">{subtitle()}</span>
             </Show>
           </div>
+          <span ref={holder} data-slot="browser-tool-shot">
+            <Show when={image.latest}>
+              {(src) => (
+                <img
+                  src={src()}
+                  alt={i18n.t("ui.tool.browser.shot")}
+                  title={i18n.t("ui.tool.browser.shot")}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    dialog.show(() => <ImagePreview src={src()} alt={subtitle()} />)
+                  }}
+                />
+              )}
+            </Show>
+          </span>
         </div>
       }
     />

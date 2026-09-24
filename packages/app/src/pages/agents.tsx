@@ -3,6 +3,7 @@ import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { DialogFooter, DialogHeader, DialogTitleGroup, DialogV2 } from "@opencode-ai/ui/v2/dialog-v2"
 import { Icon } from "@opencode-ai/ui/v2/icon"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { agentLabel } from "@opencode-ai/ui/context/i18n"
 import { useNavigate } from "@solidjs/router"
 import { createMemo, createResource, For, onCleanup, Show } from "solid-js"
 import { createStore } from "solid-js/store"
@@ -273,7 +274,7 @@ export function AgentsPage() {
         <div class="agents-card-body">
           <div class="agents-card-heading">
             <div>
-              <h3>{agent.name}</h3>
+              <h3>{agentLabel(language.t, agent.name)}</h3>
               <span class="agents-card-mode">{language.t(`agents.mode.${agent.mode}`)}</span>
             </div>
             <Show when={agent.native}>
