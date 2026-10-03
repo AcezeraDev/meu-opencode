@@ -1,6 +1,6 @@
 import type { ToolPart } from "@opencode-ai/sdk/v2"
 import { Icon } from "@opencode-ai/ui/v2/icon"
-import { createMemo, createSignal, For, Show } from "solid-js"
+import { createMemo, createSignal, For, onCleanup, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { useSync } from "@/context/sync"
 import "./session-trail.css"
@@ -43,6 +43,11 @@ export function SessionTrail(props: { sessionID: string }) {
   const sync = useSync()
   const language = useLanguage()
   const [selected, setSelected] = createSignal<string>()
+  // Steps already there when the trail opens are history; a step that arrives
+  // while it is open slides in, and its node jumps when the step finishes.
+  const [settled, setSettled] = createSignal(false)
+  const settle = setTimeout(() => setSettled(true), 800)
+  onCleanup(() => clearTimeout(settle))
 
   const steps = createMemo(() =>
     (sync().data.message[props.sessionID] ?? [])
@@ -84,28 +89,37 @@ export function SessionTrail(props: { sessionID: string }) {
           </header>
           <ol class="session-trail-list">
             <For each={steps()}>
-              {(step) => (
-                <li class="session-trail-step" data-status={step.state.status}>
-                  <span class="session-trail-node" aria-hidden="true">
-                    <Show when={step.state.status === "completed"}>
-                      <Icon name="check" size="small" />
-                    </Show>
-                  </span>
-                  <button
-                    type="button"
-                    class="session-trail-step-button"
-                    data-active={active()?.id === step.id ? "" : undefined}
-                    aria-current={active()?.id === step.id ? "step" : undefined}
-                    onClick={() => setSelected(step.id)}
+              {(step) => {
+                // Read once, when the step is created: a step is fresh or history for good.
+                const fresh = settled()
+                return (
+                  <li
+                    class="session-trail-step"
+                    data-status={step.state.status}
+                    data-fresh={fresh ? "" : undefined}
+                    data-motion="l"
                   >
-                    <span class="session-trail-step-title">{stepTitle(step)}</span>
-                    <span class="session-trail-step-meta">
-                      {step.tool}
-                      <Show when={stepDuration(step)}>{(duration) => <> · {duration()}</>}</Show>
+                    <span class="session-trail-node" aria-hidden="true" data-motion="l">
+                      <Show when={step.state.status === "completed"}>
+                        <Icon name="check" size="small" />
+                      </Show>
                     </span>
-                  </button>
-                </li>
-              )}
+                    <button
+                      type="button"
+                      class="session-trail-step-button"
+                      data-active={active()?.id === step.id ? "" : undefined}
+                      aria-current={active()?.id === step.id ? "step" : undefined}
+                      onClick={() => setSelected(step.id)}
+                    >
+                      <span class="session-trail-step-title">{stepTitle(step)}</span>
+                      <span class="session-trail-step-meta">
+                        {step.tool}
+                        <Show when={stepDuration(step)}>{(duration) => <> · {duration()}</>}</Show>
+                      </span>
+                    </button>
+                  </li>
+                )
+              }}
             </For>
           </ol>
         </section>

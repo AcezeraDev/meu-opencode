@@ -133,6 +133,14 @@ const api: ElectronAPI = {
   setForceFocus: (enabled) => ipcRenderer.invoke("set-force-focus", enabled),
   recordFatalRendererError: (error) => ipcRenderer.invoke("record-fatal-renderer-error", error),
   setNativeTranslations: (bundle) => ipcRenderer.invoke("set-native-translations", bundle),
+  quickAskSubmit: (text) => ipcRenderer.invoke("quick-ask-submit", text),
+  quickAskClose: () => ipcRenderer.invoke("quick-ask-close"),
+  onQuickAsk: (cb) => {
+    const handler = (_: unknown, text: string) => cb(text)
+    ipcRenderer.on("quick-ask", handler)
+    return () => ipcRenderer.removeListener("quick-ask", handler)
+  },
+  setAgentTray: (state) => ipcRenderer.invoke("set-agent-tray", state),
 }
 
 contextBridge.exposeInMainWorld("api", api)

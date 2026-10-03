@@ -50,6 +50,7 @@ import { migrate } from "./migrate"
 import { cleanupStoreFiles } from "./store-cleanup"
 import { startBackgroundCli } from "./background-cli"
 import { setNativeTranslations } from "./native-translations"
+import { setupAssistant } from "./assistant"
 
 const APP_NAMES: Record<string, string> = {
   dev: "OpenCode Dev",
@@ -322,6 +323,7 @@ const main = Effect.gen(function* () {
     },
   })
   registerWslIpcHandlers(wslServers)
+  setupAssistant()
   void updater.start()
   // A personal build's check compiles the app, so it only runs when asked.
   if (!compiles) {

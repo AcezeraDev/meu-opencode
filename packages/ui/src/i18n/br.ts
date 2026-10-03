@@ -430,4 +430,5 @@ export const dict = {
   "ui.variant.high": "Alto",
   "ui.variant.xhigh": "Muito alto",
   "ui.variant.max": "Máximo",
+  "ui.tool.browser.why": "Por quê:",
 }

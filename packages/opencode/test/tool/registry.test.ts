@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from "url"
 import { Effect, Layer, Result, Schema } from "effect"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { ToolRegistry } from "@/tool/registry"
+import { Ollama } from "@/provider/ollama"
 import { Tool } from "@/tool/tool"
 import { disposeAllInstances, TestInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
@@ -140,6 +141,30 @@ describe("tool.registry", () => {
       const ids = yield* registry.ids()
 
       expect(ids).not.toContain("execute")
+    }),
+  )
+
+  it.instance("a local Ollama model gets the lean tool set; other providers keep every tool", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const agents = yield* Agent.Service
+      const agent = yield* agents.defaultInfo()
+      const local = (yield* registry.tools({
+        providerID: ProviderV2.ID.make("ollama"),
+        modelID: ModelV2.ID.make("qwen3.5:4b"),
+        agent,
+      })).map((tool) => tool.id)
+      const remote = (yield* registry.tools({
+        providerID: ProviderV2.ID.opencode,
+        modelID: ModelV2.ID.make("test"),
+        agent,
+      })).map((tool) => tool.id)
+
+      expect(local.every((id) => Ollama.LEAN_TOOLS.has(id))).toBe(true)
+      expect(local).toEqual(expect.arrayContaining(["read", "edit", "bash", "grep"]))
+      expect(local).not.toContain("task")
+      expect(remote).toContain("task")
+      expect(remote.length).toBeGreaterThan(local.length)
     }),
   )
 

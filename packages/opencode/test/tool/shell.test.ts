@@ -318,6 +318,40 @@ describe("tool.shell permissions", () => {
     )
   }
 
+  each("a risky command asks shell_risky with the reason, instead of the ordinary question", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const err = new Error("stop after permission")
+          const requests: Array<Omit<PermissionV1.Request, "id" | "sessionID" | "tool">> = []
+          expect(yield* fail({ command: "git push origin main" }, capture(requests, err))).toMatchObject({
+            message: err.message,
+          })
+          expect(requests.map((r) => r.permission)).toEqual(["shell_risky"])
+          expect(requests[0]!.patterns).toEqual(["git push origin main"])
+          expect(requests[0]!.metadata.reason).toContain("push")
+        }),
+      )
+    }),
+  )
+
+  each("a command that can damage the system is refused without asking or running", () =>
+    Effect.gen(function* () {
+      const tmp = yield* tmpdirScoped()
+      yield* runIn(
+        tmp,
+        Effect.gen(function* () {
+          const requests: Array<Omit<PermissionV1.Request, "id" | "sessionID" | "tool">> = []
+          const error = yield* fail({ command: "netsh advfirewall set allprofiles state off" }, capture(requests))
+          expect(String((error as Error).message)).toContain("bloqueado")
+          expect(requests).toHaveLength(0)
+        }),
+      )
+    }),
+  )
+
   each("asks for external_directory permission for wildcard external paths", () =>
     runIn(
       projectRoot,

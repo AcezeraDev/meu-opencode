@@ -1,64 +1,7 @@
 import { onMount } from "solid-js"
+import { expectDrop, expectPaste } from "./arrival"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import type { PromptInputV2Attachment, PromptInputV2Prompt } from "./types"
-
-const accepted = [
-  "image/png",
-  "image/jpeg",
-  "image/gif",
-  "image/webp",
-  "application/pdf",
-  "text/*",
-  "application/json",
-  "application/ld+json",
-  "application/toml",
-  "application/x-toml",
-  "application/x-yaml",
-  "application/xml",
-  "application/yaml",
-  ".c",
-  ".cc",
-  ".cjs",
-  ".conf",
-  ".cpp",
-  ".css",
-  ".csv",
-  ".cts",
-  ".env",
-  ".go",
-  ".gql",
-  ".graphql",
-  ".h",
-  ".hh",
-  ".hpp",
-  ".htm",
-  ".html",
-  ".ini",
-  ".java",
-  ".js",
-  ".json",
-  ".jsx",
-  ".log",
-  ".md",
-  ".mdx",
-  ".mjs",
-  ".mts",
-  ".py",
-  ".rb",
-  ".rs",
-  ".sass",
-  ".scss",
-  ".sh",
-  ".sql",
-  ".toml",
-  ".ts",
-  ".tsx",
-  ".txt",
-  ".xml",
-  ".yaml",
-  ".yml",
-  ".zsh",
-]
 
 type PromptTarget = {
   current: () => PromptInputV2Prompt
@@ -163,12 +106,22 @@ export function createPromptInputV2Attachments(
     }
     if (!plainText) return
     const text = plainText.includes("\r") ? plainText.replace(/\r\n?/g, "\n") : plainText
+    // Like ChatGPT: a long paste becomes a Markdown file card instead of flooding the editor.
+    if (longPaste(text)) {
+      const count = target.prompt
+        .current()
+        .filter((part) => part.type === "image" && part.filename.startsWith("texto-colado")).length
+      const name = count === 0 ? "texto-colado.md" : `texto-colado-${count + 1}.md`
+      expectPaste(text, input.editor()?.getBoundingClientRect())
+      await add(new File([text], name, { type: "text/markdown" }), true, target)
+      return
+    }
     const put = () => {
       if (input.addPart({ type: "text", content: text, start: 0, end: 0 })) return true
       input.focusEditor()
       return input.addPart({ type: "text", content: text, start: 0, end: 0 })
     }
-    if (text.includes("\n") || largePaste(text)) {
+    if (text.includes("\n")) {
       put()
       return
     }
@@ -187,6 +140,7 @@ export function createPromptInputV2Attachments(
       return
     }
     const files = event.dataTransfer?.files
+    if (files?.length) expectDrop(event.clientX, event.clientY)
     if (files) await addAttachments(Array.from(files))
   }
 
@@ -212,11 +166,13 @@ export function createPromptInputV2Attachments(
         fallback()
         return
       }
-      void input
-        .picker({ defaultPath: input.directory(), multiple: true, accept: accepted }, (file) => add(file))
-        .catch(input.onError)
+      void input.picker({ defaultPath: input.directory(), multiple: true }, (file) => add(file)).catch(input.onError)
     },
   }
+}
+
+export function longPaste(text: string) {
+  return text.length >= 3000 || text.split("\n").length > 60
 }
 
 const imageMimes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"])
@@ -255,11 +211,27 @@ async function attachmentMime(file: File) {
     return "text/plain"
   }
   const bytes = new Uint8Array(await file.slice(0, 4096).arrayBuffer())
-  if (bytes.some((byte) => byte === 0)) return
   const control = bytes.filter((byte) => byte < 9 || (byte > 13 && byte < 32)).length
-  if (bytes.length > 0 && control / bytes.length > 0.3) return
-  return "text/plain"
+  if (!bytes.includes(0) && (bytes.length === 0 || control / bytes.length <= 0.3)) return "text/plain"
+  // Any other file is accepted as binary; the server saves it to disk for the model's tools.
+  if (type && type !== "application/octet-stream") return type
+  return mediaExtensions.get(suffix) ?? "application/octet-stream"
 }
+
+// Files from the desktop picker arrive without a type, and audio/video must keep theirs so models
+// that hear or watch can receive them.
+const mediaExtensions = new Map([
+  ["mp3", "audio/mpeg"],
+  ["wav", "audio/wav"],
+  ["m4a", "audio/mp4"],
+  ["ogg", "audio/ogg"],
+  ["opus", "audio/ogg"],
+  ["flac", "audio/flac"],
+  ["mp4", "video/mp4"],
+  ["webm", "video/webm"],
+  ["mov", "video/quicktime"],
+  ["mkv", "video/x-matroska"],
+])
 
 function cursorPosition(editor: HTMLElement) {
   const selection = window.getSelection()
@@ -270,9 +242,4 @@ function cursorPosition(editor: HTMLElement) {
   before.selectNodeContents(editor)
   before.setEnd(range.startContainer, range.startOffset)
   return before.toString().replace(/\u200B/g, "").length
-}
-
-function largePaste(text: string) {
-  if (text.length >= 8000) return true
-  return text.split("\n").length - 1 >= 120
 }

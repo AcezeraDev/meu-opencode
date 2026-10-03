@@ -249,12 +249,20 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                 const selected = layout.home.selection().directory
                 enterSpace(
                   selected
-                    ? projectSpace(layout.projects.list().find((item) => item.worktree === selected), selected)
+                    ? projectSpace(
+                        layout.projects.list().find((item) => item.worktree === selected),
+                        selected,
+                      )
                     : undefined,
                 )
               }
               if (route.type === "dir-new-sesssion")
-                enterSpace(projectSpace(layout.projects.list().find((item) => item.worktree === route.dir), route.dir))
+                enterSpace(
+                  projectSpace(
+                    layout.projects.list().find((item) => item.worktree === route.dir),
+                    route.dir,
+                  ),
+                )
             })
 
             createEffect(() => {
@@ -420,11 +428,24 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                     variant="ghost-muted"
                     size="large"
                     class="!w-9 shrink-0"
-                    icon={<IconV2 name="brain" />}
+                    icon={<Icon name="brain" size="small" />}
                     state={location.pathname === "/agents" ? "pressed" : undefined}
                     onClick={() => navigate("/agents")}
                     aria-label={language.t("agents.open")}
                     aria-pressed={location.pathname === "/agents"}
+                  />
+                </TooltipV2>
+                <TooltipV2 placement="bottom" value={language.t("week.open")} class="shrink-0">
+                  <IconButtonV2
+                    type="button"
+                    variant="ghost-muted"
+                    size="large"
+                    class="!w-9 shrink-0"
+                    icon={<Icon name="checklist" size="small" />}
+                    state={location.pathname === "/week" ? "pressed" : undefined}
+                    onClick={() => navigate("/week")}
+                    aria-label={language.t("week.open")}
+                    aria-pressed={location.pathname === "/week"}
                   />
                 </TooltipV2>
 

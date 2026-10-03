@@ -73,6 +73,59 @@ const UsageSpend = Schema.Struct({
   messages: Schema.Number,
 }).annotate({ identifier: "UsageSpend" })
 
+// A week (or any span since `since`, in ms) of using the agent, for the weekly summary page.
+export const UsageWeekQuery = Schema.Struct({
+  ...WorkspaceRoutingQueryFields,
+  since: Schema.optional(Schema.String),
+})
+const UsageWeekModel = Schema.Struct({
+  model: Schema.String,
+  steps: Schema.Number,
+  cost: Schema.Number,
+  tools: Schema.Number,
+  errors: Schema.Number,
+})
+const UsageWeek = Schema.Struct({
+  since: Schema.Number,
+  sessions: Schema.Number,
+  steps: Schema.Number,
+  cost: Schema.Number,
+  modelMs: Schema.Number,
+  toolMs: Schema.Number,
+  browserMs: Schema.Number,
+  tools: Schema.Number,
+  errors: Schema.Number,
+  browserActions: Schema.Number,
+  notebook: Schema.Number,
+  reliable: Schema.optional(Schema.Struct({ model: Schema.String, tools: Schema.Number, errors: Schema.Number })),
+  models: Schema.Array(UsageWeekModel),
+  topErrors: Schema.Array(Schema.Struct({ message: Schema.String, count: Schema.Number })),
+  topSessions: Schema.Array(
+    Schema.Struct({ id: Schema.String, title: Schema.String, steps: Schema.Number, cost: Schema.Number }),
+  ),
+}).annotate({ identifier: "UsageWeek" })
+
+// The study notebook: explained answers the agent gave on pages, by subject.
+const NotebookSubject = Schema.Struct({
+  slug: Schema.String,
+  subject: Schema.String,
+  count: Schema.Number,
+  updated: Schema.Number,
+})
+const NotebookEntry = Schema.Struct({
+  time: Schema.Number,
+  sessionID: Schema.String,
+  place: Schema.String,
+  activity: Schema.String,
+  answer: Schema.String,
+  why: Schema.String,
+  url: Schema.String,
+})
+const NotebookPage = Schema.Struct({
+  subject: Schema.String,
+  entries: Schema.Array(NotebookEntry),
+}).annotate({ identifier: "NotebookPage" })
+
 // The Roteia provider's card in settings. Only whether a key is set and where it
 // comes from, never the key; `test` also asks Roteia whether it accepts it.
 export const RoteiaStatusQuery = Schema.Struct({
@@ -91,6 +144,58 @@ const RoteiaStatus = Schema.Struct({
     }),
   ),
 }).annotate({ identifier: "RoteiaStatus" })
+
+// The training dataset: turns the person rated Approved/Excellent, as JSONL in Downloads.
+export const DatasetExportQuery = Schema.Struct({
+  ...WorkspaceRoutingQueryFields,
+  min: Schema.optional(Schema.Literals(["approved", "excellent"])),
+})
+const DatasetExport = Schema.Struct({
+  file: Schema.String,
+  examples: Schema.Number,
+  sessions: Schema.Number,
+  rated: Schema.Number,
+}).annotate({ identifier: "DatasetExport" })
+
+// Local Ollama: whether it runs, what is installed, and what this machine can
+// run. Read-only; nothing is downloaded from here.
+const OllamaStatus = Schema.Struct({
+  running: Schema.Boolean,
+  host: Schema.String,
+  version: Schema.optional(Schema.String),
+  connected: Schema.Boolean,
+  models: Schema.Array(
+    Schema.Struct({ id: Schema.String, context: Schema.Number, tools: Schema.Boolean, vision: Schema.Boolean }),
+  ),
+  hardware: Schema.Struct({
+    platform: Schema.String,
+    cpu: Schema.String,
+    threads: Schema.Number,
+    ramGB: Schema.Number,
+    freeDiskGB: Schema.optional(Schema.Number),
+    gpus: Schema.Array(
+      Schema.Struct({ name: Schema.String, vramGB: Schema.optional(Schema.Number), dedicated: Schema.Boolean }),
+    ),
+  }),
+  recommendation: Schema.Struct({
+    accelerator: Schema.String,
+    budgetGB: Schema.Number,
+    contextWindow: Schema.Number,
+    coding: Schema.optional(Schema.String),
+    fast: Schema.optional(Schema.String),
+    vision: Schema.optional(Schema.String),
+    fits: Schema.Array(
+      Schema.Struct({
+        tag: Schema.String,
+        context: Schema.Number,
+        needGB: Schema.Number,
+        installed: Schema.Boolean,
+        note: Schema.String,
+      }),
+    ),
+    notes: Schema.Array(Schema.String),
+  }),
+}).annotate({ identifier: "OllamaStatus" })
 
 // How long the request in progress should still take, from the person's own
 // history and the agent's todo list. Times are in milliseconds.
@@ -228,7 +333,12 @@ export const ExperimentalPaths = {
   webVideoModels: "/experimental/web-video/models",
   usageSpend: "/experimental/usage/spend",
   usageEta: "/experimental/usage/eta",
+  usageWeek: "/experimental/usage/week",
+  notebook: "/experimental/notebook",
+  notebookSubject: "/experimental/notebook/:subject",
   roteiaStatus: "/experimental/roteia/status",
+  ollamaStatus: "/experimental/ollama/status",
+  datasetExport: "/experimental/dataset/export",
   webVideoSettings: "/experimental/web-video/settings",
   browserStatus: "/experimental/browser/status",
   browserFrame: "/experimental/browser/frame",
@@ -402,6 +512,38 @@ export const ExperimentalApi = HttpApi.make("experimental")
             description: "Sum the cost of assistant messages created since `since` (ms), across all sessions.",
           }),
         ),
+        HttpApiEndpoint.get("usageWeek", ExperimentalPaths.usageWeek, {
+          query: UsageWeekQuery,
+          success: described(UsageWeek, "A week of using the agent"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.usage.week",
+            summary: "Get the weekly summary",
+            description:
+              "Sessions, time, spend, tool errors and the most reliable model since `since` (ms), across all sessions.",
+          }),
+        ),
+        HttpApiEndpoint.get("notebook", ExperimentalPaths.notebook, {
+          query: WorkspaceRoutingQuery,
+          success: described(Schema.Array(NotebookSubject), "Subjects in the study notebook"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.notebook.list",
+            summary: "List the study notebook's subjects",
+            description: "Subjects with explained answers the agent kept, most recent first.",
+          }),
+        ),
+        HttpApiEndpoint.get("notebookSubject", ExperimentalPaths.notebookSubject, {
+          params: { subject: Schema.String },
+          query: WorkspaceRoutingQuery,
+          success: described(Schema.optional(NotebookPage), "One subject's explained answers"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.notebook.get",
+            summary: "Get one subject of the study notebook",
+            description: "The explained answers kept for one subject, oldest first.",
+          }),
+        ),
         HttpApiEndpoint.get("roteiaStatus", ExperimentalPaths.roteiaStatus, {
           query: RoteiaStatusQuery,
           success: described(RoteiaStatus, "Whether Roteia is connected"),
@@ -411,6 +553,28 @@ export const ExperimentalApi = HttpApi.make("experimental")
             summary: "Get Roteia status",
             description:
               "Whether a Roteia API key is configured, where it comes from and how many models it loaded; with `test`, whether Roteia accepts the key.",
+          }),
+        ),
+        HttpApiEndpoint.post("datasetExport", ExperimentalPaths.datasetExport, {
+          query: DatasetExportQuery,
+          success: described(DatasetExport, "Where the dataset was written and how many examples it has"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.dataset.export",
+            summary: "Export the training dataset",
+            description:
+              "Writes the turns rated Approved or Excellent (or only Excellent, with min=excellent) as chat JSONL to the Downloads folder.",
+          }),
+        ),
+        HttpApiEndpoint.get("ollamaStatus", ExperimentalPaths.ollamaStatus, {
+          query: WorkspaceRoutingQuery,
+          success: described(OllamaStatus, "Local Ollama, its models and this machine"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.ollama.status",
+            summary: "Get Ollama status",
+            description:
+              "Whether Ollama runs on this machine, its installed models, the CPU/RAM/GPU found, and which models fit them.",
           }),
         ),
         HttpApiEndpoint.get("usageEta", ExperimentalPaths.usageEta, {

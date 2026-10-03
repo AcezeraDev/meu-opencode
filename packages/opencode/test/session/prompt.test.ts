@@ -8,6 +8,8 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { expect } from "bun:test"
 import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer } from "effect"
 import path from "path"
+import fs from "fs/promises"
+import { Lessons } from "@/memory/lessons"
 import { fileURLToPath } from "url"
 import { NamedError } from "@opencode-ai/core/util/error"
 import { Agent as AgentSvc } from "../../src/agent/agent"
@@ -704,6 +706,40 @@ it.instance("loop stops provider overflow instead of auto-compacting when disabl
   }),
 )
 
+it.instance("loop stops when the first answer after a summary overflows again, instead of compacting forever", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const events = yield* EventV2Bridge.Service
+    const chat = yield* sessions.create({ title: "Pinned" })
+    const errors: string[] = []
+    const off = yield* events.listen((event) => {
+      if (event.type !== Session.Event.Error.type) return Effect.void
+      const data = event.data as typeof Session.Event.Error.data.Type
+      if (data.sessionID === chat.id && data.error) errors.push(JSON.stringify(data.error))
+      return Effect.void
+    })
+
+    // Every answer reports more tokens than the model's usable room (100k
+    // context minus 10k output): the fixed prompt alone does not fit.
+    const huge = { input: 95_000, output: 10 }
+    yield* llm.push(reply().text("primeira").usage(huge).stop())
+    yield* llm.push(reply().text("resumo").usage({ input: 100, output: 10 }).stop())
+    yield* llm.push(reply().text("depois do resumo").usage(huge).stop())
+    // Only reached if the loop compacted again.
+    yield* llm.push(reply().text("resumo de novo").usage({ input: 100, output: 10 }).stop())
+    yield* llm.push(reply().text("e de novo").usage(huge).stop())
+
+    yield* prompt.prompt({ sessionID: chat.id, agent: "build", noReply: true, parts: [{ type: "text", text: "oi" }] })
+    yield* prompt.loop({ sessionID: chat.id })
+    yield* off
+    // agent answer, summary, first answer after it; then a clear stop.
+    expect(yield* llm.hits).toHaveLength(3)
+    expect(errors.some((error) => error.includes("não comporta"))).toBe(true)
+  }),
+)
+
 noLLMServer.instance.skip(
   "prompt emits v2 prompted and synthetic events (v2 projector disabled)",
   () =>
@@ -750,6 +786,51 @@ noLLMServer.instance.skip(
           expect.objectContaining({ type: "synthetic", text: "note content" }),
         ]),
       )
+    }),
+  { config: cfg },
+)
+
+noLLMServer.instance(
+  "prompt saves binary attachments to disk and hides them from the provider",
+  () =>
+    Effect.gen(function* () {
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const fsys = yield* FSUtil.Service
+      const chat = yield* sessions.create({ title: "Pinned" })
+      const bytes = Uint8Array.of(0x50, 0x4b, 3, 4, 0, 0, 255)
+
+      yield* prompt.prompt({
+        sessionID: chat.id,
+        agent: "build",
+        noReply: true,
+        parts: [
+          { type: "text", text: "leia a planilha" },
+          {
+            type: "file",
+            mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            filename: "notas.xlsx",
+            url: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${Buffer.from(bytes).toString("base64")}`,
+          },
+        ],
+      })
+
+      const messages = yield* sessions.messages({ sessionID: chat.id })
+      const note = messages
+        .flatMap((message) => message.parts)
+        .find((part) => part.type === "text" && part.synthetic && part.text.includes("notas.xlsx"))
+      expect(note?.type).toBe("text")
+      const saved = note?.type === "text" ? note.text.match(/saved at (.+?)\. Open it/)?.[1] : undefined
+      expect(saved).toBeDefined()
+      expect(new Uint8Array(yield* fsys.readFile(saved!).pipe(Effect.orDie))).toEqual(bytes)
+
+      const model = yield* MessageV2.toModelMessagesEffect(messages, {
+        ...ref,
+        api: { id: ref.modelID, url: "", npm: "@ai-sdk/openai-compatible" },
+        capabilities: { input: { pdf: false, image: true } },
+      } as never)
+      expect(JSON.stringify(model)).not.toContain('"type":"file"')
+      expect(JSON.stringify(model)).toContain("notas.xlsx")
     }),
   { config: cfg },
 )
@@ -980,6 +1061,156 @@ it.instance("loop continues when finish is stop but assistant has tool parts", (
       expect(result.parts.some((part) => part.type === "text" && part.text === "second")).toBe(true)
       expect(result.info.finish).toBe("stop")
     }
+  }),
+)
+
+it.instance("at the step limit tools are switched off, and a model that insists is stopped", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), limits: { max_steps: 2 } }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const events = yield* EventV2Bridge.Service
+    const session = yield* sessions.create({
+      title: "Pinned",
+      permission: [{ permission: "*", pattern: "*", action: "allow" }],
+    })
+    const errors: string[] = []
+    const off = yield* events.listen((event) => {
+      if (event.type !== Session.Event.Error.type) return Effect.void
+      const data = event.data as typeof Session.Event.Error.data.Type
+      if (data.sessionID === session.id && data.error) errors.push(JSON.stringify(data.error))
+      return Effect.void
+    })
+    yield* prompt.prompt({ sessionID: session.id, agent: "build", noReply: true, parts: [{ type: "text", text: "oi" }] })
+    // A model that ignores everything and keeps calling tools.
+    for (const n of [1, 2, 3, 4, 5]) yield* llm.push(reply().tool("first", { value: n }).stop())
+
+    yield* prompt.loop({ sessionID: session.id })
+    yield* off
+
+    const hits = yield* llm.hits
+    expect(hits).toHaveLength(2)
+    expect(JSON.stringify(hits[0])).not.toContain('"tool_choice":"none"')
+    expect(JSON.stringify(hits[1])).toContain('"tool_choice":"none"')
+    expect(JSON.stringify(hits[1])).toContain("limite de 2 passos")
+    expect(errors.some((error) => error.includes("A IA parou"))).toBe(true)
+  }),
+)
+
+it.instance("a saved lesson that matches the request reaches the model, hidden in the person's message", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    yield* Effect.promise(() =>
+      Lessons.add({
+        problem: "React hydration mismatch: text content does not match server-rendered HTML",
+        cause: "Date.now() rendered on server and client",
+        solution: "Render the date after mount with useEffect",
+        tags: ["react", "hydration"],
+      }),
+    )
+    const session = yield* sessions.create({ title: "Pinned" })
+    yield* prompt.prompt({
+      sessionID: session.id,
+      agent: "build",
+      noReply: true,
+      parts: [{ type: "text", text: "Está dando hydration mismatch no React na página inicial" }],
+    })
+    yield* llm.text("ok")
+    yield* prompt.loop({ sessionID: session.id })
+    yield* Effect.promise(() => fs.rm(Lessons.dir(), { recursive: true, force: true }))
+
+    const sent = JSON.stringify((yield* llm.hits)[0])
+    expect(sent).toContain("<lessons>")
+    expect(sent).toContain("useEffect")
+    const messages = yield* sessions.messages({ sessionID: session.id })
+    const parts = messages.find((msg) => msg.info.role === "user")!.parts
+    expect(parts.filter((part) => part.type === "text" && !part.synthetic)).toHaveLength(1)
+    expect(parts.some((part) => part.type === "text" && part.synthetic && part.text.startsWith("<lessons>"))).toBe(true)
+  }),
+)
+
+it.instance("an unrelated request gets no lessons", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    yield* Effect.promise(() =>
+      Lessons.add({ problem: "React hydration mismatch", solution: "Render the date after mount", tags: ["react"] }),
+    )
+    const session = yield* sessions.create({ title: "Pinned" })
+    yield* prompt.prompt({
+      sessionID: session.id,
+      agent: "build",
+      noReply: true,
+      parts: [{ type: "text", text: "Mude a cor do botão de comprar para verde" }],
+    })
+    yield* llm.text("ok")
+    yield* prompt.loop({ sessionID: session.id })
+    yield* Effect.promise(() => fs.rm(Lessons.dir(), { recursive: true, force: true }))
+    expect(JSON.stringify((yield* llm.hits)[0])).not.toContain("<lessons>")
+  }),
+)
+
+it.instance("a paused session starts nothing, and resuming continues from there", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({ title: "Pinned" })
+    yield* prompt.prompt({ sessionID: session.id, agent: "build", noReply: true, parts: [{ type: "text", text: "oi" }] })
+    yield* llm.text("pronto")
+    yield* sessions.setMetadata({ sessionID: session.id, metadata: { paused: true } })
+
+    const fiber = yield* prompt.loop({ sessionID: session.id }).pipe(Effect.forkChild)
+    yield* Effect.sleep("1500 millis")
+    expect(yield* llm.calls).toBe(0)
+
+    yield* sessions.setMetadata({ sessionID: session.id, metadata: { paused: false } })
+    const result = yield* Fiber.join(fiber)
+    expect(yield* llm.calls).toBe(1)
+    expect(result.parts.some((part) => part.type === "text" && part.text === "pronto")).toBe(true)
+  }),
+)
+
+it.instance("cancelling a paused session ends it", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({ title: "Pinned" })
+    yield* prompt.prompt({ sessionID: session.id, agent: "build", noReply: true, parts: [{ type: "text", text: "oi" }] })
+    yield* sessions.setMetadata({ sessionID: session.id, metadata: { paused: true } })
+
+    const fiber = yield* prompt.loop({ sessionID: session.id }).pipe(Effect.forkChild)
+    yield* Effect.sleep("800 millis")
+    yield* prompt.cancel(session.id)
+    yield* Fiber.await(fiber)
+    expect(yield* llm.calls).toBe(0)
+  }),
+)
+
+it.instance("tool calls failing in a row end the request with a summary step", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig((url) => ({ ...providerCfg(url), limits: { max_consecutive_errors: 3 } }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({
+      title: "Pinned",
+      permission: [{ permission: "*", pattern: "*", action: "allow" }],
+    })
+    yield* prompt.prompt({ sessionID: session.id, agent: "build", noReply: true, parts: [{ type: "text", text: "oi" }] })
+    // "first" is not a tool: every call fails.
+    for (const n of [1, 2, 3]) yield* llm.push(reply().tool("first", { value: n }).stop())
+    yield* llm.text("Parei: a ferramenta não existe. Falta X.")
+
+    const result = yield* prompt.loop({ sessionID: session.id })
+    const hits = yield* llm.hits
+    expect(hits).toHaveLength(4)
+    expect(JSON.stringify(hits[3])).toContain("3 ferramentas falharam seguidas")
+    expect(JSON.stringify(hits[3])).toContain('"tool_choice":"none"')
+    expect(result.parts.some((part) => part.type === "text" && part.text.startsWith("Parei"))).toBe(true)
   }),
 )
 

@@ -302,13 +302,126 @@ html[data-chroma-speed="fast"] {
  * animationend or transitionend (exit animations before unmounting) still hears
  * it. Spinners stay: they only fade or rotate, which the compositor does alone,
  * and they are how a wait shows it is still going.
+ *
+ * `data-motion="l"` marks the other exception: a one-shot movement set off by
+ * an event (something changed, arrived or finished), short and cheap enough to
+ * keep in Lite mode, because without it the change would go unnoticed. Its
+ * pseudo-elements are kept too. Only reduced motion stops it.
  */
-html[data-lite] *:not([data-component="spinner"] *, [data-component="loader-v2"], [data-slot="titlebar-update-loader"]),
-html[data-lite] *::before,
-html[data-lite] *::after {
+html[data-lite]
+  *:not(
+    [data-component="spinner"] *,
+    [data-component="loader-v2"],
+    [data-slot="titlebar-update-loader"],
+    [data-motion="l"],
+    [data-titlebar-tab] [data-slot="project-avatar-unread-dot"]
+  ),
+html[data-lite] *:not([data-motion="l"])::before,
+html[data-lite] *:not([data-motion="l"])::after {
   animation-duration: 1ms !important;
   animation-delay: 0s !important;
   animation-iteration-count: 1 !important;
   transition-duration: 1ms !important;
   transition-delay: 0s !important;
+}
+
+/*
+ * Motion vocabulary. Three times and three curves; every new movement picks
+ * from these instead of inventing its own. Lite mode shortens the moves that
+ * are kept (see `data-motion="l"`), and JavaScript animations read the same
+ * values from `packages/app/src/utils/motion.ts`.
+ */
+:root {
+  --motion-quick: 140ms;
+  --motion-base: 240ms;
+  --motion-move: 420ms;
+  --motion-ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --motion-ease-spring: cubic-bezier(0.34, 1.32, 0.64, 1);
+  --motion-ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+html[data-lite] {
+  --motion-move: 240ms;
+  --motion-ease-spring: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Crossing into another space: the new color spreads from where you clicked
+ * (utils/motion.ts drives the circle). The snapshots let the pointer through,
+ * so a click or a drag that starts during the crossing still reaches the page. */
+::view-transition {
+  pointer-events: none;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+/* While the selection pill travels (utils/motion.ts slidingPill), the old and
+ * new options hand their selected look to it. */
+[data-pill-moving] {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* The writing front: text that just arrived in a live answer starts in the
+ * space's ink and cools to the text color in three steps (utils/motion.ts). */
+::highlight(writing-front-0) {
+  color: var(--space-ink);
+}
+
+::highlight(writing-front-1) {
+  color: color-mix(in oklab, var(--space-ink) 62%, var(--v2-text-text-base));
+}
+
+::highlight(writing-front-2) {
+  color: color-mix(in oklab, var(--space-ink) 30%, var(--v2-text-text-base));
+}
+
+/* A mark that just landed: grows along its length with a spring. */
+@keyframes motion-tick-in {
+  from {
+    opacity: 0;
+    scale: 0 1;
+  }
+  60% {
+    opacity: 1;
+    scale: 1.6 1;
+  }
+}
+
+/* A ring that opens once and fades, for "this just happened here". */
+@keyframes motion-ring-out {
+  from {
+    opacity: 0.9;
+    scale: 0.3;
+  }
+  to {
+    opacity: 0;
+    scale: 1.4;
+  }
+}
+
+/* A small jump for something that finished. */
+@keyframes motion-pop {
+  40% {
+    scale: 1.24;
+    rotate: -6deg;
+  }
+}
+
+@keyframes motion-dot-in {
+  from {
+    scale: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-motion="l"],
+  [data-motion="l"]::before,
+  [data-motion="l"]::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }

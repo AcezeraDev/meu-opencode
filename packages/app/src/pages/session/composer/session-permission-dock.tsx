@@ -52,6 +52,17 @@ export function SessionPermissionDock(props: {
         </>
       }
     >
+      <Show when={typeof props.request.metadata?.reason === "string" && props.request.metadata.reason}>
+        {(reason) => (
+          <div data-slot="permission-row">
+            <span data-slot="permission-spacer" aria-hidden="true" />
+            <div data-slot="permission-hint">
+              {language.t("session.permission.reason")}: {reason()}
+            </div>
+          </div>
+        )}
+      </Show>
+
       <Show when={toolDescription()}>
         <div data-slot="permission-row">
           <span data-slot="permission-spacer" aria-hidden="true" />

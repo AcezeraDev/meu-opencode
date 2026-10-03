@@ -1,4 +1,5 @@
 import { createMemo, createResource, onMount, type Accessor } from "solid-js"
+import type { Config } from "@opencode-ai/sdk/v2/client"
 import type { ColorScheme } from "@opencode-ai/ui/theme/context"
 import { useTheme } from "@opencode-ai/ui/theme/context"
 import { usePermission } from "@/context/permission"
@@ -71,6 +72,36 @@ export function createShellSettingsController() {
     },
   }
 }
+
+/** Browser options added after the generated SDK types were last made. */
+type BrowserSettings = NonNullable<Config["browser"]> & {
+  ownWindow?: boolean
+  explain?: boolean
+  sounds?: boolean
+  thoughts?: BrowserThoughts
+}
+
+export type BrowserThoughts = "cursor" | "card" | "off"
+
+export function createBrowserSettingsController() {
+  const serverSync = useServerSync()
+  const current = createMemo(() => (serverSync().data.config.browser ?? {}) as BrowserSettings)
+  const set = (patch: BrowserSettings) => void serverSync().updateConfig({ browser: patch })
+
+  return {
+    extension: () => current().mode === "extension",
+    ownWindow: () => current().ownWindow === true,
+    setOwnWindow: (value: boolean) => set({ ownWindow: value }),
+    sounds: () => current().sounds !== false,
+    setSounds: (value: boolean) => set({ sounds: value }),
+    thoughts: () => current().thoughts ?? "cursor",
+    setThoughts: (value: BrowserThoughts) => set({ thoughts: value }),
+    explain: () => current().explain === true,
+    setExplain: (value: boolean) => set({ explain: value }),
+  }
+}
+
+export type BrowserSettingsController = ReturnType<typeof createBrowserSettingsController>
 
 export function createAppearanceSettingsController() {
   const settings = useSettings()

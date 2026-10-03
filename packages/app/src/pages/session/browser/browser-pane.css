@@ -144,6 +144,7 @@
 /* Toolbar */
 
 .browser-pane-toolbar {
+  position: relative;
   display: flex;
   flex-shrink: 0;
   align-items: center;
@@ -319,4 +320,20 @@
   .browser-pane-screen[data-agent]::after {
     animation: none;
   }
+}
+
+/* The line that runs under the address while a page loads (browser-pane.tsx). */
+.browser-pane-loading {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--space);
+  box-shadow: 0 0 8px color-mix(in oklab, var(--space) 70%, transparent);
+  transform: scaleX(0);
+  transform-origin: left;
+  opacity: 0;
+  pointer-events: none;
 }

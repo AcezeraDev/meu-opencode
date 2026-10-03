@@ -1,4 +1,5 @@
 import { ImagePreview } from "@opencode-ai/ui/image-preview"
+import { FlipText } from "@/components/flip-text"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
@@ -15,6 +16,7 @@ import { createPersistedPromptInputHistory } from "@/components/prompt-input/his
 import { promptDesignPlaceholder, promptPlaceholder } from "@/components/prompt-input/placeholder"
 import { createPromptSubmit } from "@/components/prompt-input/submit"
 import { createPermissionModeState, PermissionModeControl } from "@/components/prompt-input/permission-mode"
+import { createPauseState, PauseControl } from "@/components/prompt-input/pause-control"
 import { createSkillAttachments, SkillPickerControl } from "@/components/prompt-input/skill-picker"
 import { selectionFromLines, type SelectedLineRange, useFile } from "@/context/file"
 import { useComments } from "@/context/comments"
@@ -48,6 +50,7 @@ export type PromptInputV2ControllerProps = Omit<PromptInputProps, "class" | "sub
 export type PromptInputV2ComposerController = PromptInputV2Interaction & {
   readonly model: PromptInputProps["controls"]["model"]
   readonly permissionMode: ReturnType<typeof createPermissionModeState>
+  readonly pause: ReturnType<typeof createPauseState>
   readonly skills: ReturnType<typeof createSkillAttachments>
 }
 
@@ -67,6 +70,7 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
         attachShortcut={command.keybind("file.attach")}
         modelControl={
           <>
+            <PauseControl state={props.controller.pause} />
             <SkillPickerControl skills={props.controller.skills} onClose={props.controller.restoreFocus} />
             <PermissionModeControl
               current={props.controller.permissionMode.current()}
@@ -436,6 +440,14 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
   })
   Object.defineProperty(controller, "model", { get: () => props.controls.model })
   Object.defineProperty(controller, "permissionMode", { value: permissionMode })
+  Object.defineProperty(controller, "pause", {
+    value: createPauseState({
+      sessionID: () => props.controls.session.id,
+      metadata: () => info()?.metadata,
+      working,
+      save: (sessionID, metadata) => sdk().client.session.update({ sessionID, directory: sdk().directory, metadata }),
+    }),
+  })
   Object.defineProperty(controller, "skills", {
     value: createSkillAttachments({
       attachments: () => controller.attachments(),
@@ -525,7 +537,7 @@ function PromptInputV2ModelControl(props: {
           />
         )}
       </Show>
-      <span class="truncate leading-4">{props.modelName}</span>
+      <FlipText class="truncate leading-4" value={props.modelName} />
       <span class="-ml-0.5 -mr-1 flex shrink-0">
         <Icon name="chevron-down" />
       </span>

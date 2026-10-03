@@ -12,3 +12,5 @@ Usage notes:
 
 The current year is {{year}}. You MUST use this year when searching for recent information or current events
 - Example: If the current year is 2026 and the user asks for "latest AI news", search for "AI news 2026", NOT "AI news 2025"
+
+When you are not sure how an API, library, framework or CLI works in the version the project uses, search its current documentation instead of guessing, and prefer the official docs among the results. Name the sources you relied on.

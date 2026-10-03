@@ -61,6 +61,8 @@ export const { use: useModels, provider: ModelsProvider } = createSimpleContext(
         available(),
         filter(
           (x) =>
+            // Local Ollama models were installed on purpose, however old.
+            x.provider.id === "ollama" ||
             Math.abs(
               (release().get(modelKey({ providerID: x.provider.id, modelID: x.id })) ?? DateTime.invalid("invalid"))
                 .diffNow()

@@ -27,6 +27,8 @@ export const parseNewSessionDeepLink = (input: string) => {
   if (!directory) return
   const prompt = url.searchParams.get("prompt") || undefined
   if (!prompt) return { directory }
+  // `send=1` sends the prompt as soon as the composer is ready (the quick-ask box).
+  if (url.searchParams.get("send") === "1") return { directory, prompt, send: true }
   return { directory, prompt }
 }
 
@@ -34,7 +36,10 @@ export const collectOpenProjectDeepLinks = (urls: string[]) =>
   urls.map(parseDeepLink).filter((directory): directory is string => !!directory)
 
 export const collectNewSessionDeepLinks = (urls: string[]) =>
-  urls.map(parseNewSessionDeepLink).filter((link): link is { directory: string; prompt?: string } => !!link)
+  urls.flatMap((url) => {
+    const link = parseNewSessionDeepLink(url)
+    return link ? [link] : []
+  })
 
 type OpenCodeWindow = Window & {
   __OPENCODE__?: {

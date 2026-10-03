@@ -16,7 +16,7 @@ export function createNewSessionDraftController(workspace: { worktree: () => str
   const comments = useComments()
   const local = useLocal()
   const route = useSessionKey()
-  const [searchParams, setSearchParams] = useSearchParams<{ draftId?: string; prompt?: string }>()
+  const [searchParams, setSearchParams] = useSearchParams<{ draftId?: string; prompt?: string; send?: string }>()
   const model = createPromptModelSelection({ agent: () => local.agent.current() })
 
   useComposerCommands({ model })
@@ -46,6 +46,16 @@ export function createNewSessionDraftController(workspace: { worktree: () => str
       if (!text) return
       prompt.set([{ type: "text", content: text, start: 0, end: text.length }], text.length)
       setSearchParams({ ...searchParams, prompt: undefined })
+    })
+  })
+
+  // The quick-ask box opens a draft that sends itself once there is a model to send with.
+  createEffect(() => {
+    if (!prompt.ready() || !local.model.current()) return
+    untrack(() => {
+      if (searchParams.send !== "1") return
+      setSearchParams({ ...searchParams, send: undefined })
+      requestAnimationFrame(() => input.submit())
     })
   })
 

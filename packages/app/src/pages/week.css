@@ -1,0 +1,140 @@
+.week-spans {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border-weak-base);
+  border-radius: 8px;
+}
+
+.week-spans button {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-weak);
+  cursor: pointer;
+}
+
+.week-spans button[aria-pressed="true"] {
+  color: var(--text-strong);
+  background: var(--surface-raised-base);
+}
+
+.week-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px var(--notebook-gutter) 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.week-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.week-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-weak-base);
+  border-radius: 10px;
+  background: var(--surface-raised-base);
+}
+
+.week-tile-value {
+  font: var(--font-weight-medium) 22px/1.2 var(--font-family-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.week-tile-label {
+  font-size: 12px;
+  color: var(--text-weak);
+}
+
+.week-callout {
+  margin: 0;
+  padding: 12px 14px;
+  border-left: 3px solid var(--space, var(--text-interactive-base));
+  background: var(--surface-raised-base);
+  border-radius: 0 8px 8px 0;
+  font-size: 14px;
+}
+
+.week-section h2 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.week-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-weak-base);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.week-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--border-weak-base);
+}
+
+.week-list li:first-child {
+  border-top: 0;
+}
+
+.week-list-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.week-error {
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+}
+
+.week-list-meta {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--text-weak);
+  font-variant-numeric: tabular-nums;
+}
+
+.week-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.week-table th,
+.week-table td {
+  padding: 8px 10px;
+  text-align: right;
+  border-bottom: 1px solid var(--border-weak-base);
+}
+
+.week-table th:first-child,
+.week-table td:first-child {
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.week-table th {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-weak);
+}

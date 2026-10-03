@@ -1,5 +1,6 @@
-import { createEffect, createMemo, createSignal, Index, onCleanup, onMount, Show, type Accessor } from "solid-js"
+import { createEffect, createMemo, createSignal, Index, on, onCleanup, onMount, Show, type Accessor } from "solid-js"
 import { useLanguage } from "@/context/language"
+import { EASE, motionLevel } from "@/utils/motion"
 import { createBrowserFeed, type BrowserActivity } from "./browser-feed"
 import { createFramePainter, type FramePainter } from "./frame-painter"
 import { BrowserHistory } from "./browser-history"
@@ -286,9 +287,77 @@ export function BrowserPane(props: {
     if (!value) return
     setEditing(false)
     addressInput?.blur()
+    startLoad()
     void feed.control({ action: "navigate", url: value })
     canvas?.focus()
   }
+
+  // A page on its way: a line in the space color runs under the address while
+  // it loads and the old page dims; when the new address lands the line
+  // completes and the page comes up to full. Set off by the agent's or the
+  // person's navigation, finished by the address changing (or given up on).
+  let hair: HTMLSpanElement | undefined
+  let loading = 0
+  let loadTimer: ReturnType<typeof setTimeout> | undefined
+  onCleanup(() => clearTimeout(loadTimer))
+  const startLoad = () => {
+    if (!hair || motionLevel() === "none") return
+    loading = performance.now()
+    clearTimeout(loadTimer)
+    loadTimer = setTimeout(finishLoad, 4000)
+    hair.getAnimations().forEach((animation) => animation.cancel())
+    hair.animate(
+      [
+        { transform: "scaleX(0)", opacity: 1 },
+        { transform: "scaleX(0.3)", opacity: 1, offset: 0.08 },
+        { transform: "scaleX(0.88)", opacity: 1 },
+      ],
+      { duration: 8000, easing: "cubic-bezier(0.1, 0.6, 0.3, 1)", fill: "forwards" },
+    )
+    canvas?.animate([{ opacity: 1 }, { opacity: 0.7 }], { duration: 240, easing: EASE.out, fill: "forwards" })
+  }
+  const finishLoad = () => {
+    if (!hair || !loading) return
+    loading = 0
+    clearTimeout(loadTimer)
+    const running = hair.getAnimations()[0]
+    running?.commitStyles()
+    running?.cancel()
+    hair.animate(
+      [
+        { transform: hair.style.transform || "scaleX(0.3)", opacity: 1 },
+        { transform: "scaleX(1)", opacity: 1, offset: 0.6 },
+        { transform: "scaleX(1)", opacity: 0 },
+      ],
+      { duration: 420, easing: EASE.out, fill: "forwards" },
+    )
+    canvas?.getAnimations().forEach((animation) => animation.cancel())
+    canvas?.animate([{ opacity: 0.7 }, { opacity: 1 }], { duration: 220, easing: EASE.out })
+  }
+  createEffect(
+    on(
+      () => status()?.url,
+      (url, previous) => {
+        if (previous !== undefined && url !== previous) finishLoad()
+      },
+      { defer: true },
+    ),
+  )
+  // A reload keeps its address; any news about the page a moment later means it arrived.
+  createEffect(
+    on(
+      status,
+      () => {
+        if (loading && performance.now() - loading > 500) finishLoad()
+      },
+      { defer: true },
+    ),
+  )
+  createEffect(
+    on(feed.activity, (activity) => {
+      if (activity && ["navigate", "back", "forward", "reload"].includes(activity.kind)) startLoad()
+    }),
+  )
 
   const submit = (event: SubmitEvent) => {
     event.preventDefault()
@@ -377,13 +446,17 @@ export function BrowserPane(props: {
       </div>
 
       <form class="browser-pane-toolbar" onSubmit={submit}>
+        <span ref={hair} class="browser-pane-loading" aria-hidden="true" />
         <button
           type="button"
           class="browser-pane-icon"
           aria-label={language.t("ui.browserPane.back")}
           title={language.t("ui.browserPane.back")}
           disabled={!running()}
-          onClick={() => void feed.control({ action: "back" })}
+          onClick={() => {
+            startLoad()
+            void feed.control({ action: "back" })
+          }}
         >
           <Glyph d={GLYPH.back} />
         </button>
@@ -393,7 +466,10 @@ export function BrowserPane(props: {
           aria-label={language.t("ui.browserPane.forward")}
           title={language.t("ui.browserPane.forward")}
           disabled={!running()}
-          onClick={() => void feed.control({ action: "forward" })}
+          onClick={() => {
+            startLoad()
+            void feed.control({ action: "forward" })
+          }}
         >
           <Glyph d={GLYPH.forward} />
         </button>
@@ -403,7 +479,10 @@ export function BrowserPane(props: {
           aria-label={language.t("ui.browserPane.reload")}
           title={language.t("ui.browserPane.reload")}
           disabled={!running()}
-          onClick={() => void feed.control({ action: "reload" })}
+          onClick={() => {
+            startLoad()
+            void feed.control({ action: "reload" })
+          }}
         >
           <Glyph d={GLYPH.reload} />
         </button>

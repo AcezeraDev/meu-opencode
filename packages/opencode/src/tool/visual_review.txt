@@ -1,0 +1,3 @@
+Visual evaluation of a site check: a model that sees the screenshots (desktop, tablet, phone) judges layout, alignment, spacing, hierarchy, typography, colors, contrast, consistency, responsiveness, readability, UX, menus, buttons, cards, tables, forms, empty states, overflow and cut or misaligned elements. It answers with a status (approved / needs_changes), concrete issues (element, screen size, what is seen, how to fix), strengths and suggestions.
+
+Run `site_check` first; by default this reviews the latest check. Then fix the high and medium issues, run `site_check` and `visual_review` again. There is a limit of fix rounds per request; when it is reached, stop fixing and present the result and the remaining issues to the user.

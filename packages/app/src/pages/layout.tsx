@@ -82,6 +82,7 @@ import {
 } from "./layout/sidebar-workspace"
 import { ProjectDragOverlay, SortableProject, type ProjectSidebarContext } from "./layout/sidebar-project"
 import { SidebarContent } from "./layout/sidebar-shell"
+import { trackAgentTray } from "./layout/agent-tray"
 
 export default function LegacyLayout(props: ParentProps) {
   const serverSDK = useServerSDK()
@@ -1264,7 +1265,8 @@ export default function LegacyLayout(props: ParentProps) {
           prompt: link.prompt,
         })
       }
-      const href = link.prompt ? `/${slug}/session?prompt=${encodeURIComponent(link.prompt)}` : `/${slug}/session`
+      const send = link.send ? "&send=1" : ""
+      const href = link.prompt ? `/${slug}/session?prompt=${encodeURIComponent(link.prompt)}${send}` : `/${slug}/session`
       navigateWithSidebarReset(href)
     }
   }
@@ -1279,6 +1281,41 @@ export default function LegacyLayout(props: ParentProps) {
 
     handleDeepLinks(drainPendingDeepLinks(window))
     makeEventListener(window, deepLinkEvent, handler as EventListener)
+  })
+
+  // The global quick-ask box: what was typed there starts a conversation in the
+  // project on screen (or the first one), and is sent right away.
+  onMount(() => {
+    const stop = platform.onQuickAsk?.((text) => {
+      const directory = currentDir() || layout.projects.list()[0]?.worktree
+      if (!directory) return
+      const query = `directory=${encodeURIComponent(directory)}&prompt=${encodeURIComponent(text)}&send=1`
+      handleDeepLinks([`opencode://new-session?${query}`])
+    })
+    if (stop) onCleanup(stop)
+  })
+
+  onMount(() => {
+    const setTray = platform.setAgentTray
+    if (!setTray) return
+    const tracker = trackAgentTray({
+      listen: (cb) => serverSDK().event.listen(cb),
+      setTray,
+      autoResponds: (props, directory) => permission.autoResponds(props, directory),
+      title: (directory, sessionID) =>
+        serverSync()
+          .child(directory, { bootstrap: false })[0]
+          .session.find((session) => session.id === sessionID)?.title,
+      text: {
+        idle: language.t("tray.idle"),
+        working: (session, step) =>
+          step ? language.t("tray.workingStep", { session, step }) : language.t("tray.working", { session }),
+        done: (session) => language.t("tray.done", { session }),
+        attention: (session) => language.t("tray.attention", { session }),
+      },
+    })
+    makeEventListener(window, "focus", () => tracker.seen())
+    onCleanup(() => tracker.dispose())
   })
 
   async function renameProject(project: LocalProject, next: string) {

@@ -1,4 +1,15 @@
-import { Component, createEffect, createMemo, createSignal, For, on, Show, startTransition } from "solid-js"
+import {
+  Component,
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+  startTransition,
+} from "solid-js"
 import { Dialog } from "@opencode-ai/ui/v2/dialog-v2"
 import { TabsV2 } from "@opencode-ai/ui/v2/tabs-v2"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -15,6 +26,7 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useLayout } from "@/context/layout"
 import { useTabs } from "@/context/tabs"
 import { useServerSync } from "@/context/server-sync"
+import { slidingPill } from "@/utils/motion"
 
 export const DialogSettings: Component<{
   sessionID?: string
@@ -102,6 +114,11 @@ export const DialogSettings: Component<{
     void dialog.show(() => <DialogSettings sessionID={props.sessionID} defaultValue="providers" />)
   }
 
+  let pageList!: HTMLDivElement
+  onMount(() =>
+    onCleanup(slidingPill(pageList, { active: '[data-slot="tabs-v2-trigger-wrapper"]:has([data-selected])' })),
+  )
+
   return (
     <Dialog size="x-large" variant="settings" class="settings-v2-dialog">
       <TabsV2
@@ -111,7 +128,7 @@ export const DialogSettings: Component<{
         onChange={(value) => void startTransition(() => setTab(value))}
         class="settings-v2"
       >
-        <TabsV2.List>
+        <TabsV2.List ref={pageList}>
           <div class="flex flex-col justify-between h-full w-full">
             <div class="flex flex-col gap-3 w-full">
               <label class="settings-v2-search">
@@ -210,7 +227,11 @@ export const DialogSettings: Component<{
             </div>
           </div>
         </TabsV2.List>
-        <TabsV2.Content value="general" class="settings-v2-panel" ref={(element: HTMLDivElement) => (general = element)}>
+        <TabsV2.Content
+          value="general"
+          class="settings-v2-panel"
+          ref={(element: HTMLDivElement) => (general = element)}
+        >
           <Show when={words().length && !found()}>
             <p class="settings-v2-search-empty">{language.t("settings.search.empty", { query: query() })}</p>
           </Show>
@@ -238,5 +259,8 @@ export const DialogSettings: Component<{
 
 /** Lowercase without accents, so "notificacao" finds "Notificação". */
 function fold(text: string) {
-  return text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase()
+  return text
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
 }

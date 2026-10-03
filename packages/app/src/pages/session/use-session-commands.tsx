@@ -12,6 +12,7 @@ import { useSettings } from "@/context/settings"
 import { useSync } from "@/context/sync"
 import { useTerminal } from "@/context/terminal"
 import { showToast } from "@/utils/toast"
+import { useServerJson } from "@/utils/server-json"
 import { downloadSessionExport, fetchSessionExport, sessionExportFilename } from "@/utils/session-export"
 import { findLast } from "@opencode-ai/core/util/array"
 import { createSessionTabs } from "@/pages/session/helpers"
@@ -21,6 +22,7 @@ import { useSessionLayout } from "@/pages/session/session-layout"
 import { useSessionArchive } from "@/pages/session/session-archive"
 import { createSessionOwnership } from "./session-ownership"
 import { useLocal } from "@/context/local"
+import { rewind } from "@/utils/motion"
 
 export type SessionCommandContext = {
   navigateMessageByOffset: (offset: number) => void
@@ -350,6 +352,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
       await session.interrupt({ sessionID }).catch(() => {})
     }
 
+    await rewind(message.id)
     await runCommand({
       owner,
       prompt: promptSession,
@@ -643,7 +646,35 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     }),
   ]
 
+  // The turns rated Approved or Excellent, as a training dataset in Downloads.
+  const serverJson = useServerJson()
+  const exportDataset = async () => {
+    const result = await serverJson<{ file: string; examples: number }>("/experimental/dataset/export", {}, "POST")
+    if (!result) {
+      showToast({ variant: "error", title: language.t("dataset.export.failed") })
+      return
+    }
+    if (result.examples === 0) {
+      showToast({ title: language.t("dataset.export.empty") })
+      return
+    }
+    showToast({
+      variant: "success",
+      title: language.t("dataset.export.done", { count: String(result.examples) }),
+      description: result.file,
+    })
+  }
+  const datasetCmds = () => [
+    {
+      id: "dataset.export",
+      title: language.t("dataset.export.title"),
+      category: language.t("command.category.session"),
+      onSelect: () => void exportDataset(),
+    },
+  ]
+
   command.register("session", () => [
+    ...datasetCmds(),
     ...sessionCmds(),
     ...shareCmds(),
     ...fileCmds(),

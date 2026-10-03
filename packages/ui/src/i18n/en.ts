@@ -429,4 +429,5 @@ export const dict: Record<string, string> = {
   "ui.variant.high": "High",
   "ui.variant.xhigh": "Extra high",
   "ui.variant.max": "Max",
+  "ui.tool.browser.why": "Why:",
 }

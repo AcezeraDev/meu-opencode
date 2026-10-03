@@ -1,0 +1,35 @@
+.odometer {
+  display: inline-block;
+  height: 1lh;
+  vertical-align: top;
+  font-variant-numeric: tabular-nums;
+}
+
+.odometer-cells {
+  display: inline-flex;
+  flex-direction: row-reverse;
+  height: 1lh;
+}
+
+.odometer-digit,
+.odometer-sign {
+  display: inline-block;
+  height: 1lh;
+  white-space: pre;
+}
+
+.odometer-digit {
+  overflow: clip;
+}
+
+.odometer-strip {
+  display: flex;
+  flex-direction: column;
+  transition: transform var(--motion-move) var(--motion-ease-spring);
+}
+
+.odometer-strip > span {
+  display: block;
+  height: 1lh;
+  text-align: center;
+}

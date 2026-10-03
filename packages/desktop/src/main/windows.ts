@@ -154,6 +154,17 @@ export function getLastFocusedWindow() {
   return win
 }
 
+/** The main window the person used last, never a helper window such as the quick-ask box. */
+export function getMainWindow() {
+  const win = registry.lastFocused()
+  if (win && !win.isDestroyed()) return win
+  return registry.all().find((item) => !item.isDestroyed())
+}
+
+export function appIconPath() {
+  return iconPath()
+}
+
 export function restoreMainWindows() {
   const ids = registry.persisted()
   return (ids.length ? ids : [randomUUID()]).map((id) => createMainWindow(id))

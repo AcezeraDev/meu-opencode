@@ -1,8 +1,9 @@
 import { Icon } from "@opencode-ai/ui/v2/icon"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
-import { For, Show } from "solid-js"
+import { For, onCleanup, onMount, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLanguage } from "@/context/language"
+import { slidingPill } from "@/utils/motion"
 import { Persist, persisted } from "@/utils/persist"
 import "./session-mode.css"
 
@@ -34,9 +35,11 @@ export function createSessionModeState() {
 
 export function SessionModeSwitcher(props: { mode: SessionMode; onChange: (mode: SessionMode) => void }) {
   const language = useLanguage()
+  let root!: HTMLDivElement
+  onMount(() => onCleanup(slidingPill(root, { active: "[data-active]" })))
 
   return (
-    <div class="session-mode-switcher" role="radiogroup" aria-label={language.t("session.mode.label")}>
+    <div ref={root} class="session-mode-switcher" role="radiogroup" aria-label={language.t("session.mode.label")}>
       <For each={SESSION_MODES}>
         {(item) => (
           <TooltipV2 placement="bottom" value={language.t(item.key)}>

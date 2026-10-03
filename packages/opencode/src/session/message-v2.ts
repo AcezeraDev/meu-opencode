@@ -315,7 +315,14 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
             text: part.text,
           })
         // text/plain and directory files are converted into text parts, ignore them
-        if (part.type === "file" && part.mime !== "text/plain" && part.mime !== "application/x-directory") {
+        // Other binary files were saved to disk and described in a synthetic text part, since
+        // providers reject media types such as Office documents or archives.
+        if (
+          part.type === "file" &&
+          part.mime !== "text/plain" &&
+          part.mime !== "application/x-directory" &&
+          (/^(image|audio|video)\//.test(part.mime) || part.mime === "application/pdf")
+        ) {
           if (part.mime === "application/pdf" && !readsPdf && !options?.stripMedia) {
             userMessage.parts.push({ type: "text", text: yield* pdfAsText(part.url, part.filename) })
           } else if (options?.stripMedia && isMedia(part.mime)) {

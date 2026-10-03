@@ -1,9 +1,14 @@
 import type { Message, Part } from "@opencode-ai/sdk/v2/client"
 import { createMemo, Show } from "solid-js"
+import { announceSpend } from "@/components/day-spend"
 import { useLanguage } from "@/context/language"
 import { ClockReadout, Readout } from "./readout"
 import { turnFor, turnStats } from "./turn-meter"
 import "./scope.css"
+
+// Turns whose cost already flew to today's spend; a row the timeline mounts
+// again while it is still fresh must not send it twice.
+const announced = new Set<string>()
 
 /**
  * The measurement footer under a finished response: how long it took, tools used,
@@ -62,7 +67,15 @@ export function TurnStats(props: {
               <span class="scope-stats-unit">tok/s</span>
             </span>
           </Show>
-          <span class="scope-stats-cell">
+          <span
+            class="scope-stats-cell"
+            ref={(el) => {
+              // A response that just finished sends its cost to today's spend.
+              if (!props.fresh || !(value().cost > 0) || announced.has(props.userMessageID)) return
+              announced.add(props.userMessageID)
+              requestAnimationFrame(() => announceSpend(value().cost, el.getBoundingClientRect()))
+            }}
+          >
             <span class="scope-label">{language.t("scope.stats.cost")}</span>
             <span class="scope-readout">$</span>
             <Readout value={value().cost} digits={1} decimals={value().cost < 1 ? 4 : 2} />

@@ -1,5 +1,6 @@
 import { createStore } from "solid-js/store"
 import type { ProjectAvatarVariant } from "@opencode-ai/ui/v2/project-avatar-v2"
+import { crossSpace } from "@/utils/motion"
 
 /** The colors a project can own as its space; grey is for a project someone chose grey for. */
 const SPACE_COLORS = ["purple", "blue", "cyan", "green", "yellow", "orange", "red", "pink"] as const
@@ -53,16 +54,25 @@ export function getProjectAvatarVariant(key?: string, seed?: string): ProjectAva
 }
 
 /** The space (color) of a project, or of a folder that is not a known project. */
-export function projectSpace(project: { worktree?: string; icon?: { color?: string } } | undefined, directory?: string) {
+export function projectSpace(
+  project: { worktree?: string; icon?: { color?: string } } | undefined,
+  directory?: string,
+) {
   return getProjectAvatarVariant(project?.icon?.color, project?.worktree ?? directory)
 }
 
 /**
  * Tints the app with a space's color. Without one (home), the app keeps its
- * own default space.
+ * own default space. A change a click caused spreads from that click.
  */
 export function enterSpace(space: ProjectAvatarVariant | undefined) {
   if (typeof document === "undefined") return
-  if (space) document.documentElement.dataset.space = space
-  else delete document.documentElement.dataset.space
+  const root = document.documentElement
+  const apply = () => {
+    if (space) root.dataset.space = space
+    else delete root.dataset.space
+  }
+  // Home and the violet space are the same color, so moving between them is no crossing.
+  if ((root.dataset.space ?? "purple") === (space ?? "purple")) return apply()
+  crossSpace(apply)
 }

@@ -21,6 +21,11 @@ import { BrowserScreenshotTool } from "./browser_screenshot"
 import { BrowserInspectTool } from "./browser_inspect"
 import { BrowserScriptTool } from "./browser_script"
 import { BrowserNotesTool } from "./browser_notes"
+import { LessonsTool } from "./lessons"
+import { SiteCheckTool } from "./site_check"
+import { VisualReviewTool } from "./visual_review"
+import { WriteTextTool } from "./write_text"
+import { ModelRoles } from "@/provider/roles"
 import { Browser } from "@/browser/session"
 import { BrowserInstall } from "@/browser/install"
 import { WebVideoTool } from "./web-video"
@@ -67,6 +72,7 @@ import { ModelV2 } from "@opencode-ai/core/model"
 import { MCP } from "@/mcp"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { McpCatalog } from "@/mcp/catalog"
+import { Ollama } from "@/provider/ollama"
 
 export function webSearchEnabled(
   providerID: ProviderV2.ID,
@@ -91,6 +97,8 @@ const BROWSER_TOOL_IDS = new Set<string>([
   BrowserInspectTool.id,
   BrowserScriptTool.id,
   BrowserNotesTool.id,
+  SiteCheckTool.id,
+  VisualReviewTool.id,
 ])
 
 type TaskDef = Tool.InferDef<typeof TaskTool>
@@ -144,6 +152,10 @@ const layer = Layer.effect(
     const browserInspect = yield* BrowserInspectTool
     const browserScript = yield* BrowserScriptTool
     const browserNotes = yield* BrowserNotesTool
+    const lessons = yield* LessonsTool
+    const siteCheck = yield* SiteCheckTool
+    const visualReview = yield* VisualReviewTool
+    const writeText = yield* WriteTextTool
     const webvideo = yield* WebVideoTool
     const websearch = yield* WebSearchTool
     const shell = yield* ShellTool
@@ -263,6 +275,10 @@ const layer = Layer.effect(
           browserInspect: Tool.init(browserInspect),
           browserScript: Tool.init(browserScript),
           browserNotes: Tool.init(browserNotes),
+          lessons: Tool.init(lessons),
+          siteCheck: Tool.init(siteCheck),
+          visualReview: Tool.init(visualReview),
+          writeText: Tool.init(writeText),
           video: Tool.init(webvideo),
           todo: Tool.init(todo),
           search: Tool.init(websearch),
@@ -295,8 +311,12 @@ const layer = Layer.effect(
             tool.browserInspect,
             tool.browserScript,
             tool.browserNotes,
+            tool.siteCheck,
+            tool.visualReview,
+            tool.writeText,
             tool.video,
             tool.todo,
+            tool.lessons,
             tool.search,
             tool.skill,
             tool.patch,
@@ -354,14 +374,20 @@ const layer = Layer.effect(
       // space and produces failures, so they appear only when a Chromium-based
       // browser is actually reachable on this machine.
       const browserEnabled = cfg.browser?.enabled !== false && BrowserInstall.available(cfg.browser ?? {})
+      const lean = Ollama.lean(input.providerID, cfg.provider?.[input.providerID]?.options)
       const filtered = (yield* all()).filter((tool) => {
+        if (lean && !Ollama.LEAN_TOOLS.has(tool.id)) return false
+        if (tool.id === LessonsTool.id) return cfg.memory?.enabled !== false
         if (tool.id === WebVideoTool.id) return webVideoEnabled
         if (BROWSER_TOOL_IDS.has(tool.id)) return browserEnabled
+        // Only offered once a writing model is chosen.
+        if (tool.id === WriteTextTool.id) return ModelRoles.pick(cfg, "writing") !== undefined
         if (tool.id === WebSearchTool.id) {
           return webSearchEnabled(
             input.providerID,
             { exa: flags.enableExa, parallel: flags.enableParallel },
-            cfg.websearch?.enabled === true,
+            // On for every provider, local models included, unless the config turns it off.
+            cfg.websearch?.enabled !== false,
           )
         }
 

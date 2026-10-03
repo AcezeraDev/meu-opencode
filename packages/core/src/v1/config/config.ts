@@ -77,6 +77,31 @@ export const Info = Schema.Struct({
   small_model: Schema.optional(Schema.String).annotate({
     description: "Small model to use for tasks like title generation in the format of provider/model",
   }),
+  models: Schema.optional(
+    Schema.Struct({
+      coding: Schema.optional(Schema.String).annotate({
+        description: "Main model for programming and planning when `model` is not set (provider/model)",
+      }),
+      fast: Schema.optional(Schema.String).annotate({
+        description: "Model for simple tasks such as titles and summaries when `small_model` is not set",
+      }),
+      reasoning: Schema.optional(Schema.String).annotate({
+        description: "Model for the plan agent, unless the agent sets its own",
+      }),
+      vision: Schema.optional(Schema.String).annotate({
+        description: "Model that reads screenshots, for visual evaluation (must accept images)",
+      }),
+      evaluation: Schema.optional(Schema.String).annotate({
+        description: "Model that checks the result of a task (falls back to reasoning, then the main model)",
+      }),
+      writing: Schema.optional(Schema.String).annotate({
+        description: "Model that writes longer texts (essays, reports, answers) for the agent to type into pages",
+      }),
+    }),
+  ).annotate({
+    description:
+      "Models by role, local or external, each in the format provider/model; e.g. a local model for fast tasks and an external one for evaluation",
+  }),
   default_agent: Schema.optional(Schema.String).annotate({
     description:
       "Default agent to use when none is specified. Must be a primary agent. Falls back to 'build' if not set or if the specified agent is invalid.",
@@ -170,11 +195,41 @@ export const Info = Schema.Struct({
       }),
     }),
   ),
+  memory: Schema.optional(
+    Schema.Struct({
+      enabled: Schema.optional(Schema.Boolean).annotate({
+        description:
+          "Show the agent lessons saved from earlier work that match each request, and offer the lessons tool (default: true)",
+      }),
+    }),
+  ).annotate({ description: "Operational memory: lessons learned from solved problems" }),
+  limits: Schema.optional(
+    Schema.Struct({
+      max_steps: Schema.optional(NonNegativeInt).annotate({
+        description: "Model steps one request may take before the agent must stop and summarize (default: 400; 0 = no limit)",
+      }),
+      max_minutes: Schema.optional(NonNegativeInt).annotate({
+        description: "Minutes one request may run before the agent must stop and summarize (default: 180; 0 = no limit)",
+      }),
+      max_consecutive_errors: Schema.optional(NonNegativeInt).annotate({
+        description: "Tool calls failing in a row before the agent must stop and summarize (default: 8; 0 = no limit)",
+      }),
+      max_fix_rounds: Schema.optional(NonNegativeInt).annotate({
+        description: "Visual reviews (check, fix, check again) in one request before the agent must stop fixing and report (default: 3)",
+      }),
+      max_calls_per_tool: Schema.optional(NonNegativeInt).annotate({
+        description: "Calls of any single tool in one request before the agent must stop and summarize (default: 300; 0 = no limit)",
+      }),
+    }),
+  ).annotate({
+    description:
+      "Limits for one request, so the agent never loops forever. When one is reached, tools are switched off and the agent summarizes what it did and what is left.",
+  }),
   websearch: Schema.optional(
     Schema.Struct({
       enabled: Schema.optional(Schema.Boolean).annotate({
         description:
-          "Offer the websearch tool on every provider. By default it is only offered on the built-in opencode provider.",
+          "Offer the websearch tool (default: true, on every provider including local ones). Set false to turn it off.",
       }),
       provider: Schema.optional(Schema.Literals(["exa", "parallel"])).annotate({
         description: "Which web search backend to use. Defaults to alternating between them per session.",
@@ -211,6 +266,22 @@ export const Info = Schema.Struct({
       block: Schema.optional(Schema.Boolean).annotate({
         description:
           "Block ad, tracker and analytics requests in the tabs the agent drives, so pages load and settle sooner (default: true)",
+      }),
+      explain: Schema.optional(Schema.Boolean).annotate({
+        description:
+          "When the agent answers a question on a page, have it say in one line why the answer is right; shown on the step and kept in the study notebook (default: false)",
+      }),
+      sounds: Schema.optional(Schema.Boolean).annotate({
+        description:
+          "Play a short sound in the page when the agent's cursor clicks, types, scrolls or takes a screenshot (default: true)",
+      }),
+      thoughts: Schema.optional(Schema.Literals(["cursor", "card", "off"])).annotate({
+        description:
+          'Where the page shows what the agent is doing ("Clicando em Entrar", "Lendo a página", the writer composing a text): "cursor" next to the agent cursor, "card" on a small card in the corner, "off" nowhere (default: "cursor")',
+      }),
+      ownWindow: Schema.optional(Schema.Boolean).annotate({
+        description:
+          "In extension mode, work in a browser window of the agent's own, opening a copy of the page you are on there instead of taking over your tab, so you can keep browsing (default: false)",
       }),
       rejectCookies: Schema.optional(Schema.Boolean).annotate({
         description:

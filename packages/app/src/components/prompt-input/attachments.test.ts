@@ -18,9 +18,11 @@ describe("attachmentMime", () => {
     expect(await attachmentMime(file)).toBe("text/plain")
   })
 
-  test("rejects binary files", async () => {
+  test("accepts binary files as binary", async () => {
     const file = new File([Uint8Array.of(0, 255, 1, 2)], "blob.bin", { type: "application/octet-stream" })
-    expect(await attachmentMime(file)).toBeUndefined()
+    expect(await attachmentMime(file)).toBe("application/octet-stream")
+    const docx = new File([Uint8Array.of(0x50, 0x4b, 0, 0)], "a.docx", { type: "application/zip" })
+    expect(await attachmentMime(docx)).toBe("application/zip")
   })
 })
 

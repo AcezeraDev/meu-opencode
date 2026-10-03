@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onCleanup, Show, type Ref } from "solid-js"
+import { createEffect, createMemo, createSignal, For, onCleanup, Show, type Ref } from "solid-js"
 import { createStore } from "solid-js/store"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import { createResizeObserver } from "@solid-primitives/resize-observer"
@@ -11,6 +11,7 @@ import { useLanguage } from "@/context/language"
 import { ServerConnection, serverName } from "@/context/server"
 import { displayName, projectForSession } from "@/pages/layout/helpers"
 import { enterSpace, projectSpace, type ProjectAvatarVariant } from "@/context/layout"
+import { SESSION_TONES, useSessionTones } from "@/context/session-tone"
 import { SessionTabAvatar } from "@/pages/layout/session-tab-avatar"
 import type { Session } from "@opencode-ai/sdk/v2"
 import { canOpenTabRename, forwardTabRef } from "./titlebar-tab-gesture"
@@ -70,6 +71,18 @@ export function TabNavItem(props: {
   createEffect(() => {
     if (props.active && space()) enterSpace(space())
   })
+  // The session's own tone inside the project's color, on its pill and avatar arc.
+  const tones = useSessionTones()
+  createEffect(() => {
+    const session = props.session()
+    if (!session) return
+    tones.open(session.id, project()?.worktree ?? session.directory)
+    onCleanup(() => tones.close(session.id))
+  })
+  const tone = () => {
+    const session = props.session()
+    return session ? tones.tone(session.id) : undefined
+  }
 
   const projectName = createMemo(() => {
     const session = props.session()
@@ -199,6 +212,7 @@ export function TabNavItem(props: {
       classList={{ invisible: props.hidden }}
       data-active={props.active}
       data-space={space()}
+      data-tone={tone()}
       data-dragging={props.dragging}
       data-state={props.active || props.pressed ? "pressed" : undefined}
       onMouseDown={(event) => {
@@ -255,6 +269,7 @@ export function TabNavItem(props: {
                 directory={session.directory}
                 sessionId={session.id}
                 server={props.server}
+                progress
               />
             )}
           </Show>
@@ -347,6 +362,31 @@ export function TabNavItem(props: {
           <MenuV2.Item disabled={!props.session() || rename.isPending} onSelect={() => setMenu("rename", true)}>
             {language.t("common.rename")}
           </MenuV2.Item>
+          <Show when={props.session()}>
+            {(session) => (
+              <MenuV2.Sub gutter={0} overlap overflowPadding={8}>
+                <MenuV2.SubTrigger>{language.t("session.tone.label")}</MenuV2.SubTrigger>
+                <MenuV2.Portal>
+                  <MenuV2.SubContent>
+                    <For each={Array.from({ length: SESSION_TONES }, (_, index) => index)}>
+                      {(index) => (
+                        <MenuV2.Item onSelect={() => tones.set(session().id, index)}>
+                          <span
+                            class="session-tone-dot"
+                            data-space={space()}
+                            data-tone={index}
+                            data-current={tone() === index ? "" : undefined}
+                            aria-hidden="true"
+                          />
+                          {language.t("session.tone.option", { n: index + 1 })}
+                        </MenuV2.Item>
+                      )}
+                    </For>
+                  </MenuV2.SubContent>
+                </MenuV2.Portal>
+              </MenuV2.Sub>
+            )}
+          </Show>
           <MenuV2.Item onSelect={props.onClose}>{language.t("common.closeTab")}</MenuV2.Item>
         </MenuV2.Context.Content>
       </MenuV2.Context.Portal>

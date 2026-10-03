@@ -1,5 +1,6 @@
-import { createMemo, createSignal, onCleanup, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, on, onCleanup, Show } from "solid-js"
 import { Portal } from "solid-js/web"
+import { Odometer } from "@/components/odometer"
 import { openSessionContext } from "@/components/session-context-usage"
 import { getSessionContext } from "@/components/session/session-context-metrics"
 import { useCommand } from "@/context/command"
@@ -36,6 +37,19 @@ export function ContextRing() {
   )
   const usage = () => context()?.usage ?? 0
   const level = () => (usage() >= 90 ? "critical" : usage() >= 70 ? "high" : "normal")
+  // A big drop is a compaction: the ring squeezes and the freed part fades out
+  // as a ghost, so it shows how much room the compaction gave back.
+  const [freed, setFreed] = createSignal<number>()
+  let freedTimer: ReturnType<typeof setTimeout> | undefined
+  onCleanup(() => clearTimeout(freedTimer))
+  createEffect(
+    on([usage, () => params.id], ([now, id], previous) => {
+      if (!previous || previous[1] !== id || previous[0] - now < 15) return
+      setFreed(previous[0])
+      clearTimeout(freedTimer)
+      freedTimer = setTimeout(() => setFreed(undefined), 900)
+    }),
+  )
   const number = (value: number | undefined) => (value ?? 0).toLocaleString(language.intl())
 
   // The composer clips its overflow, so the panel renders in a portal, placed above the ring.
@@ -61,7 +75,7 @@ export function ContextRing() {
 
   return (
     <Show when={params.id && context()?.usage !== null && context()}>
-      <div class="scope-ring" ref={root} data-level={level()}>
+      <div class="scope-ring" ref={root} data-level={level()} data-compacted={freed() !== undefined ? "" : undefined}>
         <button
           type="button"
           class="scope-ring-button"
@@ -69,17 +83,30 @@ export function ContextRing() {
           aria-label={language.t("scope.context.label", { percent: usage() })}
           onClick={toggle}
         >
-          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" data-chroma>
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" data-chroma data-motion="l">
             <circle cx="8" cy="8" r={RADIUS} class="scope-ring-track" />
+            <Show when={freed()}>
+              {(before) => (
+                <circle
+                  cx="8"
+                  cy="8"
+                  r={RADIUS}
+                  class="scope-ring-ghost"
+                  data-motion="l"
+                  stroke-dasharray={`${(Math.min(100, before()) / 100) * CIRCUMFERENCE} ${CIRCUMFERENCE}`}
+                />
+              )}
+            </Show>
             <circle
               cx="8"
               cy="8"
               r={RADIUS}
               class="scope-ring-fill"
+              data-motion="l"
               stroke-dasharray={`${(Math.min(100, usage()) / 100) * CIRCUMFERENCE} ${CIRCUMFERENCE}`}
             />
           </svg>
-          <span class="scope-readout">{usage()}%</span>
+          <Odometer class="scope-readout" value={`${usage()}%`} />
         </button>
         <Show when={open()}>
           <Portal>

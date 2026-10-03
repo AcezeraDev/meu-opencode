@@ -21,6 +21,7 @@ import { ChildProcess } from "effect/unstable/process"
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner"
 import { ShellPrompt, type Parameters } from "./shell/prompt"
 import { BashArity } from "@/permission/arity"
+import { CommandRisk } from "@/permission/command-risk"
 
 export { Parameters } from "./shell/prompt"
 
@@ -74,8 +75,9 @@ type Scan = {
   dirs: Set<string>
   patterns: Set<string>
   always: Set<string>
+  /** Each command with what it would delete, for CommandRisk. */
+  commands: CommandRisk.Command[]
 }
-
 type Chunk = {
   text: string
   size: number
@@ -260,7 +262,12 @@ const parse = Effect.fn("ShellTool.parse")(function* (command: string, ps: boole
   return tree
 })
 
-const ask = Effect.fn("ShellTool.ask")(function* (ctx: Tool.Context, scan: Scan, input: { command: string }) {
+const ask = Effect.fn("ShellTool.ask")(function* (
+  ctx: Tool.Context,
+  scan: Scan,
+  input: { command: string },
+  risk: CommandRisk.Risk,
+) {
   if (scan.dirs.size > 0) {
     const directories = Array.from(scan.dirs)
     const globs = directories.map((dir) => {
@@ -277,6 +284,18 @@ const ask = Effect.fn("ShellTool.ask")(function* (ctx: Tool.Context, scan: Scan,
         patterns: globs,
       },
     })
+  }
+
+  if (risk.level === "confirm") {
+    // Asked even when the session skips permissions; replaces the ordinary
+    // shell question so the person is not asked twice about one command.
+    yield* ctx.ask({
+      permission: "shell_risky",
+      patterns: [input.command],
+      always: [input.command],
+      metadata: { command: input.command, reason: risk.reason },
+    })
+    return
   }
 
   if (scan.patterns.size === 0) return
@@ -386,6 +405,7 @@ export const ShellTool = Tool.define(
         dirs: new Set<string>(),
         patterns: new Set<string>(),
         always: new Set<string>(),
+        commands: [],
       }
       const shellKind = ShellID.toKind(Shell.name(shell))
 
@@ -393,6 +413,23 @@ export const ShellTool = Tool.define(
         const command = parts(node)
         const tokens = command.map((item) => item.text)
         const cmd = ps || shellKind === "cmd" ? tokens[0]?.toLowerCase() : tokens[0]
+
+        if (tokens[0]) {
+          const name = path.basename(unquote(tokens[0])).toLowerCase().replace(/\.(exe|cmd|bat)$/, "")
+          // A glob (`*`, `./*`) or `.` deletes in the folder it names.
+          const targets = CommandRisk.DELETE.has(name)
+            ? yield* Effect.forEach(pathArgs(command, ps, shellKind === "cmd"), (arg) => {
+                const bare = unquote(arg)
+                if (bare === "." || bare === "*" || /^\.?[\\/]?\*/.test(bare)) return Effect.succeed(cwd)
+                return argPath(arg, cwd, ps, shell)
+              })
+            : []
+          scan.commands.push({
+            name,
+            args: tokens.slice(1).map(unquote),
+            targets: targets.filter((target): target is string => target !== undefined),
+          })
+        }
 
         if (cmd && (FILES.has(cmd) || (shellKind === "cmd" && CMD_FILES.has(cmd)))) {
           for (const arg of pathArgs(command, ps, shellKind === "cmd")) {
@@ -624,7 +661,18 @@ export const ShellTool = Tool.define(
                   )
                   const scan = yield* collect(tree.rootNode, cwd, ps, shell, instanceCtx)
                   if (!containsPath(cwd, instanceCtx)) scan.dirs.add(cwd)
-                  yield* ask(ctx, scan, params)
+                  const risk = CommandRisk.classify({
+                    text: params.command,
+                    commands: scan.commands,
+                    workspace: [instanceCtx.directory, ...(instanceCtx.worktree === "/" ? [] : [instanceCtx.worktree])],
+                    home: os.homedir(),
+                    platform: process.platform,
+                  })
+                  if (risk.level === "blocked")
+                    throw new Error(
+                      `Comando bloqueado pela segurança do opencode: ${risk.reason}. Ele não roda em nenhum modo. Não tente fazer o mesmo por outro caminho; se for realmente necessário, explique ao usuário e peça que ele mesmo rode.`,
+                    )
+                  yield* ask(ctx, scan, params, risk)
                 }),
               )
 

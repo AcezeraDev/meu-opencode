@@ -32,16 +32,14 @@
 
 .home-hero-composer:hover:not(:disabled) {
   box-shadow:
-    var(--shadow-glass-md, var(--v2-elevation-floating)),
-    var(--shadow-glow, 0 0 0 2px var(--v2-border-border-focus));
+    var(--shadow-glass-md, var(--v2-elevation-floating)), var(--shadow-glow, 0 0 0 2px var(--v2-border-border-focus));
   transform: translateY(-2px);
 }
 
 .home-hero-composer:focus-visible {
   outline: none;
   box-shadow:
-    var(--shadow-glass-md, var(--v2-elevation-floating)),
-    var(--shadow-glow, 0 0 0 2px var(--v2-border-border-focus));
+    var(--shadow-glass-md, var(--v2-elevation-floating)), var(--shadow-glow, 0 0 0 2px var(--v2-border-border-focus));
 }
 
 .home-hero-composer:disabled {
@@ -188,4 +186,16 @@ div:has(> [data-component="home-project-row"][data-selected]) {
   .home-hero-example {
     animation: none;
   }
+}
+
+[data-slot="home-session-tone"] {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--own-space);
+  box-shadow: 0 0 0 1.5px var(--v2-background-bg-base);
+  pointer-events: none;
 }

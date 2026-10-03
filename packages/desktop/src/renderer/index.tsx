@@ -1,7 +1,6 @@
 // @refresh reload
 
 import {
-  ACCEPTED_FILE_EXTENSIONS,
   AppBaseProviders,
   AppInterface,
   loadLocaleDict,
@@ -183,7 +182,8 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
         multiple: opts?.multiple ?? false,
         title: opts?.title,
         defaultPath: opts?.defaultPath,
-        extensions: opts?.extensions ?? ACCEPTED_FILE_EXTENSIONS,
+        // No default filter: any file type can be attached.
+        extensions: opts?.extensions,
       })
       if (!result) return
       try {
@@ -242,6 +242,10 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
     },
 
     exportDebugLogs: () => window.api.exportDebugLogs(),
+
+    onQuickAsk: (cb) => window.api.onQuickAsk(cb),
+
+    setAgentTray: (state) => void window.api.setAgentTray(state).catch(() => undefined),
 
     setForceFocus: (enabled) => window.api.setForceFocus(enabled),
 

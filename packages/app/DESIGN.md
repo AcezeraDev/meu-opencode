@@ -142,6 +142,9 @@ A multi-accent system where exactly one accent is live at a time: the space you 
 
 A project's color resolves as: explicit pick in project settings, else the color the layout auto-assigned, else a stable hash of its folder over the eight chromatic spaces. Every view of a project shows the same color.
 
+### Session Tones
+Each session wears a tone of its own inside its project's space: the same hue turned 25 or 50 degrees either way, or softened (`[data-tone]` 0 to 5 in `spaces.css`, `context/session-tone.ts`). It replaces `--own-space` on the session's tab and its home row (a small dot on the avatar), so sessions of one project tell apart; the app itself keeps the project's space. A new tab takes a tone no open sibling wears; the tab's menu has "Cor da sessão" to pick another.
+
 ### Tertiary
 - **Error** (`error`, light scheme `#d92d20`) and **Warn** (`warn`, light scheme `#b7791f`): fixed state colors, identical in every space, never cycled.
 
@@ -233,6 +236,31 @@ Rounded groups (14px) on Layer 01 with a muted-border inset and a soft drop (`0 
 ### Live work
 What is live wears `--chroma`: the space color by default, or a cycling OKLCH hue (6s / 14s / 28s per turn) when the user enables the RGB cycle and Lite mode is off. Reduced motion and Lite mode keep it on the space color.
 
+## Motion
+
+Every movement tells the owner something changed, arrived or finished, and each one runs once, set off by that event. Three times (`--motion-quick` 140ms, `--motion-base` 240ms, `--motion-move` 420ms) and three curves (`--motion-ease-out`, the approved overshoot `--motion-ease-spring`, and `--motion-ease-inout` for crossing a whole space) live in `ui/src/v2/styles/scope.css`; the JavaScript movements read the same values from `app/src/utils/motion.ts`.
+
+- **Space crossing:** a space change caused by a click spreads the new color in a circle from the click (a view transition over the whole window). Keyboard and restored routes change at once.
+- **Sliding pill:** the mode switcher and the Settings pages have one selection marker that glides to the new option, stretching over both on the way outside Lite mode.
+- **Prompt rising:** a sent prompt rises from the composer into its place in the chat.
+- **Writing front:** the newest words of a live answer start in Space Ink and cool to the text color in three steps (CSS highlights, so the markdown renderer is untouched).
+- **Beats:** a marker that lands on the conversation overview while it is open grows with a spring and opens a ring once; new steps in the Trail mode slide in and their node jumps when they finish.
+- **Background tab:** a working tab with an estimate draws an arc around its avatar that fills with the share of the estimate spent; when the work ends the avatar jumps once and the unread dot pops in.
+- **Numbers:** today's spend and the context percentage roll digit by digit (`Odometer`); an edit in the live answer counts its `+N -N` up; the context ring fills with the spring and, after a compaction, squeezes while the freed part fades as a ghost arc.
+- **Arrivals in the composer:** a long paste shows its first lines for a moment and folds into its `texto-colado.md` card; a dropped file falls from where it was let go and lands with a small squash (`session-ui/.../prompt-input/arrival.ts`).
+- **Queue:** a prompt sent while the agent works flies into the follow-up queue, which bumps; when it is sent it rises from the queue into the chat.
+- **Model board:** the model name turns over like a station board when it changes (`FlipText`).
+- **Asking:** a permission or question card rises into the composer's place; a background tab whose session asks knocks twice on its avatar.
+- **Brake:** stopping the agent slows the session's endless movements to a halt, and the "interrupted" mark drops in like a stamp.
+- **Cost:** a finished response's cost flies in an arc to today's spend, which rolls to the new total.
+- **Rewind and fork:** undo folds the turn away from its last row up to its prompt, which drops back into the composer; a fork's message flies into the tab strip, where the new tab pops open.
+- **Palette:** rows that survive a filter slide to their new place (`flipList`).
+- **Page on its way:** a line in the space color runs under the browser pane's address while a page loads, and the old page dims until the new one lands.
+- **Agent cursor:** the cursor drawn in the browsed page wears the project's space (`opencode/src/browser/accent.ts`), carries an "IA" tag, and names its target on a tab above the outline.
+
+### Named Rules
+**The Lite-Kept Rule.** A one-shot movement that is short, set off by an event and moves only `transform`, `opacity` or color may carry `data-motion="l"`: Lite mode then keeps it (shortened: `--motion-move` drops to 240ms and the spring to the plain ease-out) instead of cutting it to 1ms. Anything continuous never carries it. Reduced motion stops both.
+
 ## Do's and Don'ts
 
 ### Do:
@@ -241,7 +269,7 @@ What is live wears `--chroma`: the space color by default, or a cycling OKLCH hu
 - **Do** show a project's own color through `--own-space` on its tab and row, faint when inactive, filled when selected.
 - **Do** lift cards with the Raised / Floating / Overlay shadows and step surfaces through Layers 01 to 04.
 - **Do** keep errors at `#ff5a4e` and warnings at `#f5b33c` (dark) in every space.
-- **Do** respect Lite mode (on by default): continuous animations stop, one-shot ones finish in 1ms, spinners stay.
+- **Do** respect Lite mode (on by default): continuous animations stop, one-shot ones finish in 1ms unless they carry `data-motion="l"`, spinners stay.
 - **Do** set mono labels beside their readouts, in fixed digit slots.
 
 ### Don't:

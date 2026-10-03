@@ -15,12 +15,15 @@ import { SettingsRowV2 } from "./parts/row"
 import { LayoutRetirementNotice, LayoutTransitionToggle } from "./interface-transition"
 import {
   createAppearanceSettingsController,
+  createBrowserSettingsController,
   createPermissionScopeController,
   createShellOptions,
   createShellSettingsController,
   createSoundSettingsController,
   soundOptions,
   type AppearanceSettingsController,
+  type BrowserSettingsController,
+  type BrowserThoughts,
   type PermissionScopeController,
   type ShellSettingsController,
   type SoundSettingsController,
@@ -179,6 +182,7 @@ const AppearanceSection: Component<{ controller: AppearanceSettingsController }>
 }
 
 const chromaSpeeds: ChromaSpeed[] = ["slow", "medium", "fast"]
+const browserThoughts: BrowserThoughts[] = ["cursor", "card", "off"]
 
 /** The RGB trace and the daily spend limit (see ui/src/v2/styles/scope.css). */
 const ScopeSettings = () => {
@@ -364,6 +368,7 @@ export const SettingsGeneralV2: Component<{
   const shell = createShellSettingsController()
   const appearance = createAppearanceSettingsController()
   const sounds = createSoundSettingsController()
+  const browser = createBrowserSettingsController()
   const desktop = createMemo(() => platform.platform === "desktop")
 
   const [pinchZoom, { mutate: setPinchZoom }] = createResource(
@@ -522,6 +527,49 @@ export const SettingsGeneralV2: Component<{
     </div>
   )
 
+  const BrowserSection = (props: { controller: BrowserSettingsController }) => (
+    <div class="settings-v2-section">
+      <h3 class="settings-v2-section-title">{language.t("settings.general.section.browser")}</h3>
+
+      <SettingsListV2>
+        <Show when={props.controller.extension()}>
+          <SettingsRowV2
+            title={language.t("settings.general.row.browserOwnWindow.title")}
+            description={language.t("settings.general.row.browserOwnWindow.description")}
+          >
+            <div data-action="settings-browser-own-window">
+              <Switch checked={props.controller.ownWindow()} onChange={props.controller.setOwnWindow} />
+            </div>
+          </SettingsRowV2>
+        </Show>
+        <SettingsRowV2
+          title={language.t("settings.general.row.browserSounds.title")}
+          description={language.t("settings.general.row.browserSounds.description")}
+        >
+          <div data-action="settings-browser-sounds">
+            <Switch checked={props.controller.sounds()} onChange={props.controller.setSounds} />
+          </div>
+        </SettingsRowV2>
+        <SettingsRowV2
+          title={language.t("settings.general.row.browserThoughts.title")}
+          description={language.t("settings.general.row.browserThoughts.description")}
+        >
+          <SelectV2
+            appearance="inline"
+            data-action="settings-browser-thoughts"
+            options={browserThoughts}
+            current={props.controller.thoughts()}
+            placement="bottom-end"
+            gutter={6}
+            value={(option) => option}
+            label={(option) => language.t(`settings.general.row.browserThoughts.${option}`)}
+            onSelect={(option) => option && props.controller.setThoughts(option)}
+          />
+        </SettingsRowV2>
+      </SettingsListV2>
+    </div>
+  )
+
   const NotificationsSection = () => (
     <div class="settings-v2-section">
       <h3 class="settings-v2-section-title">{language.t("settings.general.section.notifications")}</h3>
@@ -633,6 +681,8 @@ export const SettingsGeneralV2: Component<{
         <GeneralSection />
 
         <AppearanceSection controller={appearance} />
+
+        <BrowserSection controller={browser} />
 
         <NotificationsSection />
 

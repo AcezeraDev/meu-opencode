@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { Effect } from "effect"
 import { parseResponse } from "../../src/tool/mcp-websearch"
-import { selectWebSearchProvider, webSearchModelName, webSearchProviderLabel } from "../../src/tool/websearch"
+import { selectWebSearchProvider, sources, webSearchModelName, webSearchProviderLabel } from "../../src/tool/websearch"
 
 import { webSearchEnabled } from "../../src/tool/registry"
 import { it } from "../lib/effect"
@@ -43,6 +43,31 @@ describe("websearch provider", () => {
     expect(webSearchEnabled(ProviderV2.ID.openai, { exa: false, parallel: false })).toBe(false)
     expect(webSearchEnabled(ProviderV2.ID.openai, { exa: true, parallel: false })).toBe(true)
     expect(webSearchEnabled(ProviderV2.ID.openai, { exa: false, parallel: true })).toBe(true)
+  })
+
+  test("without an Exa key every session uses Parallel, which needs none", () => {
+    const sessions = ["ses_a", "ses_b", "ses_c", "ses_d", "ses_e", "ses_f"]
+    expect(sessions.map((id) => selectWebSearchProvider(id, undefined, undefined, false))).toEqual(sessions.map(() => "parallel"))
+    expect(new Set(sessions.map((id) => selectWebSearchProvider(id, undefined, undefined, true))).size).toBe(2)
+    expect(selectWebSearchProvider("ses_a", undefined, "exa", false)).toBe("exa")
+  })
+
+  test("the addresses in a result become its sources", () => {
+    const result = JSON.stringify({
+      results: [
+        { url: "https://supabase.com/docs/guides/auth/passwords?flow=pkce", title: "Password-based Auth" },
+        { url: "https://nextjs.org/docs/app.", title: "App Router" },
+        { url: "https://supabase.com/docs/guides/auth/passwords?flow=pkce", title: "again" },
+      ],
+    })
+    expect(sources(result)).toEqual(["https://supabase.com/docs/guides/auth/passwords?flow=pkce", "https://nextjs.org/docs/app"])
+    expect(sources("no links here")).toEqual([])
+    // Seen in a real Parallel answer: example addresses inside the excerpts are not sources.
+    const real = JSON.stringify({
+      results: [{ url: "https://supabase.com/docs/guides/auth/passwords", excerpts: ["redirect to http://localhost:3000/auth and https://example.com/cb, https://your-project-id.supabase.co"] }],
+    })
+    expect(sources(real)).toEqual(["https://supabase.com/docs/guides/auth/passwords"])
+    expect(sources("Title: Docs\nURL: https://nextjs.org/docs\nText: see http://localhost:3000")).toEqual(["https://nextjs.org/docs"])
   })
 
   test("uses branded labels", () => {

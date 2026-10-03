@@ -6,6 +6,9 @@ import { BrowserTrail } from "@/browser/trail"
 import type { SnapshotResult } from "@/browser/snapshot"
 import type { Tab } from "@/browser/tab"
 import { ActionVerifier, type Verdict } from "@/browser/verify"
+import { Writer } from "@/writer/writer"
+import { Config } from "@/config/config"
+import { ModelRoles } from "@/provider/roles"
 import { Step } from "./browser_act"
 import * as Tool from "./tool"
 import DESCRIPTION from "./browser_batch.txt"
@@ -50,6 +53,7 @@ export const BrowserBatchTool = Tool.define(
   "browser_batch",
   Effect.gen(function* () {
     const browser = yield* Browser.Service
+    const config = yield* Config.Service
 
     return {
       description: DESCRIPTION,
@@ -61,6 +65,14 @@ export const BrowserBatchTool = Tool.define(
           if (steps.length > MAX_STEPS) {
             throw new Error(`browser_batch takes at most ${MAX_STEPS} steps; split the work or act on what you see.`)
           }
+
+          // Checked before any step runs, so a refused text leaves the page untouched.
+          const writing = ModelRoles.pick(yield* config.get(), "writing") !== undefined
+          const refused = steps
+            .filter((step) => step.action === "fill" || step.action === "type")
+            .map((step) => Writer.guard(step.text, writing, ctx.messages))
+            .find((reason) => reason !== undefined)
+          if (refused) throw new Error(refused)
 
           const tab = yield* browser.tab()
           const timeout = yield* browser.timeout()
@@ -86,6 +98,8 @@ export const BrowserBatchTool = Tool.define(
           const from = yield* Effect.promise(() => tab.url())
           for (const step of steps) {
             const url = yield* Effect.promise(() => tab.url())
+            // A text from write_text is typed exactly as it was written.
+            const text = step.text === undefined ? undefined : yield* Effect.promise(() => Writer.expand(step.text ?? ""))
             described.push(BrowserSite.describeStep(step, step.ref ? tab.identityOf(step.ref) : undefined))
             // The same consent as browser_act, per step, since a step can land
             // on another site.
@@ -93,13 +107,13 @@ export const BrowserBatchTool = Tool.define(
               permission: "browser",
               patterns: [url],
               always: ["*"],
-              metadata: { action: step.action, url, ref: step.ref, selector: step.selector, text: step.text },
+              metadata: { action: step.action, url, ref: step.ref, selector: step.selector, text },
             })
             const before = tab.pdf
             const started = Date.now()
             const outcome = yield* Effect.promise(() =>
               tab
-                .serialize(() => BrowserPage.perform(tab, step, timeout))
+                .serialize(() => BrowserPage.perform(tab, { ...step, text }, timeout))
                 .then(
                   (verdict: Verdict) => ({ verdict }),
                   (error: unknown) => ({ failure: error instanceof Error ? error : new Error(String(error)) }),

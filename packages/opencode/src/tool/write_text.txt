@@ -1,0 +1,11 @@
+Has a writing model write or correct a longer text for you: an essay, a report, a summary, a written answer, a message — anything of more than two or three sentences that has to be typed into a page or sent. That model writes better Portuguese than you do. Always use this tool for such texts, including when correcting or improving a text that is already written (yours, the person's or one already sent): never write or fix them yourself. The browser refuses long texts that did not come from here.
+
+What to give it:
+- `request`: the assignment exactly as the page states it (copy the statement, the questions, the topics and any size or structure the page asks for), plus anything the person asked, such as "fix the Portuguese mistakes".
+- `draft`: an existing text to correct or improve, copied word for word as it is now (from the page, or the person's message), never rewritten by you first. Leave it out to write from scratch.
+- `material`: the content the text should be based on, such as the lesson text, the PDF of the class or earlier answers.
+- `format`: where the text goes and its shape, e.g. "Moodle online text field, 15 to 20 lines, three paragraphs".
+
+The writer also gets the text of the page open in the browser, so open the assignment page first. It writes, then proofreads its own text.
+
+The result has the text and an id. To type it, pass `@texto:<id>` as the `text` of browser_act or a browser_batch step (fill or type); the browser types the saved text exactly. Do not retype or edit the text yourself. If it needs changes, call write_text again with what to change and the text as `draft`.

@@ -125,6 +125,9 @@ const layer = Layer.effect(
           // Arbitrary JavaScript in a page loaded under the user's own browser
           // profile can act as the user on any site they are signed in to.
           browser_evaluate: "ask",
+          // Shell commands CommandRisk marks "confirm" (git push, reset --hard,
+          // deletes outside the project…): asked even when permissions are skipped.
+          shell_risky: "ask",
           external_directory: {
             "*": "ask",
             ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),
@@ -298,6 +301,10 @@ const layer = Layer.effect(
           item.options = mergeDeep(item.options, value.options ?? {})
           item.permission = Permission.merge(item.permission, Permission.fromConfig(value.permission ?? {}))
         }
+
+        // The reasoning role plans, unless the plan agent was given its own model.
+        if (cfg.models?.reasoning && agents.plan && !agents.plan.model)
+          agents.plan.model = Provider.parseModel(cfg.models.reasoning)
 
         // Ensure Truncate.GLOB is allowed unless explicitly configured
         for (const name in agents) {

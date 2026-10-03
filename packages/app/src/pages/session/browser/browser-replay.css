@@ -1,0 +1,21 @@
+/* The agent's browser steps played one after another. */
+.browser-replay {
+  display: flex;
+  justify-content: center;
+  min-height: 0;
+  height: 100%;
+}
+
+.browser-replay-canvas {
+  /* The whole picture, caption included, fits the dialog at any window size. */
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+}
+
+.browser-replay-empty {
+  margin: 48px 0;
+  color: var(--text-weak);
+  font-size: 13px;
+}

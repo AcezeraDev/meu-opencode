@@ -1,0 +1,9 @@
+Test a site you built or changed, in the browser: every page at desktop (1366px), tablet (768px) and phone (390px) widths. Reports, per page and size:
+- JavaScript errors, console errors, failed requests and HTTP errors;
+- horizontal overflow, with the elements that cross the screen edge;
+- broken images, text with low contrast (with the ratio), tap targets under 32px on the phone, pages without <title> or <h1>, empty pages;
+- a screenshot of each, kept for `visual_review` and for comparing with the previous check (it says how many problems the last check had).
+
+Use it whenever a frontend change is done: a page that compiles is not finished until it was checked. Start the dev server first (in the background) and pass its local address. It follows up to `crawl` links of the same site from the first page; list other routes in `paths`.
+
+After fixing what it reports, run it again to confirm. Then run `visual_review` for the visual evaluation.

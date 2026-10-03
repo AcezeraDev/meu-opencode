@@ -9,7 +9,27 @@
   min-height: 0;
 }
 
+.browser-history-row {
+  display: flex;
+  align-items: center;
+}
+
+.browser-history-play {
+  flex: 0 0 auto;
+  padding: 8px 12px 8px 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--space, var(--text-interactive-base));
+  cursor: pointer;
+}
+
+.browser-history-play:hover {
+  text-decoration: underline;
+}
+
 .browser-history-bar {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 12px;

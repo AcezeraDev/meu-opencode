@@ -32,14 +32,31 @@ export function selectWebSearchProvider(
   sessionID: string,
   flags = { exa: false, parallel: false },
   configured?: WebSearchProvider,
+  exaKey = Boolean(process.env.EXA_API_KEY),
 ): WebSearchProvider {
   const override = process.env.OPENCODE_WEBSEARCH_PROVIDER
   if (override === "exa" || override === "parallel") return override
   if (configured) return configured
   if (flags.parallel) return "parallel"
   if (flags.exa) return "exa"
+  // Exa's MCP answers 401 without a key (checked 2026-10-01); Parallel's does not need one.
+  if (!exaKey) return "parallel"
 
   return Number.parseInt(checksum(sessionID) ?? "0", 36) % 2 === 0 ? "exa" : "parallel"
+}
+
+/** The web addresses in a search result, so the answer can name where it came from. */
+export function sources(text: string, max = 10) {
+  const clean = (url: string) => url.replace(/[.,;:]+$/, "")
+  // The address of each result (Parallel's "url" field, Exa's "URL:" line), not
+  // the ones quoted inside the excerpts, which are often examples.
+  const results = [
+    ...[...text.matchAll(/"url"\s*:\s*"(https?:\/\/[^"]+)"/g)].map((match) => match[1]!),
+    ...[...text.matchAll(/^URL:\s*(https?:\/\/\S+)/gm)].map((match) => match[1]!),
+  ]
+  const found = results.length ? results : (text.match(/https?:\/\/[^\s"'<>`)\]]+/g) ?? [])
+  const example = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|([a-z0-9-]+\.)*example\.(com|org|net)|your-[^/]*)([:/]|$)/i
+  return [...new Set(found.map(clean))].filter((url) => !example.test(url)).slice(0, max)
 }
 
 export function webSearchProviderLabel(provider: unknown) {
@@ -140,9 +157,14 @@ export const WebSearchTool = Tool.define(
           })
 
           const result = yield* callProvider(http, provider, params, ctx)
+          const links = result ? sources(result) : []
 
           return {
-            output: result ?? "No search results found. Please try a different query.",
+            output: result
+              ? links.length
+                ? `${result}\n\nFontes:\n${links.map((link) => `- ${link}`).join("\n")}\nCite as fontes que usar.`
+                : result
+              : "No search results found. Please try a different query.",
             title: `${title}: ${params.query}`,
             metadata: { provider },
           }

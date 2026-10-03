@@ -25,6 +25,19 @@ export function OverviewBar(props: {
   const [tick, setTick] = createSignal(0)
   const [view, setView] = createSignal({ top: 0, height: 1, overflow: false })
   const [hover, setHover] = createSignal<Placed>()
+  // Markers already there when the bar appears are history; one that shows up
+  // later is something that just happened, and lands with a beat. Markers are
+  // rebuilt on every refresh, so a marker is known by its row and kind.
+  const known = new Set<string>()
+  const [settled, setSettled] = createSignal(false)
+  const settle = setTimeout(() => setSettled(true), 1500)
+  onCleanup(() => clearTimeout(settle))
+  const fresh = (marker: Placed) => {
+    const key = `${marker.index}:${marker.kind}`
+    if (known.has(key)) return false
+    known.add(key)
+    return settled() && marker.kind !== "live"
+  }
 
   createEffect(() => {
     const root = props.root()
@@ -88,6 +101,8 @@ export function OverviewBar(props: {
               <span
                 class="scope-overview-marker"
                 data-kind={marker.kind}
+                data-fresh={fresh(marker) ? "" : undefined}
+                data-motion="l"
                 data-chroma={marker.kind === "live" ? "" : undefined}
                 style={{ top: `${marker.ratio * 100}%` }}
                 onPointerEnter={() => setHover(marker)}

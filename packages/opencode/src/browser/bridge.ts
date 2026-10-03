@@ -608,13 +608,15 @@ export class Bridge {
     return result.targets ?? []
   }
 
-  async createTarget(url: string): Promise<string> {
-    const result = await this.request<{ targetId: string }>("createTarget", { url })
+  /** `ownWindow` opens the tab in the agent's own browser window, made on first use and left in the background. */
+  async createTarget(url: string, ownWindow = false): Promise<string> {
+    const result = await this.request<{ targetId: string }>("createTarget", { url, ownWindow })
     return result.targetId
   }
 
-  activateTarget(targetId: string): Promise<unknown> {
-    return this.request("activateTarget", { targetId })
+  /** `focus: false` switches to the tab without bringing its window in front of the person's. */
+  activateTarget(targetId: string, focus = true): Promise<unknown> {
+    return this.request("activateTarget", { targetId, focus })
   }
 
   closeTarget(targetId: string): Promise<unknown> {

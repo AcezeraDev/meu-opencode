@@ -158,6 +158,7 @@ const SCENARIOS: Scenario[] = [
       () => ({ tool: "browser_navigate", args: { url: `${site}/lesson` } }),
       (o) => ({ tool: "browser_act", args: { action: "click", ref: ref(o, /link "Apostila" \[(ref_\d+)/) } }),
       () => ({ tool: "browser_navigate", args: { url: `${site}/planilha.xlsx` } }),
+      () => ({ tool: "site_check", args: { url: `${site}/form`, crawl: 0, viewports: ["desktop", "mobile"] } }),
     ],
     check: (out, expect) => {
       expect("the click on the PDF read its text", out(1).includes("Formas normais"))
@@ -173,6 +174,7 @@ const SCENARIOS: Scenario[] = [
       expect("an embedded PDF is listed", out(11).includes('pdf "Apostila"'))
       expect("a click that downloads a Word file reads it", out(13).includes("Capítulo 1: normalização"))
       expect("navigating to a workbook reads it", out(14).includes("Ana\t9.5"))
+      expect("a site check measured the page at two sizes", out(15).includes("1 página(s) × desktop, mobile"))
     },
   },
   {
@@ -208,13 +210,16 @@ const SCENARIOS: Scenario[] = [
         args: { action: "upload_file", ref: ref(o, /"Arquivo" \[(ref_\d+)/), file: upload },
       }),
       () => ({ tool: "browser_inspect", args: { what: "evaluate", expression: "document.title" } }),
+      () => ({ tool: "site_check", args: { url: `${site}/form`, crawl: 0, viewports: ["mobile"] } }),
     ],
     check: async (out, expect, ms) => {
+      expect("a site check ran in the person's browser", out(13).includes("1 página(s) × mobile"))
       expect("the read during the restart saw the same page", out(2).includes("Enviado Ana") || out(2).includes("/form"))
       expect("the tab kept its page across the restart", out(3).includes("Enviado Ana"))
       expect("the navigation after the restart arrived", out(4).includes("/lesson"))
       expect(`the navigation after the restart was quick (${ms(4)} ms)`, ms(4) < 8000)
-      expect("no new tab was opened for the restart", extension.created() === 0)
+      // The one tab opened is the site check's own, at the end.
+      expect("no new tab was opened for the restart", extension.created() === 1)
       expect("the click on a PDF read it through the extension", out(5).includes("Formas normais"))
       expect("the extension restarted once", extension.restarts() === 1)
       expect("a click that downloads a Word file reads it through the extension", out(7).includes("Capítulo 1"))

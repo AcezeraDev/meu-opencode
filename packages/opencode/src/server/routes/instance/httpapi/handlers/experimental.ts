@@ -4,6 +4,8 @@ import { Agent } from "@/agent/agent"
 import { BackgroundJob } from "@/background/job"
 import { Browser, type BrowserEvent } from "@/browser/session"
 import { BrowserTrail } from "@/browser/trail"
+import { BrowserNotebook } from "@/browser/notebook"
+import { SessionWeek } from "@/session/week"
 import { Config } from "@/config/config"
 import { InstanceState } from "@/effect/instance-state"
 import { RuntimeFlags } from "@/effect/runtime-flags"
@@ -18,8 +20,11 @@ import { nanoGPT, resolveApiKey, toWebVideoError } from "@/web-video/provider"
 import { WebVideoSettings } from "@/web-video/settings"
 import { Provider } from "@/provider/provider"
 import { Roteia } from "@/provider/roteia"
+import { Ollama } from "@/provider/ollama"
+import { Hardware } from "@/provider/hardware"
+import { DatasetExporter } from "@/dataset/export"
 import { Database } from "@opencode-ai/core/database/database"
-import { MessageTable, PartTable, TodoTable } from "@opencode-ai/core/session/sql"
+import { MessageTable, PartTable, SessionTable, TodoTable } from "@opencode-ai/core/session/sql"
 import { SessionPace } from "@/session/pace"
 import { and, desc, eq, gte, sql } from "drizzle-orm"
 import { Effect, Option, Queue } from "effect"
@@ -36,7 +41,9 @@ import {
   ToolListQuery,
   UsageEtaQuery,
   UsageSpendQuery,
+  UsageWeekQuery,
   RoteiaStatusQuery,
+  DatasetExportQuery,
   WebVideoDefaults,
   WorktreeApiError,
 } from "../groups/experimental"
@@ -207,6 +214,64 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       return { total: Number(rows[0]?.total ?? 0), messages: Number(rows[0]?.messages ?? 0) }
     })
 
+    const usageWeek = Effect.fn("ExperimentalHttpApi.usageWeek")(function* (ctx: {
+      query: typeof UsageWeekQuery.Type
+    }) {
+      const asked = Number(ctx.query.since)
+      const since = Number.isFinite(asked) ? asked : Date.now() - 7 * 24 * 60 * 60 * 1000
+      const field = (path: string) => sql`json_extract(${MessageTable.data}, ${path})`
+      const part = (path: string) => sql`json_extract(${PartTable.data}, ${path})`
+      const messages = yield* db
+        .select({
+          id: MessageTable.id,
+          sessionID: MessageTable.session_id,
+          providerID: sql<string | null>`${field("$.providerID")}`,
+          modelID: sql<string | null>`${field("$.modelID")}`,
+          cost: sql<number | null>`${field("$.cost")}`,
+          created: sql<number | null>`${field("$.time.created")}`,
+          completed: sql<number | null>`${field("$.time.completed")}`,
+        })
+        .from(MessageTable)
+        .where(and(gte(MessageTable.time_created, since), sql`${field("$.role")} = 'assistant'`))
+        .all()
+        .pipe(Effect.orDie)
+      const tools = yield* db
+        .select({
+          sessionID: PartTable.session_id,
+          messageID: PartTable.message_id,
+          tool: sql<string | null>`${part("$.tool")}`,
+          status: sql<string | null>`${part("$.state.status")}`,
+          error: sql<string | null>`${part("$.state.error")}`,
+          start: sql<number | null>`${part("$.state.time.start")}`,
+          end: sql<number | null>`${part("$.state.time.end")}`,
+        })
+        .from(PartTable)
+        .where(and(gte(PartTable.time_created, since), sql`${part("$.type")} = 'tool'`))
+        .all()
+        .pipe(Effect.orDie)
+      const ids = [...new Set(messages.map((message) => message.sessionID))]
+      const titles = ids.length
+        ? yield* db
+            .select({ id: SessionTable.id, title: SessionTable.title, parentID: SessionTable.parent_id })
+            .from(SessionTable)
+            .where(gte(SessionTable.time_updated, since))
+            .all()
+            .pipe(Effect.orDie)
+        : []
+      const notebook = yield* Effect.promise(() => BrowserNotebook.countSince(since))
+      return SessionWeek.summarize({ since, messages, tools, sessions: titles, notebook })
+    })
+
+    const notebook = Effect.fn("ExperimentalHttpApi.notebook")(function* () {
+      return yield* Effect.promise(() => BrowserNotebook.list())
+    })
+
+    const notebookSubject = Effect.fn("ExperimentalHttpApi.notebookSubject")(function* (ctx: {
+      params: { subject: string }
+    }) {
+      return yield* Effect.promise(() => BrowserNotebook.entries(ctx.params.subject))
+    })
+
     const roteiaStatus = Effect.fn("ExperimentalHttpApi.roteiaStatus")(function* (ctx: {
       query: typeof RoteiaStatusQuery.Type
     }) {
@@ -228,6 +293,78 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       if (!ctx.query.test) return { configured: true, source: found.source, models }
       const check = yield* Effect.promise(() => Roteia.check(found.key))
       return { configured: true, source: found.source, models, check }
+    })
+
+    const datasetExport = Effect.fn("ExperimentalHttpApi.datasetExport")(function* (ctx: {
+      query: typeof DatasetExportQuery.Type
+    }) {
+      const min = ctx.query.min ?? "approved"
+      // Every project's sessions: rating lives in each session's metadata.
+      const rated = yield* db
+        .select({
+          id: SessionTable.id,
+          title: SessionTable.title,
+          directory: SessionTable.directory,
+          metadata: SessionTable.metadata,
+        })
+        .from(SessionTable)
+        .where(sql`json_extract(${SessionTable.metadata}, '$.ratings') is not null`)
+        .all()
+        .pipe(Effect.orDie)
+      const list = yield* Effect.forEach(rated, (session) =>
+        sessions.messages({ sessionID: session.id as SessionID }).pipe(
+          Effect.map((messages) =>
+            DatasetExporter.examples(
+              { id: session.id, title: session.title, directory: session.directory, metadata: session.metadata ?? undefined },
+              messages,
+              min,
+            ),
+          ),
+          Effect.orElseSucceed(() => [] as DatasetExporter.Example[]),
+        ),
+      )
+      const examples = list.flat()
+      const file = yield* Effect.promise(() => DatasetExporter.write(examples, min))
+      return {
+        file,
+        examples: examples.length,
+        sessions: new Set(examples.map((example) => example.meta.session)).size,
+        rated: rated.reduce((sum, session) => sum + Object.keys(DatasetExporter.ratings(session.metadata ?? undefined)).length, 0),
+      }
+    })
+
+    const ollamaStatus = Effect.fn("ExperimentalHttpApi.ollamaStatus")(function* () {
+      const settings = Ollama.settings((yield* config.get()).provider?.[Ollama.ID]?.options, process.env)
+      const [version, tags, hardware] = yield* Effect.promise(() =>
+        Promise.all([Ollama.probe(settings.host), Ollama.tags(settings.host), Hardware.detect()]),
+      )
+      const providers = yield* (yield* Provider.Service).list()
+      const connected = providers[Ollama.ID]
+      const models = Object.values(connected?.models ?? {}).map((model) => ({
+        id: model.id,
+        context: model.limit.context,
+        tools: model.capabilities.toolcall,
+        vision: model.capabilities.input.image,
+      }))
+      return {
+        running: version !== undefined,
+        host: settings.host,
+        version,
+        connected: connected !== undefined,
+        models,
+        hardware: {
+          platform: hardware.platform,
+          cpu: hardware.cpu.model,
+          threads: hardware.cpu.threads,
+          ramGB: hardware.ramGB,
+          freeDiskGB: hardware.freeDiskGB,
+          gpus: hardware.gpus.map((gpu) => ({ name: gpu.name, vramGB: gpu.vramGB, dedicated: gpu.dedicated })),
+        },
+        recommendation: Hardware.recommend(
+          hardware,
+          tags.map((tag) => tag.name),
+        ),
+      }
     })
 
     /** Past requests over this window teach how long work takes. */
@@ -511,7 +648,12 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       .handle("resource", resource)
       .handle("usageSpend", usageSpend)
       .handle("roteiaStatus", roteiaStatus)
+      .handle("ollamaStatus", ollamaStatus)
+      .handle("datasetExport", datasetExport)
       .handle("usageEta", usageEta)
+      .handle("usageWeek", usageWeek)
+      .handle("notebook", notebook)
+      .handle("notebookSubject", notebookSubject)
       .handle("webVideoModels", webVideoModels)
       .handle("webVideoSettings", webVideoSettings)
       .handle("webVideoSettingsUpdate", webVideoSettingsUpdate)

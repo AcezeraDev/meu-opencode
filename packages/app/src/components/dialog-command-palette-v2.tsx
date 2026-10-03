@@ -6,7 +6,18 @@ import { Icon } from "@opencode-ai/ui/v2/icon"
 import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { TextInputV2 } from "@opencode-ai/ui/v2/text-input-v2"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { createEffect, createMemo, createResource, createSignal, For, Match, onCleanup, Show, Switch } from "solid-js"
+import {
+  createEffect,
+  createMemo,
+  createResource,
+  createSignal,
+  For,
+  Match,
+  onCleanup,
+  onMount,
+  Show,
+  Switch,
+} from "solid-js"
 import { commandPaletteOptions, formatKeybindParts, useCommand } from "@/context/command"
 import { useGlobal } from "@/context/global"
 import { useLanguage } from "@/context/language"
@@ -23,6 +34,7 @@ import {
   type CommandPaletteEntry,
 } from "./command-palette"
 import "./dialog-command-palette-v2.css"
+import { flipList } from "@/utils/motion"
 
 function groups(entries: CommandPaletteEntry[]) {
   const map = new Map<string, CommandPaletteEntry[]>()
@@ -248,7 +260,7 @@ function CommandPaletteView(props: {
           />
         </div>
         <ScrollView class="command-palette-v2-scroll" viewportRef={(el) => (resultsRef = el)}>
-          <div class="command-palette-v2-results" role="listbox">
+          <div class="command-palette-v2-results" role="listbox" ref={(el) => onMount(() => onCleanup(flipList(el)))}>
             <Show
               when={visibleEntries().length > 0}
               fallback={
@@ -321,6 +333,7 @@ function PaletteRow(props: {
     <button
       type="button"
       class="command-palette-v2-row group"
+      data-flip-key={props.item.id}
       role="option"
       aria-selected={props.active}
       data-active={props.active ? "" : undefined}

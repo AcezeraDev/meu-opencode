@@ -27,7 +27,19 @@ Cada resposta da IA é tratada como um sinal ao vivo, medido numa tela de instru
 - **Cola de atalhos:** segurar `Ctrl` mostra todos os atalhos disponíveis.
 - **Gerador de vídeos na web:** uma ferramenta que a IA pode usar para gerar vídeos, com painel próprio nas configurações.
 - **Navegador de verdade:** a IA abre páginas num Chromium próprio, lê o que o JavaScript montou, clica, preenche formulários, tira print e lê o console e a rede. Um painel à direita (botão do globo) mostra o navegador ao vivo, com o cursor da IA se mexendo, e eu também posso navegar e clicar nele.
-- **Busca na web para qualquer modelo:** a ferramenta `websearch` deixou de ser exclusiva do provedor oficial e pode ser ligada para qualquer um, inclusive NanoGPT.
+- **Busca na web para qualquer modelo:** a ferramenta `websearch` deixou de ser exclusiva do provedor oficial e vem ligada para todos, inclusive modelos locais, com as fontes listadas no resultado.
+
+### A IA de desenvolvimento própria
+
+O opencode personal é a base de uma IA própria para programar: um agente que planeja, programa, testa os próprios sites no navegador visível, avalia o visual, corrige com limite, lembra do que aprendeu e pode rodar com um modelo local (e, no futuro, um modelo treinado por mim).
+
+- **Modelos locais de primeira classe:** o Ollama aparece sozinho com os modelos instalados, com contexto de verdade (o `/v1` do Ollama ficava preso em 4096 tokens) e um perfil enxuto de ferramentas. Detecta CPU/RAM/GPU e sugere modelos. Papéis por modelo: programar, rápido, raciocínio, visão, avaliação. → [docs/MODELS.md](docs/MODELS.md)
+- **Testar os próprios sites:** `site_check` passa por cada página em computador, tablet e celular, mede erros de JavaScript, rede, rolagem horizontal, contraste e mais, e guarda prints com antes × depois. `visual_review` manda os prints para um modelo com visão e recebe uma avaliação estruturada; a correção tem limite de rodadas. → [docs/BROWSER.md](docs/BROWSER.md)
+- **Memória de lições:** problema → causa → solução → resultado, lembradas sozinhas em pedidos parecidos. → [docs/MEMORY.md](docs/MEMORY.md)
+- **Segurança e limites:** comandos do terminal classificados (seguro, confirmar, bloqueado), limites de passos, tempo e erros, botão Pausar/Continuar. → [docs/SECURITY.md](docs/SECURITY.md)
+- **Dataset para treino:** botões Excelente / Aprovado / Precisa melhorar em cada resposta e o comando "Exportar dataset de treino". → [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+
+O andamento fica em [STATUS.md](STATUS.md) e a análise que deu origem a tudo em [ARCHITECTURE_ANALYSIS.md](ARCHITECTURE_ANALYSIS.md).
 
 ### O navegador
 

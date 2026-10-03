@@ -1,0 +1,6 @@
+Your memory of problems solved before, kept across sessions and projects.
+
+- `search`: look for lessons about a problem before working on it, especially after an error you do not immediately understand. Pass the error message or a short description.
+- `add`: after you solve a problem that took real effort (an error whose cause was not obvious, a library quirk, a setup step that kept failing), save what you learned so next time is faster. Only after the fix is confirmed (build, test or browser check passing). Write it so it stays true later: the problem as it showed up (error text), the cause, the solution that worked and the result. No passwords, keys or personal data.
+
+Relevant lessons are also shown to you automatically at the start of a request.

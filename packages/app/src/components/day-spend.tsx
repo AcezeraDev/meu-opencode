@@ -7,6 +7,8 @@ import { useSettings } from "@/context/settings"
 import { authTokenFromCredentials } from "@/utils/server"
 import { showToast } from "@/utils/toast"
 import { createUsdBrlRate } from "./exchange-rate"
+import { Odometer } from "./odometer"
+import { flyChip } from "@/utils/motion"
 import "./scope-shell.css"
 
 const REFRESH_MS = 30 * 1000
@@ -19,6 +21,13 @@ function startOfToday() {
   date.setHours(0, 0, 0, 0)
   return date.getTime()
 }
+
+/** Tells the titlebar readout a response just cost `cost` dollars, from where it is shown. */
+export function announceSpend(cost: number, from: DOMRect) {
+  window.dispatchEvent(new CustomEvent(SPENT_EVENT, { detail: { cost, from } }))
+}
+
+const SPENT_EVENT = "opencode:spent"
 
 /**
  * Today's model spend across every session, as a titlebar readout. Past the daily
@@ -50,6 +59,24 @@ export function DaySpend() {
       })
       .catch(() => undefined)
   }
+
+  // A response that just finished sends its cost flying here; the readout
+  // takes it in when it lands and asks the server for the exact total after.
+  const spent = (event: Event) => {
+    const detail = (event as CustomEvent<{ cost: number; from: DOMRect }>).detail
+    const current = spend()
+    if (!root || !current || !(detail.cost > 0)) return
+    void flyChip(`+${money(detail.cost)}`, detail.from, root.getBoundingClientRect()).then(() => {
+      setSpend({ total: current.total + detail.cost, messages: current.messages + 1 })
+      root?.animate([{ transform: "none" }, { transform: "scale(1.08)" }, { transform: "none" }], {
+        duration: 320,
+        easing: "cubic-bezier(0.2, 0, 0, 1)",
+      })
+      setTimeout(load, 1500)
+    })
+  }
+  window.addEventListener(SPENT_EVENT, spent)
+  onCleanup(() => window.removeEventListener(SPENT_EVENT, spent))
 
   createEffect(() => {
     void server.current
@@ -142,7 +169,7 @@ export function DaySpend() {
             onClick={toggle}
           >
             <span class="scope-label">{language.t("scope.spend.today")}</span>
-            <span class="scope-readout">{money(value().total)}</span>
+            <Odometer class="scope-readout" value={money(value().total)} />
           </button>
           <Show when={open()}>
             <Portal>
@@ -156,7 +183,7 @@ export function DaySpend() {
               >
                 <div class="day-spend-row">
                   <span>{language.t("scope.spend.title")}</span>
-                  <span class="scope-readout day-spend-value">{money(value().total)}</span>
+                  <Odometer class="scope-readout day-spend-value" value={money(value().total)} />
                 </div>
                 <Show when={brl()}>
                   {(rate) => (
@@ -165,9 +192,7 @@ export function DaySpend() {
                         <span>{language.t("scope.spend.inDollars")}</span>
                         <span class="scope-readout">{dollars(value().total)}</span>
                       </div>
-                      <p class="day-spend-hint">
-                        {language.t("scope.spend.rate", { rate: format(rate(), "BRL") })}
-                      </p>
+                      <p class="day-spend-hint">{language.t("scope.spend.rate", { rate: format(rate(), "BRL") })}</p>
                     </>
                   )}
                 </Show>

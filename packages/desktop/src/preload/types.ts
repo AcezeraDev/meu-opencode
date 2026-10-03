@@ -42,6 +42,12 @@ export type FatalRendererError = {
   os?: string
 }
 
+/** What the tray icon shows: the agent's state, and the step it is on as the tooltip. */
+export type AgentTrayState = {
+  status: "idle" | "working" | "done" | "attention"
+  tooltip: string
+}
+
 export type ElectronAPI = {
   killSidecar: () => Promise<void>
   installCli: () => Promise<string>
@@ -113,4 +119,8 @@ export type ElectronAPI = {
   setForceFocus: (enabled: boolean) => Promise<void>
   recordFatalRendererError: (error: FatalRendererError) => Promise<void>
   setNativeTranslations: (bundle: DesktopNativeBundle) => Promise<void>
+  quickAskSubmit: (text: string) => Promise<void>
+  quickAskClose: () => Promise<void>
+  onQuickAsk: (cb: (text: string) => void) => () => void
+  setAgentTray: (state: AgentTrayState) => Promise<void>
 }

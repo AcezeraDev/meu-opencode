@@ -232,7 +232,13 @@ export function withMode(ruleset: PermissionV1.Ruleset, mode: Mode | undefined):
     case "plan":
       return [...shift(ruleset, "bash", "allow", "ask"), { permission: "edit", pattern: "*", action: "deny" }]
     case "bypass":
-      return shift(ruleset, "*", "ask", "allow")
+      // Risky shell commands still ask; only what the person approved for
+      // them by hand (an explicit allow or deny) is kept.
+      return [
+        ...shift(ruleset, "*", "ask", "allow"),
+        { permission: "shell_risky", pattern: "*", action: "ask" },
+        ...ruleset.filter((rule) => rule.permission === "shell_risky" && rule.action !== "ask"),
+      ]
     default:
       return [...ruleset]
   }

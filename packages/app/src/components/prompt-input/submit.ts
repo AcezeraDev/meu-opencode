@@ -14,6 +14,7 @@ import { type ContextItem, type ImageAttachmentPart, type Prompt, type usePrompt
 import { useSDK, type DirectorySDK } from "@/context/sdk"
 import { useSync, type DirectorySync } from "@/context/sync"
 import { Identifier } from "@/utils/id"
+import { brake, launchFlight, queueFlight } from "@/utils/motion"
 import { Worktree as WorktreeState } from "@/utils/worktree"
 import { buildRequestParts } from "./build-request-parts"
 import { setCursorPosition } from "./editor-dom"
@@ -264,6 +265,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
 
     serverSync().session.set("todo", sessionID, [])
 
+    brake()
     input.onAbort?.()
 
     const key = pendingKey(sessionID)
@@ -491,6 +493,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     }
 
     if (!isNewSession && mode === "normal" && input.shouldQueue?.()) {
+      queueFlight(text, input.editor()?.getBoundingClientRect())
       input.onQueue?.(draft)
       clearContext(submission.target())
       clearInput()
@@ -567,6 +570,7 @@ export function createPromptSubmit(input: PromptSubmitInput) {
     }
 
     for (const item of commentItems) submission.target().context.remove(item.key)
+    launchFlight(text, input.editor()?.getBoundingClientRect())
     clearInput()
 
     const waitForWorktree = async () => {

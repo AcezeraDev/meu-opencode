@@ -102,6 +102,23 @@
   background: rgb(95 211 141 / 0.3);
 }
 
+/* A step that arrives while the trail is open slides in; its node jumps when it finishes. */
+.session-trail-step[data-fresh] {
+  animation: session-trail-step-in var(--motion-base) var(--motion-ease-out) both;
+}
+
+.session-trail-step[data-fresh][data-status="completed"] .session-trail-node,
+.session-trail-step[data-fresh][data-status="error"] .session-trail-node {
+  animation: motion-pop 420ms var(--motion-ease-spring);
+}
+
+@keyframes session-trail-step-in {
+  from {
+    opacity: 0;
+    translate: -6px 0;
+  }
+}
+
 .session-trail-step:last-child::before {
   display: none;
 }

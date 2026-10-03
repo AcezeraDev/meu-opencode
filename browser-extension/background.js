@@ -192,6 +192,22 @@ async function detach(tabId) {
   }
 }
 
+const AGENT_WINDOW = "agentWindowId"
+
+/**
+ * Opens a tab in the agent's own window, so the person's window and tabs stay
+ * theirs while the agent works. The window is made on first use, behind the
+ * person's, and remembered across worker restarts; a closed one is made again.
+ */
+async function openInAgentWindow(url) {
+  const saved = (await chrome.storage.session.get(AGENT_WINDOW))[AGENT_WINDOW]
+  const existing = typeof saved === "number" ? await chrome.windows.get(saved).catch(() => undefined) : undefined
+  if (existing) return chrome.tabs.create({ windowId: existing.id, url, active: true })
+  const made = await chrome.windows.create({ url, focused: false, state: "normal", width: 1280, height: 900 })
+  await chrome.storage.session.set({ [AGENT_WINDOW]: made.id })
+  return made.tabs[0]
+}
+
 async function listTargets() {
   const tabs = await chrome.tabs.query({})
   return tabs
@@ -230,14 +246,16 @@ async function handle(message) {
         return reply(id, result ?? {})
       }
       case "createTarget": {
-        const tab = await chrome.tabs.create({ url: message.url || "about:blank", active: true })
+        const url = message.url || "about:blank"
+        const tab = message.ownWindow ? await openInAgentWindow(url) : await chrome.tabs.create({ url, active: true })
         return reply(id, { targetId: String(tab.id) })
       }
       case "activateTarget": {
         const tabId = tabIdOf(message.targetId)
         const tab = await chrome.tabs.get(tabId)
         await chrome.tabs.update(tabId, { active: true })
-        if (typeof tab.windowId === "number") await chrome.windows.update(tab.windowId, { focused: true })
+        if (message.focus !== false && typeof tab.windowId === "number")
+          await chrome.windows.update(tab.windowId, { focused: true })
         return reply(id, {})
       }
       case "closeTarget": {

@@ -7,3 +7,11 @@ export function decodeDataUrl(url: string) {
   if (head.includes(";base64")) return Buffer.from(body, "base64").toString("utf8")
   return decodeURIComponent(body)
 }
+
+export function dataUrlBytes(url: string) {
+  const idx = url.indexOf(",")
+  if (idx === -1) return new Uint8Array()
+  const body = url.slice(idx + 1)
+  if (url.slice(0, idx).includes(";base64")) return new Uint8Array(Buffer.from(body, "base64"))
+  return new TextEncoder().encode(decodeURIComponent(body))
+}

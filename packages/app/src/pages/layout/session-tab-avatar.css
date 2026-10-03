@@ -1,0 +1,60 @@
+@property --tab-progress {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+.session-tab-avatar {
+  position: relative;
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* Work that just finished: the avatar jumps once. */
+.session-tab-avatar[data-landed] [data-slot="project-avatar-surface"] {
+  animation: motion-pop 460ms var(--motion-ease-spring);
+}
+
+/* A permission or question that just arrived: two knocks, like on a door. */
+.session-tab-avatar[data-knock] [data-slot="project-avatar-surface"] {
+  animation: session-tab-knock 520ms var(--motion-ease-out);
+}
+
+@keyframes session-tab-knock {
+  20%,
+  60% {
+    scale: 1.2;
+  }
+  40%,
+  80% {
+    scale: 1;
+  }
+}
+
+/* A session working in the background: an arc around its avatar fills with the
+ * share of the estimated time already spent. It moves only when the estimate
+ * does, once a second, so Lite mode just lets it step. */
+.session-tab-avatar[data-progress] {
+  transition: --tab-progress 1s linear;
+}
+
+.session-tab-avatar-arc {
+  position: absolute;
+  inset: -2px;
+  border-radius: 7px;
+  padding: 1.5px;
+  background: conic-gradient(var(--own-space, var(--space)) calc(var(--tab-progress) * 1turn), transparent 0);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  pointer-events: none;
+}
+
+[data-titlebar-tab] [data-slot="project-avatar-unread-dot"] {
+  animation: motion-dot-in 380ms var(--motion-ease-spring);
+}

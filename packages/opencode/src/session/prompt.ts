@@ -40,7 +40,8 @@ import { ShellID } from "@/tool/shell/id"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { Truncate } from "@/tool/truncate"
 import { Image } from "@/image/image"
-import { decodeDataUrl } from "@/util/data-url"
+import { dataUrlBytes, decodeDataUrl } from "@/util/data-url"
+import { Global } from "@opencode-ai/core/global"
 import { Process } from "@/util/process"
 import { Cause, Effect, Exit, Latch, Layer, Option, Scope, Context, Schema, Types } from "effect"
 import { InstanceState } from "@/effect/instance-state"
@@ -54,6 +55,12 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { eq } from "drizzle-orm"
 import { SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionReminders } from "./reminders"
+import { SessionBudget } from "./budget"
+import { SessionPause } from "./pause"
+import { Ollama } from "@/provider/ollama"
+import { Lessons } from "@/memory/lessons"
+
+const LESSONS_TAG = "<lessons>"
 import { SessionTools } from "./tools"
 import { LLMEvent } from "@opencode-ai/llm"
 
@@ -106,6 +113,27 @@ function isOrphanedInterruptedTool(part: SessionV1.ToolPart) {
   // cleanup() marks abandoned tool_use blocks this way after retries/aborts.
   // They are not pending work and must not trigger an assistant-prefill request.
   return part.state.status === "error" && part.state.metadata?.interrupted === true
+}
+
+/**
+ * Answers given since the last summary; Infinity when the session was never
+ * summarized. When the first answer after a summary already needs compacting,
+ * what does not fit is the fixed prompt, not the conversation, and compacting
+ * again would loop forever (seen with a small Ollama model).
+ */
+function answersSinceSummary(messages: SessionV1.WithParts[]) {
+  const summary = messages.findLast((msg) => msg.info.role === "assistant" && msg.info.summary === true)
+  if (!summary) return Infinity
+  return messages.filter(
+    (msg) =>
+      msg.info.role === "assistant" && msg.info.summary !== true && msg.info.time.created > summary.info.time.created,
+  ).length
+}
+
+function tooSmall(model: { limit: { context: number } }) {
+  return new NamedError.Unknown({
+    message: `O contexto deste modelo (${model.limit.context} tokens) não comporta nem o início da conversa depois de resumida. Escolha um modelo com mais contexto ou aumente o contexto dele (para o Ollama: provider.ollama.options.contextWindow).`,
+  }).toObject()
 }
 
 export interface Interface {
@@ -177,6 +205,60 @@ const layer = Layer.effect(
         next = info.parentID
       }
       return undefined
+    })
+
+    /**
+     * Lessons from earlier work that match the person's request, attached once
+     * to their message as a hidden part. At the end of the history, not in the
+     * system prompt, so the prompt prefix (and the provider's cache) stays the
+     * same from one request to the next. True when something was attached.
+     */
+    const recallLessons = Effect.fn("SessionPrompt.recallLessons")(function* (
+      sessionID: SessionID,
+      messageID: MessageID,
+      messages: SessionV1.WithParts[],
+    ) {
+      if ((yield* config.get()).memory?.enabled === false) return false
+      const message = messages.find((msg) => msg.info.id === messageID)
+      if (!message) return false
+      if (message.parts.some((part) => part.type === "text" && part.text.startsWith(LESSONS_TAG))) return false
+      const asked = message.parts
+        .filter((part): part is SessionV1.TextPart => part.type === "text" && !part.synthetic)
+        .map((part) => part.text)
+        .join("\n")
+      if (!asked.trim()) return false
+      const project = (yield* InstanceState.context).directory
+      const found = yield* Effect.promise(() => Lessons.search(asked, project, 3).catch(() => []))
+      if (!found.length) return false
+      yield* Effect.promise(() => Lessons.used(found.map((match) => match.lesson.id)).catch(() => {}))
+      yield* sessions.updatePart({
+        id: PartID.ascending(),
+        messageID,
+        sessionID,
+        type: "text",
+        text: [
+          LESSONS_TAG,
+          "Lessons saved from earlier work that may apply here (check that they fit this case before following them):",
+          ...found.map((match) => Lessons.format(match.lesson)),
+          "</lessons>",
+        ].join("\n"),
+        synthetic: true,
+      } satisfies SessionV1.TextPart)
+      return true
+    })
+
+    /** Paused here or in any parent session, so pausing the main session also holds its subagents. */
+    const paused = Effect.fn("SessionPrompt.paused")(function* (sessionID: SessionID) {
+      let next: SessionID | undefined = sessionID
+      for (let depth = 0; next && depth < 8; depth++) {
+        const info: Session.Info | undefined = yield* sessions
+          .get(next)
+          .pipe(Effect.catch(() => Effect.succeed(undefined)))
+        if (!info) return false
+        if (SessionPause.isPaused(info.metadata)) return true
+        next = info.parentID
+      }
+      return false
     })
 
     const resolvePromptParts = Effect.fn("SessionPrompt.resolvePromptParts")(function* (template: string) {
@@ -837,6 +919,37 @@ const layer = Layer.effect(
                   { ...part, messageID: info.id, sessionID: input.sessionID },
                 ]
               }
+              // Images and PDFs go to the model as they are. Anything else (Office documents, archives,
+              // audio, video...) is saved to disk so the model can open it with its own tools.
+              if (!part.mime.startsWith("image/") && part.mime !== "application/pdf") {
+                const original =
+                  part.filename && path.isAbsolute(part.filename) && (yield* fsys.isFile(part.filename))
+                    ? part.filename
+                    : undefined
+                const saved =
+                  original ??
+                  path.join(
+                    Global.Path.data,
+                    "attachments",
+                    input.sessionID,
+                    `${info.id}-${path.basename(part.filename ?? "file").replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")}`,
+                  )
+                const written = original
+                  ? true
+                  : Exit.isSuccess(yield* fsys.writeWithDirs(saved, dataUrlBytes(part.url)).pipe(Effect.exit))
+                return [
+                  {
+                    messageID: info.id,
+                    sessionID: input.sessionID,
+                    type: "text",
+                    synthetic: true,
+                    text: written
+                      ? `The user attached the file "${path.basename(saved)}" (${part.mime}). It is saved at ${saved}. Open it with your tools (read, bash, python...) to see its contents.`
+                      : `The user attached the file "${part.filename ?? "file"}" (${part.mime}), but it could not be saved to disk.`,
+                  },
+                  { ...part, messageID: info.id, sessionID: input.sessionID },
+                ]
+              }
               break
             case "file:": {
               yield* Effect.logInfo("file", { mime: part.mime })
@@ -1117,9 +1230,16 @@ const layer = Layer.effect(
         let structured: unknown
         let step = 0
         const session = yield* sessions.get(sessionID).pipe(Effect.orDie)
+        let startedAt = Date.now()
+        /** Set once a limit was reached and the tool-less closing step was given. */
+        let closed: string | undefined
 
         while (true) {
           yield* status.set(sessionID, { type: "busy" })
+          // Paused: the next step waits here. Pause time does not count toward the time limit.
+          const pausedAt = Date.now()
+          yield* SessionPause.hold(paused(sessionID))
+          startedAt += Date.now() - pausedAt
           yield* Effect.logInfo("loop", { "session.id": sessionID, step })
 
           let msgs = yield* MessageV2.filterCompactedEffect(sessionID).pipe(
@@ -1171,6 +1291,9 @@ const layer = Layer.effect(
               history: msgs,
             }).pipe(Effect.ignore, Effect.forkIn(scope))
 
+          if (step === 1 && (yield* recallLessons(sessionID, lastUser.id, msgs)))
+            msgs = yield* MessageV2.filterCompactedEffect(sessionID).pipe(Effect.provideService(Database.Service, database))
+
           const model = yield* getModel(lastUser.model.providerID, lastUser.model.modelID, sessionID)
           const task = tasks.pop()
 
@@ -1196,6 +1319,10 @@ const layer = Layer.effect(
             lastFinished.summary !== true &&
             (yield* compaction.isOverflow({ tokens: lastFinished.tokens, model }))
           ) {
+            if (answersSinceSummary(msgs) <= 1) {
+              yield* events.publish(Session.Event.Error, { sessionID, error: tooSmall(model) })
+              break
+            }
             yield* compaction.create({ sessionID, agent: lastUser.agent, model: lastUser.model, auto: true })
             continue
           }
@@ -1208,8 +1335,26 @@ const layer = Layer.effect(
             yield* events.publish(Session.Event.Error, { sessionID, error: error.toObject() })
             throw error
           }
-          const maxSteps = agent.steps ?? Infinity
-          const isLastStep = step >= maxSteps
+          const limitReached = SessionBudget.exceeded({
+            step,
+            startedAt,
+            now: Date.now(),
+            messages: msgs,
+            limits: SessionBudget.limits(yield* config.get(), agent.steps),
+          })
+          if (limitReached && closed) {
+            // The closing step still asked for tools; stop here instead of looping.
+            yield* events.publish(Session.Event.Error, {
+              sessionID,
+              error: new NamedError.Unknown({ message: `A IA parou: ${closed}.` }).toObject(),
+            })
+            break
+          }
+          const isLastStep = limitReached !== undefined
+          if (limitReached) {
+            closed = limitReached
+            yield* Effect.logInfo("budget reached", { "session.id": sessionID, step, reason: limitReached })
+          }
           msgs = yield* SessionReminders.apply({ messages: msgs, agent, session }).pipe(
             Effect.provideService(RuntimeFlags.Service, flags),
             Effect.provideService(FSUtil.Service, fsys),
@@ -1266,6 +1411,7 @@ const layer = Layer.effect(
               messages: msgs,
               promptOps,
               permissionMode: permissionMode(sessionID),
+              paused: paused(sessionID),
             }).pipe(
               Effect.provideService(Plugin.Service, plugin),
               Effect.provideService(Permission.Service, permission),
@@ -1289,8 +1435,10 @@ const layer = Layer.effect(
 
             yield* plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
 
+            // The lean profile for local models leaves out the skills list (~10k characters here).
+            const lean = Ollama.lean(model.providerID, (yield* config.get()).provider?.[model.providerID]?.options)
             const [skills, env, instructions, mcpInstructions, modelMsgs] = yield* Effect.all([
-              sys.skills(agent),
+              lean ? Effect.succeed(undefined) : sys.skills(agent),
               sys.environment(model),
               instruction.system().pipe(Effect.orDie),
               sys.mcp(agent, session.permission),
@@ -1315,11 +1463,15 @@ const layer = Layer.effect(
               system,
               messages: [
                 ...modelMsgs,
-                ...(isLastStep ? [{ role: "assistant" as const, content: MAX_STEPS_PROMPT }] : []),
+                ...(isLastStep
+                  ? [{ role: "assistant" as const, content: `${MAX_STEPS_PROMPT}\n\nReason: ${limitReached}.` }]
+                  : []),
               ],
               tools,
               model,
-              toolChoice: format.type === "json_schema" ? "required" : undefined,
+              // On the closing step tools stay declared (some providers reject a
+              // history with tool calls and no tools) but cannot be called.
+              toolChoice: isLastStep ? "none" : format.type === "json_schema" ? "required" : undefined,
             })
 
             if (structured !== undefined) {
@@ -1355,6 +1507,11 @@ const layer = Layer.effect(
 
             if (result === "stop") return "break" as const
             if (result === "compact") {
+              // msgs was read before this answer, so 0 here means this is the first one since the summary.
+              if (answersSinceSummary(msgs) === 0) {
+                yield* events.publish(Session.Event.Error, { sessionID, error: tooSmall(model) })
+                return "break" as const
+              }
               yield* compaction.create({
                 sessionID,
                 agent: lastUser.agent,

@@ -23,6 +23,7 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { isRecord } from "@/util/record"
 import { RuntimeFlags } from "@/effect/runtime-flags"
+import { SessionPause } from "./pause"
 
 const MCP_RESOURCE_TOOLS = {
   list: "list_mcp_resources",
@@ -48,7 +49,10 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   promptOps: TaskPromptOps
   /** Reads the session's current permission mode; it can change while the agent works. */
   permissionMode: Effect.Effect<Permission.Mode | undefined>
+  /** Whether the person paused the session; a tool call waits before starting while it is. */
+  paused?: Effect.Effect<boolean>
 }) {
+  const hold = (signal?: AbortSignal) => (input.paused ? SessionPause.hold(input.paused, signal) : Effect.void)
   const tools: Record<string, AITool> = {}
   const run = yield* EffectBridge.make()
   const plugin = yield* Plugin.Service
@@ -110,6 +114,7 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
       execute(args, options) {
         return run.promise(
           Effect.gen(function* () {
+            yield* hold(options.abortSignal)
             const ctx = context(args, options)
             yield* plugin.trigger(
               "tool.execute.before",
@@ -406,6 +411,7 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
     item.execute = (args, opts) =>
       run.promise(
         Effect.gen(function* () {
+          yield* hold(opts.abortSignal)
           const ctx = context(args, opts)
           yield* plugin.trigger(
             "tool.execute.before",

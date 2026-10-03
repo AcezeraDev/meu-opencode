@@ -419,6 +419,36 @@
   transition: transform 160ms var(--ease-out-expo, ease-out);
 }
 
+/* A mark for something that just happened lands with a beat: it grows along
+ * the rail and a ring opens once around it. */
+.scope-overview-marker[data-fresh] {
+  animation: motion-tick-in 360ms var(--motion-ease-spring) both;
+}
+
+.scope-overview-marker[data-fresh]::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  color: var(--scope-ch-user);
+  opacity: 0;
+  pointer-events: none;
+  animation: motion-ring-out 520ms var(--motion-ease-out);
+}
+
+.scope-overview-marker[data-kind="edit"][data-fresh]::after {
+  color: var(--scope-ch-edit);
+}
+
+.scope-overview-marker[data-kind="error"][data-fresh]::after {
+  color: var(--scope-ch-error);
+}
+
 .scope-overview-marker:hover {
   transform: translateY(-50%) scaleX(1.6);
 }
@@ -516,7 +546,42 @@
   stroke-linecap: round;
   transform: rotate(-90deg);
   transform-origin: 50% 50%;
-  transition: stroke-dasharray 500ms var(--ease-out-expo, ease-out);
+  transition:
+    stroke-dasharray var(--motion-move) var(--motion-ease-spring),
+    stroke var(--motion-base) var(--motion-ease-out);
+}
+
+/* The part a compaction freed, fading out as it widens. */
+.scope-ring-ghost {
+  fill: none;
+  stroke: var(--chroma);
+  stroke-width: 2;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  opacity: 0;
+  animation: scope-ring-freed 700ms var(--motion-ease-out);
+}
+
+.scope-ring[data-compacted] svg {
+  animation: scope-ring-squeeze 620ms var(--motion-ease-spring);
+}
+
+@keyframes scope-ring-freed {
+  from {
+    opacity: 0.7;
+    stroke-width: 2;
+  }
+  to {
+    opacity: 0;
+    stroke-width: 5;
+  }
+}
+
+@keyframes scope-ring-squeeze {
+  35% {
+    scale: 0.72;
+  }
 }
 
 .scope-ring[data-level="high"] .scope-ring-fill,
@@ -663,5 +728,64 @@
   .scope-stats-sweep > span,
   .scope-strip-step-text {
     animation: none;
+  }
+}
+
+/* The person's verdict on a finished turn (feeds the training dataset) ------ */
+
+.turn-rating {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 0 2px;
+}
+
+.turn-rating-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--scope-bezel-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--v2-text-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background-color 160ms var(--motion-ease-out, ease-out),
+    color 160ms var(--motion-ease-out, ease-out),
+    border-color 160ms var(--motion-ease-out, ease-out);
+}
+
+.turn-rating-button:hover {
+  background: var(--v2-overlay-simple-overlay-hover);
+  color: var(--v2-text-text-base);
+}
+
+.turn-rating-button:focus-visible {
+  outline: 2px solid var(--space, currentColor);
+  outline-offset: 2px;
+}
+
+.turn-rating-button[data-active] {
+  border-color: var(--space, var(--v2-text-text-base));
+  color: var(--v2-text-text-base);
+  background: color-mix(in srgb, var(--space, transparent) 14%, transparent);
+}
+
+.turn-rating-button[data-rating="rejected"][data-active] {
+  border-color: var(--scope-ch-error);
+  background: color-mix(in srgb, var(--scope-ch-error) 12%, transparent);
+}
+
+/* On a narrow screen the icons are enough; the names stay for screen readers. */
+@media (max-width: 480px) {
+  .turn-rating-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
   }
 }

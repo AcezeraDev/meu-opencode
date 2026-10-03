@@ -97,6 +97,7 @@ import { useComposerCommands } from "@/pages/session/use-composer-commands"
 import { useSessionCommands } from "@/pages/session/use-session-commands"
 import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
 import { Identifier } from "@/utils/id"
+import { launchFlight } from "@/utils/motion"
 import { diffs as list } from "@/utils/diffs"
 import { Persist, persisted } from "@/utils/persist"
 import { Portal } from "solid-js/web"
@@ -1817,6 +1818,14 @@ export default function Page() {
 
       if (input.manual) setFollowup("paused", input.sessionID, undefined)
       setFollowup("failed", input.sessionID, undefined)
+      // The queued prompt rises from its place in the queue into the chat.
+      launchFlight(
+        followupText(item),
+        (
+          document.querySelector(`[data-followup-id="${input.id}"]`) ??
+          document.querySelector('[data-component="session-followup-dock"]')
+        )?.getBoundingClientRect(),
+      )
 
       const ok = await sendFollowupDraft({
         api: sdk().api.session,
@@ -2395,7 +2404,9 @@ export default function Page() {
                   <SessionPanelFrame
                     newLayout
                     raised={!!params.id}
-                    working={!!params.id && busy(params.id) && settings.appearance.chromaGlow() && !settings.appearance.lite()}
+                    working={
+                      !!params.id && busy(params.id) && settings.appearance.chromaGlow() && !settings.appearance.lite()
+                    }
                   >
                     <ErrorBoundary fallback={sessionErrorFallback}>{sessionPanelContent()}</ErrorBoundary>
                   </SessionPanelFrame>

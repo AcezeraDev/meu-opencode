@@ -1,0 +1,7 @@
+# Perguntas para comparar o modelo original com a Ghost treinada.
+# Uma por linha. Troque por coisas que você pede no dia a dia.
+oi, tudo bem? quem é você?
+Crie um componente React de botão com variante primária e secundária, acessível.
+O build do meu projeto Next.js deu "Module not found: Can't resolve '@/components/Header'". O que pode ser?
+Me explique em poucas palavras a diferença entre useEffect e useLayoutEffect.
+Estou cansado hoje, me dá uma força?

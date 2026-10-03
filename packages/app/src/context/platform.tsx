@@ -50,6 +50,12 @@ type PlatformBase = {
   /** Send a system notification */
   notify(title: string, description?: string, onClick?: () => void): Promise<void>
 
+  /** Text typed in the global quick-ask box, to start a conversation with (desktop only) */
+  onQuickAsk?(cb: (text: string) => void): () => void
+
+  /** Shows the agent's state on the tray icon next to the clock (desktop only) */
+  setAgentTray?(state: { status: "idle" | "working" | "done" | "attention"; tooltip: string }): void
+
   /** Open a native attachment picker and read selected files sequentially (desktop only) */
   openAttachmentPickerDialog?(
     opts: OpenAttachmentPickerOptions,

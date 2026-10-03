@@ -5,6 +5,7 @@ import { ImagePreview } from "@opencode-ai/ui/image-preview"
 import { createMemo, createResource, createSignal, For, Show, type Accessor } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { useSync } from "@/context/sync"
+import { BrowserReplay } from "./browser-replay"
 import "./browser-history.css"
 
 /**
@@ -14,6 +15,8 @@ import "./browser-history.css"
  */
 export function BrowserHistory(props: { sessionID: Accessor<string | undefined> }) {
   const sync = useSync()
+  const data = useData()
+  const dialog = useDialog()
   const language = useLanguage()
   const [open, setOpen] = createSignal(false)
 
@@ -31,7 +34,9 @@ export function BrowserHistory(props: { sessionID: Accessor<string | undefined> 
 
   const times = createMemo(() => {
     const spent = (part: ToolPart) =>
-      part.state.status === "completed" || part.state.status === "error" ? part.state.time.end - part.state.time.start : 0
+      part.state.status === "completed" || part.state.status === "error"
+        ? part.state.time.end - part.state.time.start
+        : 0
     const browser = steps().reduce((total, part) => total + spent(part), 0)
     const allTools = tools().reduce((total, part) => total + spent(part), 0)
     // A reply's own time, less the tools it ran, is the model thinking and writing.
@@ -46,23 +51,49 @@ export function BrowserHistory(props: { sessionID: Accessor<string | undefined> 
     steps().filter((part) => part.state.status === "completed" && typeof part.state.metadata?.shot === "string"),
   )
 
+  const replay = () => {
+    const sessionID = props.sessionID()
+    const load = data.browserShot
+    if (!sessionID || !load) return
+    const list = shots().flatMap((part) =>
+      part.state.status === "completed" && typeof part.state.metadata?.shot === "string"
+        ? [{ callID: part.state.metadata.shot, title: stepTitle(part) }]
+        : [],
+    )
+    dialog.show(() => (
+      <BrowserReplay steps={list} load={(callID) => load(sessionID, callID)} close={() => dialog.close()} />
+    ))
+  }
+
   return (
     <Show when={steps().length > 0}>
       <div class="browser-history" data-open={open() ? "" : undefined}>
-        <button type="button" class="browser-history-bar" onClick={() => setOpen((value) => !value)} aria-expanded={open()}>
-          <span class="browser-history-summary">
-            {language.t("browser.history.summary", {
-              steps: steps().length,
-              browser: duration(times().browser),
-              model: duration(times().model),
-            })}
-          </span>
-          <Show when={shots().length > 0}>
-            <span class="browser-history-toggle">
-              {open() ? language.t("browser.history.hide") : language.t("browser.history.show")}
+        <div class="browser-history-row">
+          <button
+            type="button"
+            class="browser-history-bar"
+            onClick={() => setOpen((value) => !value)}
+            aria-expanded={open()}
+          >
+            <span class="browser-history-summary">
+              {language.t("browser.history.summary", {
+                steps: steps().length,
+                browser: duration(times().browser),
+                model: duration(times().model),
+              })}
             </span>
+            <Show when={shots().length > 0}>
+              <span class="browser-history-toggle">
+                {open() ? language.t("browser.history.hide") : language.t("browser.history.show")}
+              </span>
+            </Show>
+          </button>
+          <Show when={shots().length > 1 && data.browserShot}>
+            <button type="button" class="browser-history-play" onClick={replay}>
+              {language.t("browser.history.play")}
+            </button>
           </Show>
-        </button>
+        </div>
         <Show when={open()}>
           <ol class="browser-history-steps">
             <For each={shots()}>
@@ -78,14 +109,7 @@ export function BrowserHistory(props: { sessionID: Accessor<string | undefined> 
 function HistoryStep(props: { part: ToolPart; number: number; sessionID: string }) {
   const data = useData()
   const dialog = useDialog()
-  const title = () => {
-    if (props.part.state.status !== "completed") return props.part.tool
-    const metadata = props.part.state.metadata ?? {}
-    // What was clicked or typed into, by its name; otherwise the page it went to.
-    if (typeof metadata.target === "string" && metadata.target) return `“${metadata.target}”`
-    if (typeof metadata.url === "string" && metadata.url) return place(metadata.url)
-    return props.part.state.title || props.part.tool
-  }
+  const title = () => stepTitle(props.part)
   const shot = () =>
     props.part.state.status === "completed" && typeof props.part.state.metadata?.shot === "string"
       ? props.part.state.metadata.shot
@@ -114,6 +138,15 @@ function HistoryStep(props: { part: ToolPart; number: number; sessionID: string 
       </button>
     </li>
   )
+}
+
+/** What a step did: what was clicked or typed into, by its name; otherwise the page it went to. */
+function stepTitle(part: ToolPart) {
+  if (part.state.status !== "completed") return part.tool
+  const metadata = part.state.metadata ?? {}
+  if (typeof metadata.target === "string" && metadata.target) return `“${metadata.target}”`
+  if (typeof metadata.url === "string" && metadata.url) return place(metadata.url)
+  return part.state.title || part.tool
 }
 
 /** A page by its path, which says more than the site it is on. */

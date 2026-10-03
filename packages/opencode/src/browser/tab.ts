@@ -133,8 +133,29 @@ export interface TabHooks {
   presenting(): boolean
   /** Whether the live view in the app is open, as opposed to only the browser's own window being on screen. */
   watched?(): boolean
+  /** The color the cursor wears, as "r, g, b"; the overlay's own cyan without it. */
+  accent?(): string
+  /** Whether the cursor makes sounds as it acts. */
+  sounds?(): boolean
+  /** Where the agent's thoughts show in the page: beside the cursor, on a card in the corner, or nowhere. */
+  thoughts?(): Thoughts
   activity(activity: Activity): void
   changed(): void
+}
+
+export type Thoughts = "cursor" | "card" | "off"
+
+/**
+ * One thought shown in the page. `short` fits on the cursor's tag; the card
+ * shows `title` (or `short`) with `body` and `status` under it. `hold` keeps
+ * it up while work goes on off the page.
+ */
+export interface Thought {
+  short: string
+  title?: string
+  body?: string
+  status?: string
+  hold?: boolean
 }
 
 /** Navigation counters at one moment, to tell what an action set off since. */
@@ -200,7 +221,7 @@ const NAVIGATION_START = 1500
 const ORPHAN_GRACE = 2000
 /** Request types that end in a re-render; images, fonts and beacons hold nothing up. */
 const SETTLE_TYPES = new Set(["XHR", "Fetch", "Document"])
-/** How recently the agent must have acted for a new document to show its cursor again. */
+/** How recently the agent must have acted for a new document to greet its cursor with a sound. */
 const CURSOR_CARRY = 3000
 /**
  * How far the element may have moved between aiming and pressing before the
@@ -531,7 +552,11 @@ async function readUploads(files: string[]) {
     files.map(async (file) => {
       const bytes = await fs.readFile(file)
       if (bytes.byteLength > MAX_UPLOAD) throw new Error(`${file} is larger than ${MAX_UPLOAD / 1024 / 1024} MB.`)
-      return { name: path.basename(file), type: MIME[path.extname(file).toLowerCase()] ?? "", data: bytes.toString("base64") }
+      return {
+        name: path.basename(file),
+        type: MIME[path.extname(file).toLowerCase()] ?? "",
+        data: bytes.toString("base64"),
+      }
     }),
   )
 }
@@ -1198,11 +1223,12 @@ export class Tab {
     })
     this.connection.on("Page.domContentEventFired", () => {
       this.counts.loaded++
-      // A new document starts without the overlay. If the agent brought the
-      // page here, put its cursor back where it left it so the view does not
-      // lose track of it; a page the person opened themselves stays clear.
-      if (this.presenting && Date.now() - this.acted < CURSOR_CARRY) {
-        void this.cursor("place", `${this.pointer.x}, ${this.pointer.y}`)
+      // A new document starts without the overlay. Once the agent has acted
+      // on this tab its cursor is put back where it left it, so it is always
+      // in view; it only chimes when the agent brought the page here just now.
+      if (this.presenting && this.acted > 0) {
+        const loud = Date.now() - this.acted < CURSOR_CARRY
+        void this.cursor("arrive", `${this.pointer.x}, ${this.pointer.y}, ${loud}`)
       }
     })
     this.connection.on("Page.loadEventFired", () => {
@@ -1264,6 +1290,13 @@ export class Tab {
   announce(kind: ActivityKind, target?: string) {
     this.acted = Date.now()
     this.hooks.activity({ kind, target: target || undefined, tab: this.id, at: this.acted })
+    void this.think({ short: saying(kind, target) })
+  }
+
+  /** Shows what the agent is doing in the page, where the person chose. Never fails. */
+  think(thought: Thought) {
+    if (!this.presenting || this.hooks.thoughts?.() === "off") return Promise.resolve()
+    return this.cursor("say", JSON.stringify(thought))
   }
 
   /**
@@ -1393,7 +1426,10 @@ export class Tab {
    */
   private cursorCall(method: string, args = "") {
     const { x, y } = this.pointer
-    return `(() => { try { return (${BrowserCursor.SCRIPT})(${x}, ${y}).${method}(${args}) || 0 } catch (error) { return 0 } })()`
+    const accent = JSON.stringify(this.hooks.accent?.() ?? "")
+    const sounds = this.hooks.sounds?.() === true
+    const thoughts = JSON.stringify(this.hooks.thoughts?.() ?? "cursor")
+    return `(() => { try { return (${BrowserCursor.SCRIPT})(${x}, ${y}, ${accent}, ${sounds}, ${thoughts}).${method}(${args}) || 0 } catch (error) { return 0 } })()`
   }
 
   /** Drives the in-page cursor overlay on its own. Never fails. */
@@ -1716,7 +1752,9 @@ export class Tab {
   ): Promise<Target> {
     const glide = options.glide ?? true
     const cursor =
-      glide && this.presenting ? this.cursorCall("glide", "f.x + f.ox, f.y + f.oy, f.x, f.y, f.width, f.height") : "0"
+      glide && this.presenting
+        ? this.cursorCall("glide", "f.x + f.ox, f.y + f.oy, f.x, f.y, f.width, f.height, f.name")
+        : "0"
     // A wait before measuring is spent inside the page rather than here, so it
     // overlaps the round trip instead of following it. Through the extension,
     // where every command is a trip out to the browser and back, that is the
@@ -1791,7 +1829,7 @@ export class Tab {
     // coordinates either way, and precision never waits on a picture.
     if (drift > CURSOR_DRIFT && this.presenting) {
       const box = fresh.rect
-      void this.cursor("glide", `${x}, ${y}, ${box.x}, ${box.y}, ${box.width}, ${box.height}`)
+      void this.cursor("follow", `${x}, ${y}, ${box.x}, ${box.y}, ${box.width}, ${box.height}`)
     }
     await this.connection.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, button: "none" })
     if (BrowserTrace.enabled) {
@@ -2070,7 +2108,8 @@ export class Tab {
     // file on disk (unless they gave it access to file URLs), so the files are
     // read here and handed to the input from inside the page instead, the way
     // a page's own drag and drop would.
-    if (!direct) await this.evaluate(`(${GIVE_FILES})(${this.locate(selector)}, ${JSON.stringify(await readUploads(files))})`)
+    if (!direct)
+      await this.evaluate(`(${GIVE_FILES})(${this.locate(selector)}, ${JSON.stringify(await readUploads(files))})`)
     this.touched()
   }
 
@@ -2202,6 +2241,7 @@ export class Tab {
       return { typed: true }
     }
 
+    if (this.presenting) void this.cursor("typing", `${Array.from(text).length}, 220`)
     await this.insert(text)
     await this.notifyInput(selector)
     // A controlled input that only trusts key events throws the insert away.
@@ -2298,9 +2338,11 @@ export class Tab {
   private async typeText(text: string) {
     const presenting = this.presenting
     const chars = Array.from(text)
+    const parts = presenting ? chunks(chars) : [chars]
+    if (presenting) void this.cursor("typing", `${chars.length}, ${parts.length * TYPE_TICK}`)
     // Keys are sent without waiting on each reply; they are delivered in order.
     const sent: Promise<unknown>[] = []
-    for (const chunk of presenting ? chunks(chars) : [chars]) {
+    for (const chunk of parts) {
       for (const char of chunk) {
         const key = describeChar(char)
         const common = {
@@ -2329,7 +2371,7 @@ export class Tab {
   async press(name: string, selector?: string) {
     this.announce("press", name)
     if (selector) await this.focus(selector)
-    else if (this.presenting) void this.cursor("busy")
+    if (this.presenting) void this.cursor("key")
     await this.key(name)
   }
 
@@ -2410,6 +2452,7 @@ export class Tab {
     if (this.presenting) {
       this.pointer = where.point
       void this.cursor("move", `${where.point.x}, ${where.point.y}, ${CURSOR_CATCHUP}`)
+      void this.cursor("scroll", `${(y || x) < 0 ? -1 : 1}`)
     }
 
     const before = await this.scrollState(selector, where.point)
@@ -2610,6 +2653,8 @@ export class Tab {
       return Buffer.from(result.data, "base64")
     } finally {
       await this.cursor("hide", "0")
+      // Only once the picture is taken, so the flash is never in it.
+      if (this.presenting) void this.cursor("shot")
     }
   }
 
@@ -2789,6 +2834,29 @@ export class Tab {
    */
   async clearResize() {
     await this.connection.send("Emulation.clearDeviceMetricsOverride").catch(() => {})
+    await this.connection.send("Emulation.setTouchEmulationEnabled", { enabled: false }).catch(() => {})
+  }
+
+  /**
+   * Lays the page out at a device's size (desktop, tablet, phone) for a site
+   * check, until `clearResize`. The exception to the rule above: only a site
+   * check uses it, for the few seconds it looks at each size, and it always
+   * clears it afterwards, so the window goes back to its own size.
+   */
+  async emulate(size: { width: number; height: number; mobile: boolean }) {
+    await this.connection.send("Emulation.setDeviceMetricsOverride", {
+      width: size.width,
+      height: size.height,
+      deviceScaleFactor: 1,
+      mobile: size.mobile,
+    })
+    await this.connection.send("Emulation.setTouchEmulationEnabled", { enabled: size.mobile }).catch(() => {})
+  }
+
+  /** A JPEG of the viewport for a site check, without clip or scale (see `thumbnail`). */
+  async capture(quality = 75) {
+    const result = await this.connection.send<ScreenshotResult>("Page.captureScreenshot", { format: "jpeg", quality })
+    return Buffer.from(result.data, "base64")
   }
 
   /**
@@ -2820,6 +2888,44 @@ export class Tab {
     this.stopCast = undefined
     this.connection.close()
   }
+}
+
+/** What the cursor says for each kind of action: with no target, and before one. */
+const SAYINGS: Record<ActivityKind, readonly [string, string]> = {
+  navigate: ["Abrindo a página", "Abrindo "],
+  reload: ["Recarregando a página", ""],
+  back: ["Voltando", "Voltando para "],
+  forward: ["Avançando", "Avançando para "],
+  click: ["Clicando", "Clicando em "],
+  double_click: ["Clicando duas vezes", "Clicando duas vezes em "],
+  right_click: ["Abrindo o menu", "Abrindo o menu de "],
+  hover: ["Apontando", "Apontando para "],
+  fill: ["Preenchendo o campo", "Preenchendo "],
+  type: ["Digitando", "Digitando em "],
+  press: ["Apertando uma tecla", "Apertando "],
+  select: ["Escolhendo uma opção", "Escolhendo em "],
+  check: ["Marcando", "Marcando "],
+  uncheck: ["Desmarcando", "Desmarcando "],
+  scroll: ["Rolando a página", ""],
+  drag: ["Arrastando", "Arrastando "],
+  upload: ["Anexando um arquivo", "Anexando um arquivo em "],
+  wait: ["Esperando a página", "Esperando "],
+  read: ["Lendo a página", ""],
+  screenshot: ["Olhando a página", ""],
+  inspect: ["Inspecionando a página", ""],
+  handoff: ["Abrindo no seu navegador", ""],
+}
+/** Longer names are cut, so the tag stays a glance. */
+const SAYING_NAME = 34
+
+/** The words for an action, naming its target: an element in quotes, a page by its site. */
+function saying(kind: ActivityKind, target?: string) {
+  const name = target?.replace(/\s+/g, " ").trim()
+  const [bare, before] = SAYINGS[kind]
+  if (!name || !before) return bare
+  if (/^https?:\/\//.test(name) && URL.canParse(name)) return before + new URL(name).host.replace(/^www\./, "")
+  const shown = name.length > SAYING_NAME ? name.slice(0, SAYING_NAME - 1) + "…" : name
+  return `${before}“${shown}”`
 }
 
 export * as BrowserTab from "./tab"

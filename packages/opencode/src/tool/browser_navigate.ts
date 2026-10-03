@@ -72,6 +72,10 @@ interface Metadata {
 
 const NAVIGATIONS = new Set(["goto", "new_tab", "back", "forward", "reload"])
 
+/** Reasons that are the person's to do even where the page does not show it plainly. */
+const PERSON_ONLY =
+  /\b(login|log in|sign in|entrar|acessar sua conta|senha|password|captcha|recaptcha|n[ãa]o sou um rob[ôo]|pagamento|payment|cart[ãa]o|card|c[óo]digo de verifica|verification code|2fa|autentica)/i
+
 function normalize(url: string) {
   if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)) return url
   return `https://${url}`
@@ -156,12 +160,18 @@ export const BrowserNavigateTool = Tool.define(
             const active = yield* browser.current()
             const opened = yield* Effect.promise(() => BrowserPage.openPdf(url, active))
             const shown =
-              "failure" in opened ? undefined : yield* BrowserPage.showPdf(browser, opened, action === "new_tab" ? "new" : "same")
+              "failure" in opened
+                ? undefined
+                : yield* BrowserPage.showPdf(browser, opened, action === "new_tab" ? "new" : "same")
             const output =
               "failure" in opened
                 ? opened.failure
                 : (shown ??
-                  [opened.text, "", `Saved to ${opened.file}. (Read directly; the browser tab was left as it was.)`].join("\n"))
+                  [
+                    opened.text,
+                    "",
+                    `Saved to ${opened.file}. (Read directly; the browser tab was left as it was.)`,
+                  ].join("\n"))
             return { output, title: `PDF ${url}`, metadata: { action, url, page: "pdf" } }
           }
 
@@ -178,6 +188,18 @@ export const BrowserNavigateTool = Tool.define(
           // stops and waits for them, and reads the page again when they are done.
           if (action === "ask_user") {
             const reason = params.reason?.trim() || "concluir uma etapa na página aberta"
+            // Only a login, a captcha or a payment stops the agent for the person.
+            // A model once asked them to copy a question it could have read itself.
+            const current = yield* browser.tab()
+            const needed = yield* Effect.promise(() => BrowserPage.personNeeded(current))
+            if (!needed && !PERSON_ONLY.test(reason)) {
+              return {
+                output:
+                  "Not asked: nothing on this page needs the user (no login, captcha or payment is showing). Do it yourself: read the page with browser_snapshot or browser_screenshot, scroll or open the frame the content is in, and carry on without the user.",
+                title: "Not needed",
+                metadata: { action },
+              }
+            }
             const answers = yield* question
               .ask({
                 sessionID: ctx.sessionID,
@@ -295,9 +317,7 @@ export const BrowserNavigateTool = Tool.define(
           // is never retried like this, since it could land twice.
           const moved = yield* go.pipe(
             Effect.catchCause((cause) =>
-              (action === "goto" || action === "reload") && BrowserPage.dropped(cause)
-                ? go
-                : Effect.failCause(cause),
+              (action === "goto" || action === "reload") && BrowserPage.dropped(cause) ? go : Effect.failCause(cause),
             ),
           )
           const tab = moved.tab
@@ -307,7 +327,12 @@ export const BrowserNavigateTool = Tool.define(
           // An address that did not look like one can still be a file to download.
           if (action === "goto" || action === "new_tab") {
             const downloaded = yield* BrowserPage.readDownload(browser, tab, moved.started)
-            if (downloaded) return { output: downloaded.output, title: downloaded.url, metadata: { action, url: downloaded.url, page: "pdf" } }
+            if (downloaded)
+              return {
+                output: downloaded.output,
+                title: downloaded.url,
+                metadata: { action, url: downloaded.url, page: "pdf" },
+              }
           }
 
           // An address that did not look like one can still serve a PDF.
@@ -344,7 +369,9 @@ export const BrowserNavigateTool = Tool.define(
             NAVIGATIONS.has(action) && (yield* browser.rejectsCookies())
               ? yield* Effect.promise(() => BrowserPage.refuseCookies(tab))
               : undefined
-          const person = NAVIGATIONS.has(action) ? yield* Effect.promise(() => BrowserPage.personNeeded(tab)) : undefined
+          const person = NAVIGATIONS.has(action)
+            ? yield* Effect.promise(() => BrowserPage.personNeeded(tab))
+            : undefined
 
           if (params.snapshot === false) {
             const [current, title] = yield* Effect.promise(() => Promise.all([tab.url(), tab.title()]))
@@ -377,7 +404,9 @@ export const BrowserNavigateTool = Tool.define(
             BrowserSite.aside(ctx.sessionID, { steps: [step], from: result.url, to: result.url }),
           )
           return {
-            output: [...(cookies ? [cookies, ""] : []), arrived.output, ...(person ? ["", person] : []), ...extra].join("\n"),
+            output: [...(cookies ? [cookies, ""] : []), arrived.output, ...(person ? ["", person] : []), ...extra].join(
+              "\n",
+            ),
             title: result.title || result.url,
             metadata: {
               action,

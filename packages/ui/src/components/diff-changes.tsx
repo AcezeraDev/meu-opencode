@@ -1,4 +1,4 @@
-import { createMemo, For, Match, Show, Switch } from "solid-js"
+import { createMemo, createSignal, For, Match, onCleanup, onMount, Show, Switch } from "solid-js"
 
 export function DiffChanges(props: {
   class?: string
@@ -18,6 +18,29 @@ export function DiffChanges(props: {
       : props.changes.deletions,
   )
   const total = createMemo(() => (additions() ?? 0) + (deletions() ?? 0))
+
+  // An edit that lands in the live answer counts up to its size, so the size of
+  // the change registers before it is read. History shows the final numbers.
+  const [counted, setCounted] = createSignal<number>()
+  let root: HTMLDivElement | undefined
+  onMount(() => {
+    if (variant() !== "default" || !root?.closest("[data-scope-live]")) return
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+    const duration = document.documentElement.hasAttribute("data-lite") ? 300 : 620
+    const start = performance.now()
+    const step = (now: number) => {
+      const progress = Math.min(1, (now - start) / duration)
+      setCounted(progress < 1 ? 1 - (1 - progress) ** 3 : undefined)
+      if (progress < 1) frame = requestAnimationFrame(step)
+    }
+    setCounted(0)
+    let frame = requestAnimationFrame(step)
+    onCleanup(() => cancelAnimationFrame(frame))
+  })
+  const shown = (value: number | undefined) => {
+    const share = counted()
+    return share === undefined ? value : Math.round((value ?? 0) * share)
+  }
 
   const blockCounts = createMemo(() => {
     const TOTAL_BLOCKS = 5
@@ -93,7 +116,7 @@ export function DiffChanges(props: {
 
   return (
     <Show when={variant() === "default" ? total() > 0 : true}>
-      <div data-component="diff-changes" data-variant={variant()} classList={{ [props.class ?? ""]: true }}>
+      <div ref={root} data-component="diff-changes" data-variant={variant()} classList={{ [props.class ?? ""]: true }}>
         <Switch>
           <Match when={variant() === "bars"}>
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 14" fill="none">
@@ -105,8 +128,8 @@ export function DiffChanges(props: {
             </svg>
           </Match>
           <Match when={variant() === "default"}>
-            <span data-slot="diff-changes-additions">{`+${additions()}`}</span>
-            <span data-slot="diff-changes-deletions">{`-${deletions()}`}</span>
+            <span data-slot="diff-changes-additions">{`+${shown(additions())}`}</span>
+            <span data-slot="diff-changes-deletions">{`-${shown(deletions())}`}</span>
           </Match>
         </Switch>
       </div>

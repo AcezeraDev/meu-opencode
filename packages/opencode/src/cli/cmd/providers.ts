@@ -6,6 +6,7 @@ import { UI } from "../ui"
 import * as Prompt from "../effect/prompt"
 import { ModelsDev } from "@opencode-ai/core/models-dev"
 import { Roteia } from "@/provider/roteia"
+import { Ollama } from "@/provider/ollama"
 
 import { map, pipe, sortBy, values } from "remeda"
 import path from "path"
@@ -362,7 +363,7 @@ export const ProvidersLoginCommand = effectCmd({
     const disabled = new Set(config.disabled_providers ?? [])
     const enabled = config.enabled_providers ? new Set(config.enabled_providers) : undefined
 
-    const allProviders = Roteia.withCatalog(yield* modelsDev.get())
+    const allProviders = Ollama.withCatalog(Roteia.withCatalog(yield* modelsDev.get()))
     const providers: Record<string, (typeof allProviders)[string]> = {}
     for (const [key, value] of Object.entries(allProviders)) {
       if ((enabled ? enabled.has(key) : true) && !disabled.has(key)) providers[key] = value

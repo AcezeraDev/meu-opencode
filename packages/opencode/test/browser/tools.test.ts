@@ -71,7 +71,7 @@ const server = Bun.serve({
 afterAll(() => server.stop(true))
 
 const it = testEffect(
-  LayerNode.compile(LayerNode.group([Browser.node, Truncate.node, Agent.node, Question.node]), [
+  LayerNode.compile(LayerNode.group([Browser.node, Truncate.node, Agent.node, Question.node, Config.node]), [
     [
       Config.node,
       TestConfig.layer({
@@ -131,6 +131,26 @@ describeBrowser("browser tools", () => {
 
         const browser = yield* Browser.Service
         yield* browser.shutdown()
+      }),
+    60_000,
+  )
+
+  it.instance(
+    "the person is not stopped for something the agent can read on the page itself",
+    () =>
+      Effect.gen(function* () {
+        const navigate = yield* (yield* BrowserNavigateTool).init()
+        yield* navigate.execute({ url: `http://127.0.0.1:${server.port}/attempt` }, ctx)
+        // What a model asked in a real lesson, where the question was on the page all along.
+        const asked = yield* navigate.execute(
+          {
+            action: "ask_user",
+            reason: "A questão do H5P está truncada na tela. Por favor, copie e cole aqui o texto completo da pergunta",
+          },
+          ctx,
+        )
+        expect(asked.output).toContain("Not asked")
+        yield* (yield* Browser.Service).shutdown()
       }),
     60_000,
   )

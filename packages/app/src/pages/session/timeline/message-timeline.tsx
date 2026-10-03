@@ -79,6 +79,8 @@ import { filterVirtualIndexes } from "./virtual-items"
 import { OverviewBar, type OverviewMarker } from "../scope/overview-bar"
 import { toolTarget } from "../scope/turn-meter"
 import { TurnStats } from "../scope/turn-stats"
+import { TurnRating } from "../scope/turn-rating"
+import { stamp, writingFront } from "@/utils/motion"
 
 const emptyMessages: MessageType[] = []
 const emptyParts: PartType[] = []
@@ -282,6 +284,10 @@ export function MessageTimeline(props: {
   const platform = usePlatform()
 
   const [listRoot, setListRoot] = createSignal<HTMLDivElement>()
+  createEffect(() => {
+    const root = listRoot()
+    if (root) onCleanup(writingFront(root))
+  })
   const sessionID = createMemo(() => params.id)
   const sessionStatus = createMemo(() => {
     const id = sessionID()
@@ -1205,7 +1211,12 @@ export function MessageTimeline(props: {
         return (
           <TimelineRowFrame row={turnDividerRow}>
             <div data-slot="session-turn-message-container" class="w-full px-4 md:px-5">
-              <div data-slot="session-turn-compaction">
+              <div
+                data-slot="session-turn-compaction"
+                ref={(el) => {
+                  if (turnDividerRow().label !== "compaction") stamp(el)
+                }}
+              >
                 <MessageDivider
                   label={language.t(
                     turnDividerRow().label === "compaction" ? "ui.messagePart.compaction" : "ui.message.interrupted",
@@ -1277,6 +1288,18 @@ export function MessageTimeline(props: {
                 parts={getMsgParts}
                 fresh={freshTurn(turnStatsRow().userMessageID)}
               />
+              <Show when={sessionID()}>
+                {(id) => (
+                  <TurnRating
+                    sessionID={id()}
+                    userMessageID={turnStatsRow().userMessageID}
+                    metadata={info()?.metadata}
+                    save={(sessionID, metadata) =>
+                      sdk().client.session.update({ sessionID, directory: sdk().directory, metadata })
+                    }
+                  />
+                )}
+              </Show>
             </div>
           </TimelineRowFrame>
         )

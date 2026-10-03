@@ -9,10 +9,11 @@ import { Config } from "@/config/config"
 import { InstanceState } from "@/effect/instance-state"
 import { CDPConnection } from "./cdp"
 import { BrowserInstall, type LaunchTarget } from "./install"
+import { BrowserAccent } from "./accent"
 import { BrowserBridge, type Bridge, type BridgeTarget, type TargetEvent } from "./bridge"
 import { BrowserPdf } from "./pdf"
 import { asRecord, asText, type CreateTargetResult, type TargetInfo, type VersionInfo } from "./protocol"
-import { Tab, type Activity, type Frame, type TabHooks, type UserInput } from "./tab"
+import { Tab, type Activity, type Frame, type TabHooks, type Thoughts, type UserInput } from "./tab"
 
 export type { Activity, ConsoleEntry, Frame, NetworkEntry, UserInput } from "./tab"
 
@@ -137,12 +138,20 @@ interface State {
   block: boolean
   /** Whether cookie banners are answered by refusing non-essential cookies. */
   cookies: boolean
+  /** Extension mode: the agent keeps to a browser window of its own and leaves the person's tabs alone. */
+  ownWindow: boolean
   timeout: number
   viewport: { width: number; height: number }
   profileDir: string
   options: { channel?: string; executablePath?: string; external?: string; mode?: "process" | "extension" }
   /** "process" launches our own browser; "extension" drives the user's via the bridge. */
   mode: "process" | "extension"
+  /** The project's space as "r, g, b", which the agent's cursor wears in the page. */
+  accent: string
+  /** Whether the agent's cursor makes sounds as it clicks, types, scrolls and takes pictures. */
+  sounds: boolean
+  /** Where the agent's thoughts show in the page. */
+  thoughts: Thoughts
   bridge?: Bridge
   /** Unsubscribes from the bridge's tab and connection events. */
   unbridge?: () => void
@@ -371,7 +380,7 @@ const layer = Layer.effect(
     const bridgeService = yield* BrowserBridge.Service
 
     const state = yield* InstanceState.make(
-      Effect.fn("Browser.state")(function* () {
+      Effect.fn("Browser.state")(function* (ctx) {
         const cfg = yield* config.get()
         const options = cfg.browser ?? {}
         const bridge = yield* bridgeService.get()
@@ -384,6 +393,7 @@ const layer = Layer.effect(
           headless: mode === "extension" ? false : (options.headless ?? true),
           block: options.block ?? true,
           cookies: options.rejectCookies ?? true,
+          ownWindow: mode === "extension" && options.ownWindow === true,
           timeout: options.timeout ?? DEFAULT_TIMEOUT,
           viewport: {
             width: options.viewport?.width ?? DEFAULT_VIEWPORT.width,
@@ -393,6 +403,9 @@ const layer = Layer.effect(
           options,
           external: BrowserInstall.external(options),
           mode,
+          accent: BrowserAccent.of(ctx.project),
+          sounds: options.sounds !== false,
+          thoughts: options.thoughts ?? "cursor",
           bridge,
           targets: [],
           handed: new Map(),
@@ -510,6 +523,9 @@ const layer = Layer.effect(
         // A visible window is an audience too.
         presenting: () => s.listeners.size > 0 || !s.headless,
         watched: () => s.listeners.size > 0,
+        accent: () => s.accent,
+        sounds: () => s.sounds,
+        thoughts: () => s.thoughts,
         activity: (activity) => emit(s, { type: "activity", activity }),
         changed: () => announceStatus(s),
       }
@@ -565,7 +581,9 @@ const layer = Layer.effect(
       }, castSize(s))
       // Chromium only sends frames on change, so a still page needs one sent by
       // hand; a tab that is not being painted never gives one, so not for long.
-      const first = await Promise.race([next.frame(), sleep(FIRST_FRAME_WAIT).then(() => undefined)]).catch(() => undefined)
+      const first = await Promise.race([next.frame(), sleep(FIRST_FRAME_WAIT).then(() => undefined)]).catch(
+        () => undefined,
+      )
       if (first && s.cast === next.id) emit(s, { type: "frame", frame: first })
     }
 
@@ -853,7 +871,7 @@ const layer = Layer.effect(
     async function newTab(s: State, url = "about:blank") {
       const targetId =
         s.mode === "extension"
-          ? await s.bridge!.createTarget(url)
+          ? await s.bridge!.createTarget(url, s.ownWindow)
           : (await s.connection!.send<CreateTargetResult>("Target.createTarget", { url })).targetId
       const tab = await adopt(s, targetId)
       s.active = tab.id
@@ -907,6 +925,11 @@ const layer = Layer.effect(
         if (existing) {
           s.active = existing.id
           changed(s)
+        } else if (s.mode === "extension" && s.ownWindow) {
+          // The agent has a window of its own: it opens the page the person is
+          // on there, and their tab stays theirs to keep using.
+          const target = s.targets.find((t) => t.active)
+          yield* Effect.promise(() => newTab(s, target && /^https?:/.test(target.url) ? target.url : "about:blank"))
         } else if (s.mode === "extension") {
           // Reuse the tab the person is on rather than opening a blank one.
           // One the debugger may not attach to (a PDF, a browser page) must
@@ -926,6 +949,10 @@ const layer = Layer.effect(
 
     const tab: Interface["tab"] = Effect.fn("Browser.tab")(function* () {
       const s = yield* ensure()
+      // The sound switch in the settings applies from the next action on, without a restart.
+      const browser = (yield* config.get()).browser
+      s.sounds = browser?.sounds !== false
+      s.thoughts = browser?.thoughts ?? "cursor"
       return s.tabs.get(s.active!)!
     })
 
@@ -964,7 +991,9 @@ const layer = Layer.effect(
       if (!found) return yield* Effect.die(new Error(`No open tab with id ${id}`))
       s.active = found.id
       yield* Effect.promise(() =>
-        s.mode === "extension" ? s.bridge!.activateTarget(found!.targetId).catch(() => {}) : found!.bringToFront(),
+        s.mode === "extension"
+          ? s.bridge!.activateTarget(found!.targetId, !s.ownWindow).catch(() => {})
+          : found!.bringToFront(),
       )
       changed(s)
       return found

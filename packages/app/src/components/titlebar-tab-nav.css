@@ -170,3 +170,18 @@
     transform: scaleX(0);
   }
 }
+
+/* A swatch of one session tone in the tab's menu; the current one is ringed. */
+.session-tone-dot {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--own-space);
+}
+
+.session-tone-dot[data-current] {
+  box-shadow:
+    0 0 0 2px var(--v2-background-bg-layer-01),
+    0 0 0 3.5px var(--own-space);
+}

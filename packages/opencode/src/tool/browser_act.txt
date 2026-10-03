@@ -40,6 +40,9 @@ each keystroke seen, such as for a search box that suggests as you type.
 
 Set `submit` to press Enter after filling or typing, which submits most forms.
 
+`text` can be `@texto:<id>`, a text written by write_text: the saved text is
+typed exactly as written. Use it for essays, reports and other long answers.
+
 Refs are stable: an element keeps its ref for as long as it is on the page,
 including across a re-render that rebuilds it, so refs you already have keep
 working after acting and there is no need to re-read the page for fresh ones.

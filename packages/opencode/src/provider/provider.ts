@@ -32,6 +32,8 @@ import { ModelStatus } from "./model-status"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { ProviderError } from "./error"
 import { Roteia } from "./roteia"
+import { Ollama } from "./ollama"
+import { ModelRoles } from "./roles"
 
 const OPENAI_HEADER_TIMEOUT_DEFAULT = 300_000
 
@@ -896,6 +898,22 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
         discoverModels: () => Roteia.discover(apiKey),
       }
     }),
+    // Installed local models, listed from Ollama itself; on when Ollama answers.
+    ollama: Effect.fnUntraced(function* (input: Info) {
+      const env = yield* dep.env()
+      const cfg = yield* dep.config()
+      const settings = Ollama.settings(cfg.provider?.[input.id]?.options, env)
+      const version = yield* Effect.promise(() => Ollama.probe(settings.host))
+      return {
+        autoload: version !== undefined,
+        options: {
+          baseURL: `${settings.host}/v1`,
+          apiKey: "ollama",
+          fetch: Ollama.createFetch(settings),
+        },
+        discoverModels: () => Ollama.discover(settings),
+      }
+    }),
     cerebras: () =>
       Effect.succeed({
         autoload: false,
@@ -1420,7 +1438,7 @@ const layer = Layer.effect(
       Effect.gen(function* () {
         const bridge = yield* EffectBridge.make()
         const cfg = yield* config.get()
-        const modelsDev = Roteia.withCatalog(yield* modelsDevSvc.get())
+        const modelsDev = Ollama.withCatalog(Roteia.withCatalog(yield* modelsDevSvc.get()))
         const catalog = mapValues(modelsDev, fromModelsDevProvider)
         const database = mapValues(catalog, toPublicInfo)
 
@@ -1959,8 +1977,9 @@ const layer = Layer.effect(
     const getSmallModel = Effect.fn("Provider.getSmallModel")(function* (providerID: ProviderV2.ID) {
       const cfg = yield* config.get()
 
-      if (cfg.small_model) {
-        const parsed = parseModel(cfg.small_model)
+      const small = ModelRoles.pick(cfg, "fast")
+      if (small) {
+        const parsed = parseModel(small)
         return yield* getModel(parsed.providerID, parsed.modelID).pipe(
           Effect.catchTag("ProviderModelNotFoundError", () => Effect.succeed(undefined)),
         )
@@ -2027,7 +2046,8 @@ const layer = Layer.effect(
 
     const defaultModel = Effect.fn("Provider.defaultModel")(function* () {
       const cfg = yield* config.get()
-      if (cfg.model) return parseModel(cfg.model)
+      const chosen = ModelRoles.pick(cfg, "coding")
+      if (chosen) return parseModel(chosen)
 
       const s = yield* InstanceState.get(state)
       const recent = yield* fs.readJson(path.join(Global.Path.state, "model.json")).pipe(
@@ -2050,7 +2070,10 @@ const layer = Layer.effect(
       }
 
       const configured = Object.keys(cfg.provider ?? {})
-      const provider = Object.values(s.providers).find((p) => configured.length === 0 || configured.includes(p.id))
+      const candidates = Object.values(s.providers).filter((p) => configured.length === 0 || configured.includes(p.id))
+      // Ollama connects on its own whenever it is running; a local model on a
+      // laptop CPU is only the default when it is all there is, or chosen.
+      const provider = candidates.find((p) => p.id !== Ollama.ID) ?? candidates[0]
       if (!provider) return yield* new NoProvidersError()
       const [model] = sort(Object.values(provider.models))
       if (!model) return yield* new NoModelsError({ providerID: provider.id })

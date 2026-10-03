@@ -22,6 +22,7 @@ import type {
   PromptInputV2Suggestion,
 } from "./types"
 import type { PromptInputV2Interaction, PromptInputV2SelectControl } from "./interaction"
+import { arrive } from "./arrival"
 import "./attachments.css"
 
 export type {
@@ -79,7 +80,6 @@ export function PromptInputV2(props: PromptInputV2Props) {
         ref={props.controller.setFileInput}
         type="file"
         multiple
-        accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/*,application/json,application/ld+json,application/toml,application/x-toml,application/x-yaml,application/xml,application/yaml,.c,.cc,.cjs,.conf,.cpp,.css,.csv,.cts,.env,.go,.gql,.graphql,.h,.hh,.hpp,.htm,.html,.ini,.java,.js,.json,.jsx,.log,.md,.mdx,.mjs,.mts,.py,.rb,.rs,.sass,.scss,.sh,.sql,.toml,.ts,.tsx,.txt,.xml,.yaml,.yml,.zsh"
         class="hidden"
         onChange={(event) => {
           const list = event.currentTarget.files
@@ -423,7 +423,7 @@ export function PromptInputV2Attachments(props: {
           </For>
           <For each={props.attachments}>
             {(attachment) => (
-              <div class="relative group shrink-0">
+              <div class="relative group shrink-0" ref={arrive}>
                 <TooltipV2 value={attachment.filename} placement="top" contentClass="break-all">
                   <Show
                     when={attachment.mime.startsWith("image/")}

@@ -5,6 +5,9 @@ import { BrowserTrail } from "@/browser/trail"
 import { ActionVerifier, type Verdict } from "@/browser/verify"
 import { BrowserSite } from "@/browser/site"
 import { BrowserTab } from "@/browser/tab"
+import { Writer } from "@/writer/writer"
+import { Config } from "@/config/config"
+import { ModelRoles } from "@/provider/roles"
 import * as Tool from "./tool"
 import DESCRIPTION from "./browser_act.txt"
 
@@ -75,6 +78,7 @@ export const BrowserActTool = Tool.define(
   "browser_act",
   Effect.gen(function* () {
     const browser = yield* Browser.Service
+    const config = yield* Config.Service
 
     return {
       description: DESCRIPTION,
@@ -86,6 +90,13 @@ export const BrowserActTool = Tool.define(
           const label = BrowserPage.describe(params)
 
           yield* ctx.metadata({ title: label, metadata: { action: params.action, url, ref: params.ref } })
+          // A text from write_text is typed exactly as it was written.
+          const text = params.text === undefined ? undefined : yield* Effect.promise(() => Writer.expand(params.text ?? ""))
+          if (params.action === "fill" || params.action === "type") {
+            const writing = ModelRoles.pick(yield* config.get(), "writing") !== undefined
+            const refused = Writer.guard(params.text, writing, ctx.messages)
+            if (refused) throw new Error(refused)
+          }
 
           // Acting runs under the persistent profile, so it can post, buy or
           // delete as the user. Consent is keyed on the site being acted on.
@@ -98,7 +109,7 @@ export const BrowserActTool = Tool.define(
               url,
               ref: params.ref,
               selector: params.selector,
-              text: params.text,
+              text,
               // Attaching a file sends it to the site, so the ask names it.
               file: params.file,
             },
@@ -114,7 +125,7 @@ export const BrowserActTool = Tool.define(
           const started = Date.now()
           const outcome = yield* Effect.promise(() =>
             tab
-              .serialize(() => BrowserPage.perform(tab, params, timeout))
+              .serialize(() => BrowserPage.perform(tab, { ...params, text }, timeout))
               .then(
                 (verdict: Verdict) => ({ verdict }),
                 (error: unknown) => ({ failure: error instanceof Error ? error : new Error(String(error)) }),

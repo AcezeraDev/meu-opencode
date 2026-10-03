@@ -69,6 +69,8 @@ import { SessionPage, SessionRouteErrorBoundary, TargetSessionRouteContent } fro
 import { NewHome } from "@/pages/home"
 import { SessionBoard } from "@/pages/board"
 import { AgentsPage } from "@/pages/agents"
+import { NotebookPage } from "@/pages/notebook"
+import { WeekPage } from "@/pages/week"
 import { useLocal } from "@/context/local"
 import { LegacyHome } from "@/pages/home/legacy-home"
 import { installChromaSync, realignChroma } from "@/utils/chroma"
@@ -78,7 +80,7 @@ const NewSession = lazy(() => import("@/pages/new-session"))
 const SessionRoute = () => {
   const settings = useSettings()
   const params = useParams()
-  const [search] = useSearchParams<{ draftId?: string; prompt?: string }>()
+  const [search] = useSearchParams<{ draftId?: string; prompt?: string; send?: string }>()
   const sdk = useSDK()
   const server = useServer()
   const tabs = useTabs()
@@ -101,7 +103,7 @@ const SessionRoute = () => {
     if (!settings.general.newLayoutDesigns()) return
     if (params.id || search.draftId) return
     if (!tabs.ready() || !sdk().directory) return
-    tabs.newDraft({ server: server.key, directory: sdk().directory }, search.prompt)
+    tabs.newDraft({ server: server.key, directory: sdk().directory }, search.prompt, undefined, search.send === "1")
   })
 
   return (
@@ -664,6 +666,8 @@ function Routes(props: { serverScoped?: JSX.Element }) {
         <Route path="/" component={NewHome} />
         <Route path="/board" component={SessionBoard} />
         <Route path="/agents" component={AgentsPage} />
+        <Route path="/notebook" component={NotebookPage} />
+        <Route path="/week" component={WeekPage} />
         <Route path="/:dir/session/:id" component={NewLayoutLegacySessionRedirect} />
         <Route path="/server/:serverKey/session/:id" component={TargetSessionRoute} />
       </Show>

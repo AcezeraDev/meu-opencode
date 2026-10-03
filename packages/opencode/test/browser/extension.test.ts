@@ -25,6 +25,20 @@ const it = testEffect(
   ]),
 )
 
+/** The same, with the agent keeping to a browser window of its own. */
+const itOwnWindow = testEffect(
+  LayerNode.compile(LayerNode.group([Browser.node]), [
+    [
+      Config.node,
+      TestConfig.layer({
+        directories: () => InstanceState.directory.pipe(Effect.map((dir) => [path.join(dir, ".opencode")])),
+        get: () =>
+          Effect.succeed({ browser: { mode: "extension", extensionToken: TOKEN, timeout: 5_000, ownWindow: true } }),
+      }),
+    ],
+  ]),
+)
+
 afterAll(() => BrowserBridge.reset())
 
 /** The element every lookup in the fake page finds. */
@@ -90,6 +104,30 @@ function pairFakeExtension(options: { targets?: BridgeTarget[]; refuse?: Set<str
   pair()
   return { bridge, sent, reconnect: pair }
 }
+
+describe("browser service in extension mode, in a window of its own", () => {
+  itOwnWindow.instance(
+    "opens the person's page in its own window and leaves their tab alone",
+    () =>
+      Effect.gen(function* () {
+        const { sent } = pairFakeExtension()
+        const browser = yield* Browser.Service
+        const tab = yield* browser.tab()
+        expect(tab.targetId).toBe("8")
+        expect(sent.find((message) => message.type === "createTarget")).toMatchObject({
+          url: "https://example.com/",
+          ownWindow: true,
+        })
+        expect(sent.some((message) => message.type === "attach" && message.targetId === "7")).toBe(false)
+
+        // Switching to one of its tabs does not pull its window over the person's.
+        yield* browser.select(tab.id)
+        expect(sent.find((message) => message.type === "activateTarget")).toMatchObject({ focus: false })
+        yield* browser.shutdown()
+      }),
+    30_000,
+  )
+})
 
 describe("browser service in extension mode", () => {
   it.instance(
@@ -320,11 +358,18 @@ function loadRelay(stored: { token?: string; port?: number } = {}) {
       this.readyState = 3
       this.emit("close")
     }
+    /** A message from the app arriving on this socket. */
+    deliver(message: unknown) {
+      this.emit("message", { data: JSON.stringify(message) })
+    }
     private emit(type: string, event?: unknown) {
       for (const fn of this.listeners.get(type) ?? []) fn(event)
     }
   }
   const data: Record<string, unknown> = { ...stored }
+  const session: Record<string, unknown> = {}
+  const windows = new Set<number>()
+  const calls: Record<string, unknown>[] = []
   const onChanged = hub()
   const onStartup = hub()
   const chrome = {
@@ -339,11 +384,36 @@ function loadRelay(stored: { token?: string; port?: number } = {}) {
           onChanged.fire(changes, "local")
         },
       },
+      session: {
+        get: async (key: string) => ({ [key]: session[key] }),
+        set: async (values: Record<string, unknown>) => Object.assign(session, values),
+      },
       onChanged,
     },
     alarms: { create: () => {}, onAlarm: hub() },
     debugger: { onEvent: hub(), onDetach: hub() },
-    tabs: { onCreated: hub(), onUpdated: hub(), onActivated: hub(), onRemoved: hub() },
+    tabs: {
+      onCreated: hub(),
+      onUpdated: hub(),
+      onActivated: hub(),
+      onRemoved: hub(),
+      create: async (options: { windowId?: number; url: string }) => {
+        calls.push({ call: "tabs.create", ...options })
+        return { id: 100 + calls.length, windowId: options.windowId }
+      },
+    },
+    windows: {
+      get: async (id: number) => {
+        if (!windows.has(id)) throw new Error(`No window with id: ${id}.`)
+        return { id }
+      },
+      create: async (options: { url: string; focused: boolean }) => {
+        calls.push({ call: "windows.create", ...options })
+        const id = 50 + windows.size
+        windows.add(id)
+        return { id, tabs: [{ id: 90 + windows.size, windowId: id }] }
+      },
+    },
     runtime: { onMessage: hub(), onStartup, onInstalled: hub() },
   }
   const load = new Function("chrome", "WebSocket", `${source}\nreturn { prune }`) as (
@@ -354,6 +424,8 @@ function loadRelay(stored: { token?: string; port?: number } = {}) {
     ...load(chrome, FakeSocket),
     sockets,
     data,
+    calls,
+    windows,
     startup: () => onStartup.fire(),
     created: (tab: Record<string, unknown>) => chrome.tabs.onCreated.fire(tab),
     save: (values: Record<string, unknown>) => chrome.storage.local.set(values),
@@ -389,6 +461,36 @@ describe("the extension relay's connection", () => {
     await pause(700)
     expect(relay.sockets).toHaveLength(2)
     expect(second.readyState).toBe(1)
+  })
+
+  test("the agent's tabs go to one window of its own, made once and behind the person's", async () => {
+    const relay = loadRelay({ token: "t", port: 4919 })
+    await pause()
+    const socket = relay.sockets[0]!
+    socket.open()
+    socket.deliver({ id: 1, type: "createTarget", url: "https://example.com/aula", ownWindow: true })
+    await pause()
+    socket.deliver({ id: 2, type: "createTarget", url: "https://example.com/material", ownWindow: true })
+    await pause()
+    expect(relay.calls).toEqual([
+      {
+        call: "windows.create",
+        url: "https://example.com/aula",
+        focused: false,
+        state: "normal",
+        width: 1280,
+        height: 900,
+      },
+      { call: "tabs.create", windowId: 50, url: "https://example.com/material", active: true },
+    ])
+    const results = socket.sent.filter((message: any) => message.type === "result") as any[]
+    expect(results.map((message) => message.result.targetId)).toEqual(["91", "102"])
+
+    // Closed by the person, the window is made again for the next tab.
+    relay.windows.clear()
+    socket.deliver({ id: 3, type: "createTarget", url: "https://example.com/", ownWindow: true })
+    await pause()
+    expect(relay.calls.at(-1)).toMatchObject({ call: "windows.create", url: "https://example.com/" })
   })
 
   test("a new tab says which tab opened it, so the agent can follow its own link there", async () => {

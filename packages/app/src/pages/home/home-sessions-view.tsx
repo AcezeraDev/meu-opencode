@@ -7,7 +7,9 @@ import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { useLanguage } from "@/context/language"
+import { projectSpace } from "@/context/layout"
 import { ServerConnection } from "@/context/server"
+import { useSessionTones } from "@/context/session-tone"
 import { SessionTabAvatarView } from "@/pages/layout/session-tab-avatar"
 import { sessionTitle } from "@/utils/session-title"
 import { shouldOpenSessionInBackground } from "../home-session-open"
@@ -178,8 +180,13 @@ function HomeSessionLeading(props: {
   unread: boolean
   loading: boolean
 }) {
+  const tones = useSessionTones()
   return (
-    <div class="relative shrink-0">
+    <div
+      class="relative shrink-0"
+      data-space={projectSpace(props.record.project, props.record.session.directory)}
+      data-tone={tones.tone(props.record.session.id)}
+    >
       <Show when={props.open}>
         <span
           aria-hidden="true"
@@ -197,6 +204,8 @@ function HomeSessionLeading(props: {
         unread={props.unread}
         loading={props.loading}
       />
+      {/* The session's tone inside its project's color, the same one its tab wears. */}
+      <span data-slot="home-session-tone" aria-hidden="true" />
     </div>
   )
 }
