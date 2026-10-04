@@ -39,7 +39,8 @@
 }
 
 /* A session's tone inside its project's color (context/session-tone.ts): the
- * same space turned a little either way along the hue, or softened. On a
+ * same space turned a little either way along the hue (kept small so every
+ * tone stays between the logo cyan and indigo), or softened. On a
  * tab or a session row it replaces --own-space, so everything that wears the
  * row's own color wears the session's tone; the app itself keeps the space. */
 [data-tone="0"] {
@@ -50,22 +51,22 @@
 [data-tone="1"] {
   --tone-l: 0.02;
   --tone-c: 1;
-  --tone-h: -25;
+  --tone-h: -15;
 }
 [data-tone="2"] {
   --tone-l: 0.02;
   --tone-c: 1;
-  --tone-h: 25;
+  --tone-h: 15;
 }
 [data-tone="3"] {
   --tone-l: 0.04;
   --tone-c: 1;
-  --tone-h: -50;
+  --tone-h: -30;
 }
 [data-tone="4"] {
   --tone-l: 0.04;
   --tone-c: 1;
-  --tone-h: 50;
+  --tone-h: 30;
 }
 [data-tone="5"] {
   --tone-l: 0.1;
@@ -166,15 +167,13 @@ html .scope-screen [data-session-title] {
   );
 }
 
-@media (prefers-color-scheme: light) {
-  html .scope-screen [data-session-title] {
-    background: linear-gradient(
-      to bottom,
-      color-mix(in oklab, var(--v2-background-bg-base), var(--space) 9%) 0,
-      color-mix(in oklab, var(--v2-background-bg-base), var(--space) 7%) 48px,
-      transparent
-    );
-  }
+html[data-color-scheme="light"] .scope-screen [data-session-title] {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--v2-background-bg-base), var(--space) 9%) 0,
+    color-mix(in oklab, var(--v2-background-bg-base), var(--space) 7%) 48px,
+    transparent
+  );
 }
 
 /* The composer is a card of its own that lights in the space color while you

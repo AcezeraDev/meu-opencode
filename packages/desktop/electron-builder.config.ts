@@ -147,7 +147,12 @@ function getConfig() {
         return {
           ...personalBase,
           appId: "ai.opencode.desktop.personal",
-          productName: "OpenCode Personal",
+          // What Windows shows (window, taskbar, shortcuts, Apps list) is Lynx Code;
+          // the app id, install folder and data folder keep their old names so
+          // installed copies update in place and keep their settings.
+          productName: "Lynx Code",
+          executableName: "Lynx Code",
+          protocols: { name: "Lynx Code", schemes: ["opencode"] },
           // The name instalar.ps1 and latest.yml point at, the same for every build.
           artifactName: "OpenCodePersonalSetup.${ext}",
           // The install folder and updater cache are named after the package, so a

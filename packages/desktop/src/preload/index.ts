@@ -141,6 +141,14 @@ const api: ElectronAPI = {
     return () => ipcRenderer.removeListener("quick-ask", handler)
   },
   setAgentTray: (state) => ipcRenderer.invoke("set-agent-tray", state),
+  lynxDictate: () => ipcRenderer.invoke("lynx-dictate"),
+  lynxOpenMain: () => ipcRenderer.invoke("lynx-open-main"),
+  lynxReply: (text) => ipcRenderer.invoke("lynx-reply", text),
+  onLynxReply: (cb) => {
+    const handler = (_: unknown, text: string) => cb(text)
+    ipcRenderer.on("lynx-reply", handler)
+    return () => ipcRenderer.removeListener("lynx-reply", handler)
+  },
 }
 
 contextBridge.exposeInMainWorld("api", api)

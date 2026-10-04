@@ -1743,7 +1743,7 @@ PART_MAPPING["text"] = function TextPartDisplay(props) {
 
   return (
     <Show when={text()}>
-      <div data-component="text-part" data-timeline-part-id={part().id}>
+      <div data-component="text-part" data-timeline-part-id={part().id} data-streaming={streaming() ? "" : undefined}>
         <div data-slot="text-part-body">
           <PacedMarkdown text={text()} cacheKey={part().id} streaming={streaming()} />
         </div>
@@ -1779,7 +1779,7 @@ PART_MAPPING["reasoning"] = function ReasoningPartDisplay(props) {
 
   return (
     <Show when={text()}>
-      <div data-component="reasoning-part" data-timeline-part-id={part().id}>
+      <div data-component="reasoning-part" data-timeline-part-id={part().id} data-streaming={streaming() ? "" : undefined}>
         <PacedMarkdown text={text()} cacheKey={part().id} streaming={streaming()} />
       </div>
     </Show>

@@ -16,6 +16,7 @@ const STORAGE_KEYS = {
   COLOR_SCHEME: "opencode-color-scheme",
   THEME_CSS_LIGHT: "opencode-theme-css-light",
   THEME_CSS_DARK: "opencode-theme-css-dark",
+  LYNX: "lynx-code-theme",
 } as const
 
 const THEME_STYLE_ID = "oc-theme"
@@ -44,7 +45,7 @@ function knownThemes() {
 }
 
 const names: Record<string, string> = {
-  "oc-2": "OC-2",
+  "oc-2": "Lynx Code",
   amoled: "AMOLED",
   aura: "Aura",
   ayu: "Ayu",
@@ -69,7 +70,7 @@ const names: Record<string, string> = {
   nord: "Nord",
   "one-dark": "One Dark",
   onedarkpro: "One Dark Pro",
-  opencode: "OpenCode",
+  opencode: "Clássico",
   orng: "Orng",
   "osaka-jade": "Osaka Jade",
   palenight: "Palenight",
@@ -116,6 +117,19 @@ function clear() {
   drop(STORAGE_KEYS.THEME_CSS_DARK)
 }
 
+/**
+ * The default theme (oc-2) wears Lynx Code's colors. Whoever had picked another
+ * theme before the rename moves to it once; picking another later still sticks.
+ * oc-theme-preload.js does the same before the first paint.
+ */
+function adoptLynxTheme() {
+  if (read(STORAGE_KEYS.LYNX) === "1") return
+  write(STORAGE_KEYS.LYNX, "1")
+  if (read(STORAGE_KEYS.THEME_ID) === null) return
+  write(STORAGE_KEYS.THEME_ID, "oc-2")
+  clear()
+}
+
 function ensureThemeStyleElement(): HTMLStyleElement {
   const existing = document.getElementById(THEME_STYLE_ID) as HTMLStyleElement | null
   if (existing) return existing
@@ -152,11 +166,11 @@ function applyThemeCss(theme: DesktopTheme, themeId: string, mode: "light" | "da
   ensureThemeStyleElement().textContent = fullCss
   document.documentElement.dataset.theme = themeId
   document.documentElement.dataset.colorScheme = mode
-  document.documentElement.style.backgroundColor = isDark ? "#080808" : "#fafafa"
+  document.documentElement.style.backgroundColor = isDark ? "#070b19" : "#ffffff"
 
   // Update theme-color meta tag to match light/dark mode
   const meta = document.querySelector('meta[name="theme-color"]')
-  if (meta) meta.setAttribute("content", isDark ? "#080808" : "#fafafa")
+  if (meta) meta.setAttribute("content", isDark ? "#070b19" : "#ffffff")
 }
 
 function cacheThemeVariants(theme: DesktopTheme, themeId: string) {
@@ -177,6 +191,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     defaultTheme?: string
     onThemeApplied?: (theme: DesktopTheme, mode: "light" | "dark", scheme: ColorScheme) => void
   }) => {
+    adoptLynxTheme()
     const themeId = normalize(read(STORAGE_KEYS.THEME_ID) ?? props.defaultTheme) ?? "oc-2"
     const colorScheme = (read(STORAGE_KEYS.COLOR_SCHEME) as ColorScheme | null) ?? "system"
     const mode = colorScheme === "system" ? getSystemMode() : colorScheme

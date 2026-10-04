@@ -1,6 +1,5 @@
 import { createStore } from "solid-js/store"
 import type { ProjectAvatarVariant } from "@opencode-ai/ui/v2/project-avatar-v2"
-import { crossSpace } from "@/utils/motion"
 
 /** The colors a project can own as its space; grey is for a project someone chose grey for. */
 const SPACE_COLORS = ["purple", "blue", "cyan", "green", "yellow", "orange", "red", "pink"] as const
@@ -62,17 +61,13 @@ export function projectSpace(
 }
 
 /**
- * Tints the app with a space's color. Without one (home), the app keeps its
- * own default space. A change a click caused spreads from that click.
+ * Marks which project's space the app is in. Lynx Code keeps the logo's colors
+ * in every project (ui/src/v2/styles/scope.css), so the app's color no longer
+ * changes, and neither does the crossing that used to spread a new color.
  */
 export function enterSpace(space: ProjectAvatarVariant | undefined) {
   if (typeof document === "undefined") return
   const root = document.documentElement
-  const apply = () => {
-    if (space) root.dataset.space = space
-    else delete root.dataset.space
-  }
-  // Home and the violet space are the same color, so moving between them is no crossing.
-  if ((root.dataset.space ?? "purple") === (space ?? "purple")) return apply()
-  crossSpace(apply)
+  if (space) root.dataset.space = space
+  else delete root.dataset.space
 }

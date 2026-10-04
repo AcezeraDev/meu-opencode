@@ -372,8 +372,11 @@ const layer = Layer.effect(
       const cfg = yield* config.get()
       // Offering browser tools that cannot launch anything just wastes prompt
       // space and produces failures, so they appear only when a Chromium-based
-      // browser is actually reachable on this machine.
-      const browserEnabled = cfg.browser?.enabled !== false && BrowserInstall.available(cfg.browser ?? {})
+      // browser is actually reachable on this machine. Extension mode drives the
+      // person's own browser (Brave), so it needs no Edge or Chrome installed.
+      const browserEnabled =
+        cfg.browser?.enabled !== false &&
+        (cfg.browser?.mode === "extension" || BrowserInstall.available(cfg.browser ?? {}))
       const lean = Ollama.lean(input.providerID, cfg.provider?.[input.providerID]?.options)
       const filtered = (yield* all()).filter((tool) => {
         if (lean && !Ollama.LEAN_TOOLS.has(tool.id)) return false

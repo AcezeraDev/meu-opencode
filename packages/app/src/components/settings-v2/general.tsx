@@ -532,6 +532,31 @@ export const SettingsGeneralV2: Component<{
       <h3 class="settings-v2-section-title">{language.t("settings.general.section.browser")}</h3>
 
       <SettingsListV2>
+        <SettingsRowV2
+          title={language.t("settings.general.row.browserExtension.title")}
+          description={language.t("settings.general.row.browserExtension.description")}
+        >
+          <div data-action="settings-browser-extension">
+            <Switch checked={props.controller.extension()} onChange={props.controller.setExtension} />
+          </div>
+        </SettingsRowV2>
+        <Show when={props.controller.extension() && props.controller.token()}>
+          <SettingsRowV2
+            title={language.t("settings.general.row.browserToken.title")}
+            description={language.t("settings.general.row.browserToken.description", {
+              token: props.controller.token(),
+            })}
+          >
+            <ButtonV2
+              size="normal"
+              variant="neutral"
+              data-action="settings-browser-token-copy"
+              onClick={() => void navigator.clipboard.writeText(props.controller.token()).catch(() => undefined)}
+            >
+              {language.t("settings.general.row.browserToken.copy")}
+            </ButtonV2>
+          </SettingsRowV2>
+        </Show>
         <Show when={props.controller.extension()}>
           <SettingsRowV2
             title={language.t("settings.general.row.browserOwnWindow.title")}

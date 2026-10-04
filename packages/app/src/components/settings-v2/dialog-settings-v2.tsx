@@ -27,6 +27,15 @@ import { useLayout } from "@/context/layout"
 import { useTabs } from "@/context/tabs"
 import { useServerSync } from "@/context/server-sync"
 import { slidingPill } from "@/utils/motion"
+import { useLynxPrefs } from "@/context/lynx-prefs"
+import { LynxOverview } from "./lynx/overview"
+import { LynxLooks } from "./lynx/looks"
+import { LynxBudget } from "./lynx/budget"
+import { LynxPermissions } from "./lynx/permissions"
+import { LynxRoles } from "./lynx/roles"
+import { LynxChatSetup } from "./lynx/chat-setup"
+import { LynxHistory } from "./lynx/history"
+import { LynxKeyboard } from "./lynx/keyboard"
 
 export const DialogSettings: Component<{
   sessionID?: string
@@ -38,7 +47,18 @@ export const DialogSettings: Component<{
   const layout = useLayout()
   const tabs = useTabs()
   const serverSync = useServerSync()
-  const [tab, setTab] = createSignal(props.defaultValue ?? "general")
+  const prefs = useLynxPrefs()
+  const [tab, setTab] = createSignal(props.defaultValue ?? "lynx-overview")
+  const simple = () => prefs.get("settingsSimple")
+  const lynxPages = [
+    { value: "lynx-overview", icon: "◎", key: "lynx.set.overview" },
+    { value: "lynx-looks", icon: "◐", key: "lynx.set.tab.looks" },
+    { value: "lynx-budget", icon: "R$", key: "lynx.set.tab.budget" },
+    { value: "lynx-permissions", icon: "⛨", key: "lynx.set.tab.permissions" },
+    { value: "lynx-roles", icon: "◇", key: "lynx.set.tab.roles", advanced: true },
+    { value: "lynx-talk", icon: "✦", key: "lynx.set.tab.talk" },
+    { value: "lynx-history", icon: "↶", key: "lynx.set.tab.history", advanced: true },
+  ]
   const directory = createMemo(() => {
     const route = layout.route()
     if (route.type === "dir-new-sesssion") return route.dir
@@ -56,6 +76,11 @@ export const DialogSettings: Component<{
   const [query, setQuery] = createSignal("")
   const [sections, setSections] = createSignal<{ title: string; element: HTMLElement }[]>([])
   const [found, setFound] = createSignal(0)
+  /** Opens a page, optionally searching General for the words given. */
+  const go = (value: string, search?: string) => {
+    if (search) setQuery(search)
+    void startTransition(() => setTab(search ? "general" : value))
+  }
   let general: HTMLDivElement | undefined
   const words = createMemo(() => fold(query()).split(/\s+/).filter(Boolean))
   const pages = () => [
@@ -166,6 +191,21 @@ export const DialogSettings: Component<{
               </Show>
               <div class="flex flex-col gap-3">
                 <div class="flex flex-col gap-1.5">
+                  <TabsV2.SectionTitle>Lynx Code</TabsV2.SectionTitle>
+                  <div class="flex flex-col gap-1.5 w-full">
+                    <For each={lynxPages.filter((page) => !simple() || !page.advanced)}>
+                      {(page) => (
+                        <TabsV2.Trigger value={page.value}>
+                          <span class="lynx-nav-ico" aria-hidden="true">
+                            {page.icon}
+                          </span>
+                          {language.t(page.key as never)}
+                        </TabsV2.Trigger>
+                      )}
+                    </For>
+                  </div>
+                </div>
+                <div class="flex flex-col gap-1.5">
                   <TabsV2.SectionTitle>{language.t("settings.section.desktop")}</TabsV2.SectionTitle>
                   <div class="flex flex-col gap-1.5 w-full">
                     <TabsV2.Trigger value="general">
@@ -198,7 +238,7 @@ export const DialogSettings: Component<{
                   </div>
                 </div>
 
-                <div class="flex flex-col gap-1.5">
+                <div class="flex flex-col gap-1.5" hidden={simple()}>
                   <TabsV2.SectionTitle>{language.t("settings.section.server")}</TabsV2.SectionTitle>
                   <div class="flex flex-col gap-1.5 w-full">
                     <TabsV2.Trigger value="servers">
@@ -221,12 +261,41 @@ export const DialogSettings: Component<{
                 </div>
               </div>
             </div>
+            <div class="lynx-set-modes" role="group" aria-label={language.t("lynx.set.mode")}>
+              <button type="button" aria-pressed={simple()} onClick={() => prefs.set("settingsSimple", true)}>
+                {language.t("lynx.set.mode.simple")}
+              </button>
+              <button type="button" aria-pressed={!simple()} onClick={() => prefs.set("settingsSimple", false)}>
+                {language.t("lynx.set.mode.advanced")}
+              </button>
+            </div>
             <div class="settings-v2-nav-footer">
               <span>{language.t("app.name.desktop")}</span>
               <span>v{platform.version}</span>
             </div>
           </div>
         </TabsV2.List>
+        <TabsV2.Content value="lynx-overview" class="settings-v2-panel">
+          <LynxOverview go={go} />
+        </TabsV2.Content>
+        <TabsV2.Content value="lynx-looks" class="settings-v2-panel">
+          <LynxLooks />
+        </TabsV2.Content>
+        <TabsV2.Content value="lynx-budget" class="settings-v2-panel">
+          <LynxBudget />
+        </TabsV2.Content>
+        <TabsV2.Content value="lynx-permissions" class="settings-v2-panel">
+          <LynxPermissions />
+        </TabsV2.Content>
+        <TabsV2.Content value="lynx-roles" class="settings-v2-panel">
+          <LynxRoles />
+        </TabsV2.Content>
+        <TabsV2.Content value="lynx-talk" class="settings-v2-panel">
+          <LynxChatSetup />
+        </TabsV2.Content>
+        <TabsV2.Content value="lynx-history" class="settings-v2-panel">
+          <LynxHistory />
+        </TabsV2.Content>
         <TabsV2.Content
           value="general"
           class="settings-v2-panel"
@@ -238,6 +307,7 @@ export const DialogSettings: Component<{
           <SettingsGeneralV2 sessionID={props.sessionID} />
         </TabsV2.Content>
         <TabsV2.Content value="shortcuts" class="settings-v2-panel">
+          <LynxKeyboard />
           <SettingsKeybinds v2 />
         </TabsV2.Content>
         <TabsV2.Content value="servers" class="settings-v2-panel">

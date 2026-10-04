@@ -1,4 +1,4 @@
-# OpenCode Browser Bridge (extensão)
+# Lynx Code (extensão) (extensão)
 
 Deixa o agente do OpenCode dirigir o **seu** navegador de verdade (Brave/Chrome,
 com o seu perfil e os seus logins) pelo protocolo DevTools, via `chrome.debugger`
@@ -53,7 +53,7 @@ de responder, a extensão tenta a 4919 e passa a lembrar dela.
 ## Depois de atualizar esta pasta
 
 O Brave não relê a extensão sozinho: em `brave://extensions`, clique no ↻ do
-cartão "OpenCode Browser Bridge" (a versão aparece ali). Desde a 0.2.0 o `attach`
+cartão "Lynx Code (extensão)" (a versão aparece ali). Desde a 0.2.0 o `attach`
 leva a lista de eventos CDP que o OpenCode lê, e a extensão só repassa esses.
 Uma extensão antiga continua funcionando, só repassa tudo.
 

@@ -186,7 +186,7 @@ export function WindowsAppMenu(props: {
           <span class="desktop-app-menu-glide" aria-hidden="true" />
           <DropdownMenu.Group>
             <DropdownMenu.GroupLabel class="desktop-app-menu-heading">
-              <span class="desktop-app-menu-wordmark">OpenCode</span>
+              <span class="desktop-app-menu-wordmark">Lynx Code</span>
               <Show when={props.platform.version}>
                 {(version) => <span class="desktop-app-menu-version">v{version()}</span>}
               </Show>

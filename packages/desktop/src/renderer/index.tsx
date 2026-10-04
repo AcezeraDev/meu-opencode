@@ -247,6 +247,10 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
 
     setAgentTray: (state) => void window.api.setAgentTray(state).catch(() => undefined),
 
+    dictate: () => window.api.lynxDictate().catch(() => false),
+
+    onLynxReply: (cb) => window.api.onLynxReply(cb),
+
     setForceFocus: (enabled) => window.api.setForceFocus(enabled),
 
     recordFatalRendererError: (error) => window.api.recordFatalRendererError(error),

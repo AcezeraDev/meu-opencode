@@ -1,14 +1,33 @@
-import { createEffect, Suspense, type ParentProps } from "solid-js"
+import { createEffect, onCleanup, Suspense, type ParentProps } from "solid-js"
 import { createStore } from "solid-js/store"
 import { DebugBar } from "@/components/debug-bar"
 import { TabsInfoPopup } from "@/components/help-button"
 import { Titlebar, type TitlebarUpdate } from "@/components/titlebar"
 import { Softkeys } from "@/components/softkeys"
 import { usePlatform } from "@/context/platform"
+import { useLynxPrefs } from "@/context/lynx-prefs"
+import { useSettingsHistory } from "@/context/lynx-history"
+import "./lynx-global.css"
+import { LynxDrop } from "@/components/lynx-drop"
+import { LynxSplash } from "@/components/lynx-splash"
 import { setV2Toast, ToastRegion } from "@/utils/toast"
 
 export default function NewLayout(props: ParentProps) {
   const platform = usePlatform()
+  // Applies the chosen chat style and other Lynx looks to the page from the start.
+  useLynxPrefs()
+  useSettingsHistory()
+  // An answer typed in the desktop's corner note goes into the open session's composer and is sent.
+  onCleanup(
+    platform.onLynxReply?.((text) => {
+      const form = document.querySelector<HTMLFormElement>('[data-component="prompt-input-v2"]')
+      const editor = form?.querySelector<HTMLElement>('[contenteditable="true"]')
+      if (!form || !editor) return
+      editor.focus()
+      document.execCommand("insertText", false, text)
+      requestAnimationFrame(() => form.requestSubmit())
+    }) ?? (() => undefined),
+  )
   const [state, setState] = createStore({ debugTools: true })
 
   createEffect(() => setV2Toast(true))
@@ -45,6 +64,8 @@ export default function NewLayout(props: ParentProps) {
       {import.meta.env.DEV && state.debugTools && <DebugBar inline />}
       <TabsInfoPopup />
       <Softkeys />
+      <LynxDrop />
+      <LynxSplash />
       <ToastRegion v2 />
     </div>
   )

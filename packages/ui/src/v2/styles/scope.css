@@ -1,5 +1,11 @@
 /*
- * Colored spaces — the app's visual world (replaces the bench oscilloscope).
+ * Lynx Code — the app wears its logo's colors, always: white, the logo's cyan
+ * and indigo, and a dark blue. The accent (`--space`) is the logo cyan in every
+ * project; a project keeps a shade between cyan and indigo for its own tab and
+ * avatar (`--own-space`), so projects still tell apart. Filled controls use the
+ * indigo, which white text reads on. Errors and warnings keep red and amber.
+ *
+ * Built on the colored spaces world, which replaced the bench oscilloscope:
  * ----------------------------------------------------------------------------
  * Every project is a space with a color of its own (its avatar color, or one
  * picked from its folder when none was chosen). The app takes on the tone of
@@ -24,68 +30,53 @@
   initial-value: 280deg;
 }
 
+/* The live color sweeps between the logo's cyan and indigo, never the whole wheel. */
 @keyframes chroma-cycle {
   from {
-    --chroma-hue: 0deg;
+    --chroma-hue: 205deg;
   }
   to {
-    --chroma-hue: 360deg;
+    --chroma-hue: 280deg;
   }
 }
 
 html[data-theme][data-theme],
 :root {
-  /* The spaces. Tuned to read on the dark ground and as a fill under white. */
-  --space-purple: #9b7bff;
-  --space-blue: #5b8cff;
-  --space-cyan: #2fc4de;
-  --space-green: #34cc88;
-  --space-yellow: #f0bd45;
-  --space-orange: #ff8a4c;
-  --space-red: #ff5d6c;
-  --space-pink: #ff66b8;
-  --space-gray: #9aa3b2;
-  --space: var(--space-purple);
+  /* The logo. */
+  --lynx-cyan: #22d3ee;
+  --lynx-indigo: #6366f1;
+  --lynx-navy: #0b1226;
+  /* Filled controls (white text on them) and accent text on the light ground. */
+  --lynx-fill: #4f46e5;
+  --lynx-ink: #4f46e5;
+
+  /* A project's own shade, from cyan to indigo; the names are the colors a
+   * project can pick, kept so saved choices still map to a shade. */
+  --space-cyan: #22d3ee;
+  --space-green: #2dd4bf;
+  --space-yellow: #67e8f9;
+  --space-blue: #38bdf8;
+  --space-orange: #60a5fa;
+  --space-purple: #818cf8;
+  --space-red: #6366f1;
+  --space-pink: #a5b4fc;
+  --space-gray: #94a3b8;
+  --space: var(--lynx-cyan);
 
   --chroma-period: 14s;
   --chroma-l: 0.62;
   --chroma-c: 0.19;
 }
 
-html[data-space="blue"][data-space] {
-  --space: var(--space-blue);
-}
-html[data-space="cyan"][data-space] {
-  --space: var(--space-cyan);
-}
-html[data-space="green"][data-space] {
-  --space: var(--space-green);
-}
-html[data-space="yellow"][data-space] {
-  --space: var(--space-yellow);
-}
-html[data-space="orange"][data-space] {
-  --space: var(--space-orange);
-}
-html[data-space="red"][data-space] {
-  --space: var(--space-red);
-}
-html[data-space="pink"][data-space] {
-  --space: var(--space-pink);
-}
-html[data-space="gray"][data-space] {
-  --space: var(--space-gray);
-}
-
-/* Light scheme: a bright ground washed with the space; its color darkens to
- * stay readable as text on white. */
+/* Light scheme: a white ground with a breath of blue; accent text is the
+ * indigo, which reads on white where the cyan would not. */
 html[data-theme][data-theme],
 :root {
-  --space-ink: color-mix(in oklab, var(--space) 72%, #10121a);
+  --space-ink: var(--lynx-ink);
   --space-soft: color-mix(in oklab, var(--space) 14%, transparent);
   --space-line: color-mix(in oklab, var(--space) 36%, transparent);
   --space-wash: color-mix(in oklab, var(--space) 10%, transparent);
-  --space-on: #ffffff;
+  --space-on: var(--lynx-navy);
 
   --scope-ch-edit: var(--space);
   --scope-ch-user: #4a5263;
@@ -99,13 +90,13 @@ html[data-theme][data-theme],
   --scope-readout: #10121a;
   --scope-bezel-line: color-mix(in oklab, var(--space) 14%, rgb(20 24 40 / 0.1));
 
-  --v2-background-bg-deep: color-mix(in oklab, var(--space) 9%, #e9ebf1);
-  --v2-background-bg-base: color-mix(in oklab, var(--space) 2%, #ffffff);
-  --v2-background-bg-layer-01: color-mix(in oklab, var(--space) 4%, #f5f6f9);
-  --v2-background-bg-layer-02: color-mix(in oklab, var(--space) 6%, #eceef3);
-  --v2-background-bg-layer-03: color-mix(in oklab, var(--space) 8%, #e1e4eb);
-  --v2-background-bg-layer-04: color-mix(in oklab, var(--space) 10%, #d4d8e1);
-  --v2-background-bg-accent: var(--space);
+  --v2-background-bg-deep: #eef2fa;
+  --v2-background-bg-base: #ffffff;
+  --v2-background-bg-layer-01: #f5f7fc;
+  --v2-background-bg-layer-02: #ecf0f8;
+  --v2-background-bg-layer-03: #e1e7f3;
+  --v2-background-bg-layer-04: #d3dbec;
+  --v2-background-bg-accent: var(--lynx-fill);
   --v2-border-border-muted: color-mix(in oklab, var(--space) 10%, rgb(20 24 40 / 0.07));
   --v2-border-border-base: color-mix(in oklab, var(--space) 14%, rgb(20 24 40 / 0.11));
   --v2-border-border-strong: color-mix(in oklab, var(--space) 20%, rgb(20 24 40 / 0.2));
@@ -141,54 +132,54 @@ html[data-theme][data-theme],
   --glass-filter-lg: none;
 }
 
-/* Dark scheme (the one used all day): a near-black ground leaning toward the
- * space's hue, panels one step lighter, the space color bright on top. */
-@media (prefers-color-scheme: dark) {
-  html[data-theme][data-theme],
-  :root {
-    --chroma-l: 0.78;
-    --chroma-c: 0.17;
-    --space-ink: color-mix(in oklab, var(--space) 82%, #ffffff);
-    --space-soft: color-mix(in oklab, var(--space) 16%, transparent);
-    --space-line: color-mix(in oklab, var(--space) 42%, transparent);
-    --space-wash: color-mix(in oklab, var(--space) 28%, transparent);
-    --space-on: #0b0b10;
+/* Dark scheme (the one used all day): the logo's dark blue as the ground,
+ * panels one step lighter, the cyan bright on top. Keyed on the scheme the app
+ * chose, not the OS one, so picking Dark works on a PC whose Windows is light. */
+html[data-color-scheme="dark"][data-theme][data-theme],
+html[data-color-scheme="dark"] {
+  --chroma-l: 0.78;
+  --chroma-c: 0.17;
+  --lynx-fill: #6366f1;
+  --space-ink: color-mix(in oklab, var(--space) 82%, #ffffff);
+  --space-soft: color-mix(in oklab, var(--space) 16%, transparent);
+  --space-line: color-mix(in oklab, var(--space) 42%, transparent);
+  --space-wash: color-mix(in oklab, var(--space) 28%, transparent);
+  --space-on: var(--lynx-navy);
 
-    --scope-ch-user: #c7cede;
-    --scope-ch-error: #ff5a4e;
-    --scope-ch-warn: #f5b33c;
-    --scope-grid-dot: color-mix(in oklab, var(--space) 40%, rgb(255 255 255 / 0.1));
-    --scope-ghost: rgb(220 226 240 / 0.18);
-    --scope-readout: #eef0f6;
-    --scope-bezel-line: color-mix(in oklab, var(--space) 16%, rgb(255 255 255 / 0.07));
+  --scope-ch-user: #c7cede;
+  --scope-ch-error: #ff5a4e;
+  --scope-ch-warn: #f5b33c;
+  --scope-grid-dot: color-mix(in oklab, var(--space) 40%, rgb(255 255 255 / 0.1));
+  --scope-ghost: rgb(220 226 240 / 0.18);
+  --scope-readout: #eef0f6;
+  --scope-bezel-line: color-mix(in oklab, var(--space) 16%, rgb(255 255 255 / 0.07));
 
-    --v2-background-bg-deep: color-mix(in oklab, var(--space) 7%, #07080b);
-    --v2-background-bg-base: color-mix(in oklab, var(--space) 6%, #111217);
-    --v2-background-bg-layer-01: color-mix(in oklab, var(--space) 7%, #17181e);
-    --v2-background-bg-layer-02: color-mix(in oklab, var(--space) 8%, #1d1e26);
-    --v2-background-bg-layer-03: color-mix(in oklab, var(--space) 9%, #25262f);
-    --v2-background-bg-layer-04: color-mix(in oklab, var(--space) 10%, #2e2f3a);
-    --v2-border-border-muted: color-mix(in oklab, var(--space) 12%, rgb(255 255 255 / 0.05));
-    --v2-border-border-base: color-mix(in oklab, var(--space) 16%, rgb(255 255 255 / 0.08));
-    --v2-border-border-strong: color-mix(in oklab, var(--space) 22%, rgb(255 255 255 / 0.15));
-    --v2-text-text-accent-hover: #ffffff;
-    --v2-icon-icon-accent-hover: #ffffff;
-    --v2-overlay-simple-overlay-hover: color-mix(in oklab, var(--space) 10%, rgb(255 255 255 / 0.05));
-    --v2-overlay-simple-overlay-pressed: color-mix(in oklab, var(--space) 18%, rgb(255 255 255 / 0.08));
+  --v2-background-bg-deep: #070b19;
+  --v2-background-bg-base: #0b1226;
+  --v2-background-bg-layer-01: #101831;
+  --v2-background-bg-layer-02: #152040;
+  --v2-background-bg-layer-03: #1b284d;
+  --v2-background-bg-layer-04: #22305c;
+  --v2-border-border-muted: color-mix(in oklab, var(--space) 12%, rgb(255 255 255 / 0.05));
+  --v2-border-border-base: color-mix(in oklab, var(--space) 16%, rgb(255 255 255 / 0.08));
+  --v2-border-border-strong: color-mix(in oklab, var(--space) 22%, rgb(255 255 255 / 0.15));
+  --v2-text-text-accent-hover: #ffffff;
+  --v2-icon-icon-accent-hover: #ffffff;
+  --v2-overlay-simple-overlay-hover: color-mix(in oklab, var(--space) 10%, rgb(255 255 255 / 0.05));
+  --v2-overlay-simple-overlay-pressed: color-mix(in oklab, var(--space) 18%, rgb(255 255 255 / 0.08));
 
-    --v2-elevation-raised:
-      0 1px 0 rgb(255 255 255 / 0.035) inset, 0 2px 4px rgb(0 0 0 / 0.3), 0 10px 28px -10px rgb(0 0 0 / 0.6),
-      0 0 0 1px var(--v2-border-border-muted);
-    --v2-elevation-floating:
-      0 1px 0 rgb(255 255 255 / 0.05) inset, 0 6px 14px rgb(0 0 0 / 0.35), 0 24px 56px -16px rgb(0 0 0 / 0.7),
-      0 0 0 1px var(--v2-border-border-base);
-    --v2-elevation-overlay:
-      0 1px 0 rgb(255 255 255 / 0.05) inset, 0 12px 28px rgb(0 0 0 / 0.4), 0 40px 80px -20px rgb(0 0 0 / 0.75),
-      0 0 0 1px var(--v2-border-border-base);
+  --v2-elevation-raised:
+    0 1px 0 rgb(255 255 255 / 0.035) inset, 0 2px 4px rgb(0 0 0 / 0.3), 0 10px 28px -10px rgb(0 0 0 / 0.6),
+    0 0 0 1px var(--v2-border-border-muted);
+  --v2-elevation-floating:
+    0 1px 0 rgb(255 255 255 / 0.05) inset, 0 6px 14px rgb(0 0 0 / 0.35), 0 24px 56px -16px rgb(0 0 0 / 0.7),
+    0 0 0 1px var(--v2-border-border-base);
+  --v2-elevation-overlay:
+    0 1px 0 rgb(255 255 255 / 0.05) inset, 0 12px 28px rgb(0 0 0 / 0.4), 0 40px 80px -20px rgb(0 0 0 / 0.75),
+    0 0 0 1px var(--v2-border-border-base);
 
-    --glass-highlight: rgb(255 255 255 / 0.05);
-    --glass-scrim: rgb(0 0 0 / 0.55);
-  }
+  --glass-highlight: rgb(255 255 255 / 0.05);
+  --glass-scrim: rgb(0 0 0 / 0.55);
 }
 
 html[data-theme][data-theme],
@@ -217,7 +208,7 @@ html {
 html:not([data-lite]):not([data-chroma-off]) [data-chroma] {
   --chroma: oklch(var(--chroma-l) var(--chroma-c) var(--chroma-hue));
   --chroma-soft: oklch(var(--chroma-l) var(--chroma-c) var(--chroma-hue) / 0.18);
-  animation: chroma-cycle var(--chroma-period) linear infinite;
+  animation: chroma-cycle var(--chroma-period) ease-in-out infinite alternate;
 }
 
 html[data-chroma-speed="slow"] {

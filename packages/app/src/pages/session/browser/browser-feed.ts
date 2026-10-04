@@ -29,6 +29,7 @@ export type BrowserCommand =
   | { action: "close_tab"; tab: string }
   | { action: "resize"; width: number; height: number }
   | { action: "open_external" }
+  | { action: "xray"; on: boolean }
 
 export type BrowserInput =
   | {

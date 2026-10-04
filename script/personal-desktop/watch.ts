@@ -69,7 +69,7 @@ setInterval(() => {
   })
 }, INSTALL_CHECK_MS)
 
-await log(follow ? "Vigia do OpenCode Personal iniciado (seguindo o GitHub)." : "Vigia do OpenCode Personal iniciado.")
+await log(follow ? "Vigia do Lynx Code iniciado (seguindo o GitHub)." : "Vigia do Lynx Code iniciado.")
 // Catch up on changes made, or published, while the watcher wasn't running.
 const state = await readState()
 if (follow) schedule(10 * 1000)

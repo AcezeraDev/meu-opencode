@@ -1,0 +1,27 @@
+/*
+ * Lynx Code palette variants, on top of the Lynx Code theme. "noite" and "dia"
+ * are the theme's own dark and light; these two retune the dark one.
+ * Set on <html data-lynx-variant> by context/lynx-prefs.ts; scoped to body so
+ * they win over the theme variables declared on the root.
+ */
+html[data-lynx-variant="contraste"] body {
+  --v2-background-bg-deep: #000000;
+  --v2-background-bg-base: #030305;
+  --v2-background-bg-layer-01: #0b0b12;
+  --v2-background-bg-layer-02: #14141f;
+  --v2-text-text-base: #ffffff;
+  --v2-text-text-muted: #dfe5f5;
+  --v2-text-text-faint: #b6bfd6;
+  --v2-border-border-muted: rgba(255, 255, 255, 0.34);
+  --v2-border-border-base: rgba(255, 255, 255, 0.5);
+}
+html[data-lynx-variant="ciano"] body {
+  --v2-background-bg-deep: #031822;
+  --v2-background-bg-base: #06202f;
+  --v2-background-bg-layer-01: #0a2d40;
+  --v2-background-bg-layer-02: #0e3a52;
+  --v2-text-text-base: #e0fbff;
+  --v2-text-text-muted: #9fd8e6;
+  --v2-text-text-faint: #6fb2c4;
+  --v2-border-border-muted: rgba(34, 211, 238, 0.24);
+}

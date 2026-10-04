@@ -58,6 +58,10 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/SystemPrompt") {}
 
+/** The person reads everything in Portuguese, including the model's running commentary. */
+const LANGUAGE =
+  "Always write in Brazilian Portuguese (pt-BR): your thinking and reasoning, the short notes between tool calls about what you see and will do next, and your answers. Keep code, commands, file names and quoted text from pages as they are."
+
 const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -82,6 +86,8 @@ const layer = Layer.effect(
             `  Platform: ${process.platform}`,
             `  Today's date: ${new Date().toDateString()}`,
             `</env>`,
+            "",
+            LANGUAGE,
           ].join("\n"),
           references.length === 0
             ? undefined

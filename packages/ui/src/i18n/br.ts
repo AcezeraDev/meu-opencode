@@ -195,7 +195,7 @@ export const dict = {
   "ui.browserPane.connecting": "Esperando a primeira imagem",
   "ui.browserPane.pairTitle": "Pareie a extensão do navegador",
   "ui.browserPane.pairHint":
-    "No popup da extensão OpenCode Browser Bridge, coloque a porta {{port}} e o token da sua config (browser.extensionToken), e clique em Salvar e conectar.",
+    "No popup da extensão Lynx Code, coloque a porta {{port}} e o token que aparece em Configurações › Geral › Navegador (botão Copiar token), e clique em Salvar e conectar.",
   "ui.browserPane.agent.label": "IA",
   "ui.browserPane.stop": "Parar a IA",
   "ui.browserPane.stopHint": "Interrompe o que a IA está fazendo; a página fica como está, para você continuar.",

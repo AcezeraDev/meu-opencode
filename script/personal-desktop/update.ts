@@ -100,7 +100,7 @@ async function build() {
   }
 
   try {
-    await log("Compilando o OpenCode Personal com as mudanças atuais")
+    await log("Compilando o Lynx Code com as mudanças atuais")
     // Same as scripts/prebuild.ts minus the v2 CLI download: personal builds run the
     // embedded server (with this checkout's changes), which doesn't need that binary.
     await step("Preparando ícones", $`bun ./scripts/copy-icons.ts dev`.cwd(DESKTOP).env(env))
@@ -171,6 +171,6 @@ if (result === "built" && !follow)
   }).unref()
 if (result === "built" && fromApp) await log("Nova versão pronta: reinicie pelo botão de atualizar do app.")
 if (result === "built" && !fromApp && !(await installPending()) && (await appRunning())) {
-  await log("App aberto: a nova versão será instalada assim que você fechar o OpenCode Personal.")
+  await log("App aberto: a nova versão será instalada assim que você fechar o Lynx Code.")
   await notify("Nova versão pronta. Use o botão Atualizar do app ou feche-o para instalar.")
 }

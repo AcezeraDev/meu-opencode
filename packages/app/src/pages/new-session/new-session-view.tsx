@@ -1,9 +1,11 @@
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
-import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
-import { For, Show, createMemo, createSignal, type Accessor } from "solid-js"
+import { useNavigate } from "@solidjs/router"
+import { base64Encode } from "@opencode-ai/core/util/encode"
+import { DateTime } from "luxon"
+import { For, Show, createMemo, createSignal, onCleanup, onMount, type Accessor } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Portal } from "solid-js/web"
 import createPresence from "solid-presence"
@@ -20,6 +22,8 @@ import { useSDK } from "@/context/sdk"
 import { useServerSync } from "@/context/server-sync"
 import { useProviders } from "@/hooks/use-providers"
 import { NEW_SESSION_CONTENT_WIDTH } from "@/pages/session/new-session-layout"
+import { LynxMark } from "@/pages/home/lynx-home"
+import { sessionTitle } from "@/utils/session-title"
 import { Persist, persisted } from "@/utils/persist"
 import type { NewSessionDraftController } from "./new-session-draft-controller"
 import type { NewSessionWorkspaceController } from "./new-session-workspace-controller"
@@ -28,9 +32,9 @@ import "./new-session-view.css"
 const providerTipDismissalDuration = 30 * 24 * 60 * 60 * 1000
 
 const EXAMPLES = [
-  { key: "prompt.example.1", icon: "edit" },
-  { key: "prompt.example.3", icon: "check" },
-  { key: "prompt.example.5", icon: "review" },
+  { key: "lynx.home.example.1", icon: "globe" },
+  { key: "lynx.home.example.2", icon: "check" },
+  { key: "lynx.home.example.3", icon: "edit" },
   { key: "prompt.example.7", icon: "split" },
 ] as const
 
@@ -41,6 +45,13 @@ export function NewSessionView(props: {
   onExample: (text: string) => void
 }) {
   const language = useLanguage()
+  const greeting = () => {
+    const hour = new Date().getHours()
+    if (hour < 5) return "lynx.new.hello.night"
+    if (hour < 12) return "lynx.new.hello.morning"
+    if (hour < 18) return "lynx.new.hello.afternoon"
+    return "lynx.new.hello.evening"
+  }
 
   return (
     <div class="@container relative flex flex-col min-h-0 h-full flex-1">
@@ -48,7 +59,12 @@ export function NewSessionView(props: {
         data-component="session-new-design"
         class="relative flex-1 min-h-0 overflow-hidden rounded-[10px] bg-v2-background-bg-deep"
       >
-        <div class="new-session-glow" aria-hidden="true" />
+        <div class="new-session-aurora" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </div>
+        <div class="new-session-grid" aria-hidden="true" />
         <div class="absolute inset-0 overflow-y-auto">
           <div class="flex min-h-full items-center justify-center px-6 py-12">
             <div class={NEW_SESSION_CONTENT_WIDTH}>
@@ -73,7 +89,11 @@ export function NewSessionView(props: {
                     </Show>
                   </div>
                 </Show>
-                <h1 class="new-session-title">{language.t("command.session.new")}</h1>
+                <div class="new-session-hello">
+                  <LynxMark size={64} class="new-session-mark" />
+                  <h1 class="new-session-title">{language.t(greeting())}</h1>
+                  <p class="new-session-sub">{language.t("lynx.new.sub")}</p>
+                </div>
                 <div class="new-session-composer">
                   <PromptInputV2Composer controller={props.input} />
                 </div>
@@ -82,11 +102,12 @@ export function NewSessionView(props: {
                 </Show>
                 <div class="new-session-examples">
                   <For each={EXAMPLES}>
-                    {(example) => (
+                    {(example, index) => (
                       <button
                         type="button"
                         class="new-session-example"
-                        onClick={() => props.onExample(language.t(example.key))}
+                        style={{ "--d": `${140 + index() * 50}ms` }}
+                        onClick={() => props.onExample(language.t(example.key).replace(/…$/, ""))}
                       >
                         <IconV2 name={example.icon} />
                         <span>{language.t(example.key)}</span>
@@ -94,16 +115,7 @@ export function NewSessionView(props: {
                     )}
                   </For>
                 </div>
-                <div class="new-session-hints">
-                  <span>
-                    <KeybindV2 keys={["↵"]} variant="neutral" />
-                    {language.t("session.new.hint.send")}
-                  </span>
-                  <span>
-                    <KeybindV2 keys={["⇧", "↵"]} variant="neutral" />
-                    {language.t("session.new.hint.newline")}
-                  </span>
-                </div>
+                <RecentSessions />
               </div>
             </div>
           </div>
@@ -111,6 +123,48 @@ export function NewSessionView(props: {
         <ProviderTip />
       </div>
     </div>
+  )
+}
+
+/** Where the person left off in this project: the last sessions, one click away. */
+function RecentSessions() {
+  const language = useLanguage()
+  const sdk = useSDK()
+  const serverSync = useServerSync()
+  const navigate = useNavigate()
+  const [now, setNow] = createSignal(Date.now())
+  onMount(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000)
+    onCleanup(() => clearInterval(timer))
+  })
+  const recent = createMemo(() =>
+    serverSync()
+      .child(sdk().directory)[0]
+      .session.filter((session) => !session.parentID && !session.time.archived)
+      .toSorted((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
+      .slice(0, 3),
+  )
+  return (
+    <Show when={recent().length > 0}>
+      <section class="new-session-recent">
+        <span class="new-session-recent-label">{language.t("lynx.new.continue")}</span>
+        <For each={recent()}>
+          {(session, index) => (
+            <button
+              type="button"
+              style={{ "--d": `${320 + index() * 60}ms` }}
+              onClick={() => navigate(`/${base64Encode(sdk().directory)}/session/${session.id}`)}
+            >
+              <span class="new-session-recent-dot" />
+              <span class="new-session-recent-title">{sessionTitle(session.title) || language.t("command.session.new")}</span>
+              <span class="new-session-recent-when">
+                {(now(), DateTime.fromMillis(session.time.updated ?? session.time.created).setLocale(language.intl()).toRelative())}
+              </span>
+            </button>
+          )}
+        </For>
+      </section>
+    </Show>
   )
 }
 

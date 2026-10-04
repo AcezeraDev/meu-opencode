@@ -112,6 +112,7 @@ import { MeasurementStrip } from "./session/scope/measurement-strip"
 import { SessionResume } from "./session/session-resume"
 import { BrowserPanel } from "./session/browser/browser-panel"
 import { BrowserPane } from "./session/browser/browser-pane"
+import { BrowserFloat } from "./session/browser/browser-float"
 import { browserPane } from "./session/browser/pane-state"
 import { ScopeTrace } from "./session/scope/scope-trace"
 import { COMPOSER_FILL_EVENT, type ComposerFillDetail } from "@opencode-ai/session-ui/web-video-tool"
@@ -513,7 +514,10 @@ export default function Page() {
       }),
   )
   // The browser pane lives in the new layout's right column, beside review and terminal.
-  const desktopBrowserOpen = createMemo(() => newSessionDesign() && isDesktop() && !!params.id && browserPane.opened())
+  const browserShown = createMemo(() => newSessionDesign() && isDesktop() && !!params.id && browserPane.opened())
+  // Floating, the pane leaves the layout and hovers over the conversation instead.
+  const desktopBrowserOpen = createMemo(() => browserShown() && !browserPane.floating())
+  const browserFloating = createMemo(() => browserShown() && browserPane.floating())
   const desktopSessionResizeOpen = createMemo(() =>
     newSessionDesign() ? desktopV2ReviewOpen() || desktopTerminalOpen() || desktopBrowserOpen() : desktopReviewOpen(),
   )
@@ -2290,7 +2294,7 @@ export default function Page() {
               controller={controller}
               measurement={
                 <Show when={newSessionDesign()}>
-                  <BrowserPanel directory={() => sdk().directory} docked={desktopBrowserOpen} canDock={isDesktop} />
+                  <BrowserPanel directory={() => sdk().directory} docked={browserShown} canDock={isDesktop} />
                   <MeasurementStrip sessionID={params.id} active={!!params.id && busy(params.id)} />
                   <SessionResume sessionID={params.id} busy={!!params.id && busy(params.id)} />
                 </Show>
@@ -2454,6 +2458,21 @@ export default function Page() {
                 size={size}
               />
             </Suspense>
+          </Show>
+          <Show when={browserFloating()}>
+            <Portal>
+              <BrowserFloat>
+                <BrowserPane
+                  directory={() => sdk().directory}
+                  sessionID={() => params.id}
+                  onClose={() => browserPane.close()}
+                  working={() => !!params.id && busy(params.id)}
+                  onStop={() => {
+                    if (params.id) void halt(params.id)
+                  }}
+                />
+              </BrowserFloat>
+            </Portal>
           </Show>
           <Show when={newSessionDesign()}>
             <Show when={isDesktop() ? desktopV2PanelLayout().visible : terminalOpen()}>

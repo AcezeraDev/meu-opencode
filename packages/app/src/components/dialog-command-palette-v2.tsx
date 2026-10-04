@@ -35,6 +35,21 @@ import {
 } from "./command-palette"
 import "./dialog-command-palette-v2.css"
 import { flipList } from "@/utils/motion"
+import { useLynxPrefs } from "@/context/lynx-prefs"
+import { useSDK } from "@/context/sdk"
+import { useServerSDK } from "@/context/server-sdk"
+import {
+  fuzzy,
+  inScope,
+  Lit,
+  PREFIXES,
+  quickAnswer,
+  readScope,
+  stepEntries,
+  useLynxSteps,
+  type PaletteStep,
+} from "./lynx-palette"
+import "./lynx-palette.css"
 
 function groups(entries: CommandPaletteEntry[]) {
   const map = new Map<string, CommandPaletteEntry[]>()
@@ -44,7 +59,9 @@ function groups(entries: CommandPaletteEntry[]) {
 
 function matchesEntry(entry: CommandPaletteEntry, query: string) {
   const value = query.toLowerCase()
-  return [entry.title, entry.description, entry.category].some((text) => text?.toLowerCase().includes(value))
+  if ([entry.title, entry.description, entry.category].some((text) => text?.toLowerCase().includes(value))) return true
+  // Letters in order, with gaps: "nvss" finds "Nova sessão".
+  return value.length >= 3 && fuzzy(entry.title, value) !== undefined
 }
 
 // Ordered: specific ids before their prefix group.
@@ -106,6 +123,9 @@ export function DialogCommandPaletteV2(props: { onOpenFile?: (path: string) => v
     ]
   }
 
+  const tabs = useTabs()
+  const sdk = useSDK()
+  const serverSdk = useServerSDK()
   return (
     <CommandPaletteView
       placeholder={palette.language.t("palette.search.placeholder")}
@@ -113,6 +133,7 @@ export function DialogCommandPaletteV2(props: { onOpenFile?: (path: string) => v
       highlight={palette.highlight}
       select={palette.select}
       close={palette.close}
+      onAsk={(text) => void tabs.newDraft({ server: ServerConnection.key(serverSdk().server), directory: sdk().directory }, text)}
     />
   )
 }
@@ -185,17 +206,40 @@ function CommandPaletteView(props: {
   highlight: (item: CommandPaletteEntry | undefined) => void
   select: (item: CommandPaletteEntry | undefined) => void
   close: () => void
+  /** Sends a question to Lynx in a new session; absent where there is no project to ask in. */
+  onAsk?: (text: string) => void
 }) {
   const language = useLanguage()
   const tabs = useTabs()
+  const prefs = useLynxPrefs()
+  const steps = useLynxSteps()
   const [query, setQuery] = createSignal("")
   const [active, setActive] = createSignal(0)
+  const [step, setStep] = createSignal<PaletteStep>()
+  const [option, setOption] = createSignal(0)
+  const [numbers, setNumbers] = createSignal(false)
+  let input: HTMLInputElement | undefined
 
-  const [entries] = createResource(query, props.loadItems, { initialValue: [] as CommandPaletteEntry[] })
+  const parsed = createMemo(() => readScope(query()))
+  const [entries] = createResource(
+    () => parsed().rest,
+    (text) => props.loadItems(text),
+    { initialValue: [] as CommandPaletteEntry[] },
+  )
   // Render stale results while a new query loads to avoid flashing "Loading" per keystroke.
-  const visibleEntries = createMemo(() => uniqueCommandPaletteEntries(entries.latest ?? []))
+  const visibleEntries = createMemo(() => {
+    const { scope, rest } = parsed()
+    if (scope === "ask") return []
+    const loaded = uniqueCommandPaletteEntries(entries.latest ?? []).filter((entry) => inScope(entry, scope))
+    const extra =
+      scope === "all" || scope === "commands"
+        ? stepEntries(steps, "Lynx Code").filter((entry) => !rest || fuzzy(entry.title, rest))
+        : []
+    return [...loaded, ...extra]
+  })
   const groupedEntries = createMemo(() => groups(visibleEntries()))
   const activeEntry = createMemo(() => visibleEntries()[active()])
+  const answer = createMemo(() => (parsed().scope === "ask" ? quickAnswer(parsed().rest) : undefined))
   const openSessions = createMemo(
     () => new Set(tabs.store.flatMap((tab) => (tab.type === "session" ? [`${tab.server}\0${tab.sessionId}`] : []))),
   )
@@ -207,7 +251,8 @@ function CommandPaletteView(props: {
   })
 
   createEffect(() => {
-    props.highlight(activeEntry())
+    const entry = activeEntry()
+    props.highlight(entry?.id.startsWith("lynx.step.") ? undefined : entry)
   })
 
   let resultsRef: HTMLDivElement | undefined
@@ -221,7 +266,57 @@ function CommandPaletteView(props: {
     })
   }
 
+  // A step entry opens its choices inside the palette instead of running a command.
+  const choose = (entry: CommandPaletteEntry | undefined) => {
+    if (entry?.id.startsWith("lynx.step.")) {
+      const next = entry.id.slice("lynx.step.".length) as PaletteStep
+      setStep(next)
+      setOption(Math.max(0, steps[next].options.findIndex((item) => item.on)))
+      setQuery("")
+      input?.focus()
+      return
+    }
+    props.select(entry)
+  }
+  const pickOption = (index: number) => {
+    const current = step()
+    if (!current) return
+    steps[current].options[index]?.pick()
+    props.close()
+  }
+
   const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key === "Alt") setNumbers(true)
+    if (event.altKey && /^[1-9]$/.test(event.key)) {
+      event.preventDefault()
+      choose(visibleEntries()[Number(event.key) - 1])
+      return
+    }
+    const current = step()
+    if (current) {
+      const count = steps[current].options.length
+      if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+        event.preventDefault()
+        setOption((index) => (index + 1) % count)
+        return
+      }
+      if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+        event.preventDefault()
+        setOption((index) => (index - 1 + count) % count)
+        return
+      }
+      if (event.key === "Enter") {
+        event.preventDefault()
+        pickOption(option())
+        return
+      }
+      if ((event.key === "Backspace" && !query()) || event.key === "Escape") {
+        event.preventDefault()
+        setStep(undefined)
+        return
+      }
+      return
+    }
     if (event.key === "ArrowDown") {
       event.preventDefault()
       move(1)
@@ -234,7 +329,14 @@ function CommandPaletteView(props: {
     }
     if (event.key === "Enter") {
       event.preventDefault()
-      props.select(activeEntry())
+      if (parsed().scope === "ask") {
+        if (parsed().rest && props.onAsk) {
+          props.onAsk(parsed().rest)
+          props.close()
+        }
+        return
+      }
+      choose(activeEntry())
       return
     }
     if (event.key === "Escape") {
@@ -243,60 +345,193 @@ function CommandPaletteView(props: {
     }
   }
 
+  const setScope = (char: string) => {
+    setQuery(char ? `${char} ${parsed().rest}`.trimEnd() + (parsed().rest ? "" : " ") : parsed().rest)
+    input?.focus()
+  }
+  const index = (entry: CommandPaletteEntry) => visibleEntries().findIndex((item) => item.id === entry.id)
+
   return (
-    <Dialog class="command-palette-v2" size="large">
+    <Dialog
+      // The dialog passes on its class, not data attributes, so the looks are classes.
+      class={`command-palette-v2 lynx-palette lynx-layout-${prefs.get("paletteLayout")}${prefs.get("paletteGrid") ? " lynx-grid" : ""}${numbers() ? " lynx-numbers" : ""}`}
+      size="large"
+    >
       <DialogBody class="command-palette-v2-body">
+        <div class="lynx-palette-scopes" role="tablist">
+          <For each={PREFIXES}>
+            {(prefix) => (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={!step() && parsed().scope === prefix.scope}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  setStep(undefined)
+                  setScope(prefix.char)
+                }}
+              >
+                <Show when={prefix.char}>
+                  <b>{prefix.char}</b>
+                </Show>
+                {language.t(`lynx.palette.scope.${prefix.scope}` as never)}
+              </button>
+            )}
+          </For>
+        </div>
         <div class="command-palette-v2-search">
+          <Show when={step()}>
+            {(current) => (
+              <span class="lynx-palette-crumb" data-motion="l">
+                {steps[current()].title} ›
+              </span>
+            )}
+          </Show>
           <TextInputV2
+            ref={(el: HTMLInputElement) => (input = el)}
             value={query()}
             autofocus
             autocomplete="off"
             spellcheck={false}
             appearance="large"
-            placeholder={props.placeholder}
+            placeholder={step() ? language.t("lynx.palette.step.hint") : props.placeholder}
             leadingIcon={<Icon name="magnifying-glass" />}
             onInput={(event) => setQuery(event.currentTarget.value)}
             onKeyDown={handleKeyDown}
+            onKeyUp={(event) => event.key === "Alt" && setNumbers(false)}
+            onBlur={() => setNumbers(false)}
           />
         </div>
-        <ScrollView class="command-palette-v2-scroll" viewportRef={(el) => (resultsRef = el)}>
-          <div class="command-palette-v2-results" role="listbox" ref={(el) => onMount(() => onCleanup(flipList(el)))}>
-            <Show
-              when={visibleEntries().length > 0}
-              fallback={
-                <div class="command-palette-v2-state">
-                  {entries.loading ? language.t("common.loading") : language.t("palette.empty")}
-                </div>
-              }
-            >
-              <For each={groupedEntries()}>
-                {(group) => (
-                  <div class="command-palette-v2-group">
-                    <Show when={group.category}>
-                      <div class="command-palette-v2-group-title">{group.category}</div>
-                    </Show>
-                    <For each={group.entries}>
-                      {(item) => (
-                        <PaletteRow
-                          item={item}
-                          active={activeEntry()?.id === item.id}
-                          language={language}
-                          sessionOpen={
-                            item.server && item.sessionID
-                              ? openSessions().has(`${item.server}\0${item.sessionID}`)
-                              : false
-                          }
-                          onActive={() => setActive(visibleEntries().findIndex((entry) => entry.id === item.id))}
-                          onSelect={() => props.select(item)}
-                        />
+        <Switch
+          fallback={
+            <div class="lynx-palette-body">
+              <ScrollView class="command-palette-v2-scroll" viewportRef={(el) => (resultsRef = el)}>
+                <Show when={!query() && visibleEntries().length > 2}>
+                  <div class="lynx-palette-fan" aria-hidden="true">
+                    <For each={visibleEntries().slice(0, 4)}>
+                      {(entry, position) => (
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          class="lynx-palette-card"
+                          style={{ "--i": String(position()) }}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => choose(entry)}
+                        >
+                          <b>{entry.title}</b>
+                          <small>{entry.category}</small>
+                        </button>
                       )}
                     </For>
                   </div>
+                </Show>
+                <div class="command-palette-v2-results" role="listbox" ref={(el) => onMount(() => onCleanup(flipList(el)))}>
+                  <Show
+                    when={visibleEntries().length > 0}
+                    fallback={
+                      <div class="command-palette-v2-state">
+                        {entries.loading ? language.t("common.loading") : language.t("palette.empty")}
+                      </div>
+                    }
+                  >
+                    <For each={groupedEntries()}>
+                      {(group) => (
+                        <div class="command-palette-v2-group">
+                          <Show when={group.category}>
+                            <div class="command-palette-v2-group-title">{group.category}</div>
+                          </Show>
+                          <div class="lynx-palette-items">
+                            <For each={group.entries}>
+                              {(item) => (
+                                <PaletteRow
+                                  item={item}
+                                  query={parsed().rest}
+                                  number={index(item) < 9 ? index(item) + 1 : undefined}
+                                  active={activeEntry()?.id === item.id}
+                                  language={language}
+                                  sessionOpen={
+                                    item.server && item.sessionID
+                                      ? openSessions().has(`${item.server}\0${item.sessionID}`)
+                                      : false
+                                  }
+                                  onActive={() => setActive(index(item))}
+                                  onSelect={() => choose(item)}
+                                />
+                              )}
+                            </For>
+                          </div>
+                        </div>
+                      )}
+                    </For>
+                  </Show>
+                </div>
+              </ScrollView>
+              <Show when={activeEntry() && !prefs.get("paletteGrid")}>
+                <PalettePreview entry={activeEntry()!} />
+              </Show>
+            </div>
+          }
+        >
+          <Match when={step()}>
+            {(current) => (
+              <div class="lynx-carousel" data-motion="l">
+                <div class="lynx-carousel-track" style={{ "--at": String(option()) }}>
+                  <For each={steps[current()].options}>
+                    {(item, position) => (
+                      <button
+                        type="button"
+                        class="lynx-carousel-card"
+                        data-focus={position() === option() ? "" : undefined}
+                        data-on={item.on ? "" : undefined}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onMouseEnter={() => setOption(position())}
+                        onClick={() => pickOption(position())}
+                      >
+                        <span class="lynx-carousel-art" data-id={item.id} />
+                        <b>{item.label}</b>
+                        <Show when={item.hint}>
+                          <small>{item.hint}</small>
+                        </Show>
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </div>
+            )}
+          </Match>
+          <Match when={parsed().scope === "ask"}>
+            <div class="lynx-palette-ask" data-motion="l">
+              <Show
+                when={answer()}
+                fallback={
+                  <p class="lynx-palette-ask-hint">
+                    {parsed().rest ? language.t("lynx.palette.ask.session") : language.t("lynx.palette.ask.hint")}
+                  </p>
+                }
+              >
+                {(value) => (
+                  <>
+                    <span class="lynx-palette-ask-label">{language.t("lynx.palette.ask.answer")}</span>
+                    <b class="lynx-palette-ask-value">{value()}</b>
+                    <small>{parsed().rest}</small>
+                  </>
                 )}
-              </For>
-            </Show>
-          </div>
-        </ScrollView>
+              </Show>
+              <Show when={parsed().rest && props.onAsk}>
+                <button
+                  type="button"
+                  class="lynx-palette-ask-go"
+                  onClick={() => {
+                    props.onAsk?.(parsed().rest)
+                    props.close()
+                  }}
+                >
+                  {language.t("lynx.palette.ask.go")} <KeybindV2 keys={["↵"]} variant="neutral" />
+                </button>
+              </Show>
+            </div>
+          </Match>
+        </Switch>
         <div class="command-palette-v2-footer">
           <span class="command-palette-v2-hint">
             <KeybindV2 keys={["↑", "↓"]} variant="neutral" />
@@ -307,8 +542,32 @@ function CommandPaletteView(props: {
             {language.t("palette.hint.select")}
           </span>
           <span class="command-palette-v2-hint">
-            <KeybindV2 keys={["esc"]} variant="neutral" />
-            {language.t("palette.hint.close")}
+            <KeybindV2 keys={["Alt", "1–9"]} variant="neutral" />
+            {language.t("lynx.palette.hint.number")}
+          </span>
+          <span class="lynx-palette-tools">
+            <button
+              type="button"
+              title={language.t("lynx.palette.grid")}
+              aria-pressed={prefs.get("paletteGrid")}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => prefs.set("paletteGrid", !prefs.get("paletteGrid"))}
+            >
+              ▦
+            </button>
+            <For each={["centro", "lado", "cortina"] as const}>
+              {(layout) => (
+                <button
+                  type="button"
+                  title={language.t(`lynx.palette.layout.${layout}` as never)}
+                  aria-pressed={prefs.get("paletteLayout") === layout}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => prefs.set("paletteLayout", layout)}
+                >
+                  {layout === "centro" ? "◻" : layout === "lado" ? "◧" : "⬒"}
+                </button>
+              )}
+            </For>
           </span>
         </div>
       </DialogBody>
@@ -316,8 +575,46 @@ function CommandPaletteView(props: {
   )
 }
 
+/** The highlighted result, larger, beside the list: a session's last words, a command's shortcut, a file's place. */
+function PalettePreview(props: { entry: CommandPaletteEntry }) {
+  const language = useLanguage()
+  const global = useGlobal()
+  const lines = createMemo(() => {
+    const entry = props.entry
+    if (entry.type !== "session" || !entry.server || !entry.sessionID) return []
+    const conn = global.servers.list().find((item) => ServerConnection.key(item) === entry.server)
+    if (!conn) return []
+    const store = global.ensureServerCtx(conn).sync
+    void store.session.sync(entry.sessionID).catch(() => undefined)
+    return (store.session.data.message[entry.sessionID] ?? []).slice(-4).flatMap((message) => {
+      const text = (store.session.data.part[message.id] ?? [])
+        .flatMap((part) => (part.type === "text" && part.text ? [part.text] : []))
+        .join(" ")
+      return text ? [{ role: message.role, text: text.length > 180 ? `${text.slice(0, 180)}…` : text }] : []
+    })
+  })
+  return (
+    <aside class="lynx-palette-preview" data-motion="l">
+      <span class="lynx-palette-preview-kind">{props.entry.category}</span>
+      <b>{props.entry.title}</b>
+      <Show when={props.entry.description}>
+        <p>{props.entry.description}</p>
+      </Show>
+      <Show when={props.entry.type === "file" && props.entry.path}>
+        <code>{props.entry.path}</code>
+      </Show>
+      <Show when={props.entry.keybind}>
+        <KeybindV2 keys={formatKeybindParts(props.entry.keybind ?? "", language.t)} variant="neutral" />
+      </Show>
+      <For each={lines()}>{(line) => <p data-role={line.role}>{line.text}</p>}</For>
+    </aside>
+  )
+}
+
 function PaletteRow(props: {
   item: CommandPaletteEntry
+  query: string
+  number?: number
   active: boolean
   language: ReturnType<typeof useLanguage>
   sessionOpen: boolean
@@ -345,13 +642,20 @@ function PaletteRow(props: {
       onMouseDown={(event) => event.preventDefault()}
       onClick={props.onSelect}
     >
+      <Show when={props.number}>
+        <span class="lynx-palette-number" aria-hidden="true">
+          {props.number}
+        </span>
+      </Show>
       <Switch
         fallback={
           <div class="command-palette-v2-row-main">
             <FileIcon node={{ path: props.item.path ?? "", type: "file" }} class="command-palette-v2-row-icon size-4" />
             <div class="command-palette-v2-file-path">
               <span class="command-palette-v2-file-dir">{getDirectory(props.item.path ?? "")}</span>
-              <span class="command-palette-v2-file-name">{getFilename(props.item.path ?? "")}</span>
+              <span class="command-palette-v2-file-name">
+                <Lit text={getFilename(props.item.path ?? "")} query={props.query} />
+              </span>
             </div>
           </div>
         }
@@ -359,10 +663,12 @@ function PaletteRow(props: {
         <Match when={props.item.type === "command"}>
           <div class="command-palette-v2-row-main">
             <span class="command-palette-v2-row-tile" data-command={props.item.option?.id}>
-              <Icon name={paletteIcon(props.item)} />
+              <Icon name={props.item.id.startsWith("lynx.step.") ? "outline-sliders" : paletteIcon(props.item)} />
             </span>
             <div class="command-palette-v2-row-text">
-              <span class="command-palette-v2-title">{props.item.title}</span>
+              <span class="command-palette-v2-title">
+                <Lit text={props.item.title} query={props.query} />
+              </span>
               <Show when={props.item.description}>
                 <span class="command-palette-v2-description">{props.item.description}</span>
               </Show>
@@ -398,7 +704,7 @@ function PaletteRow(props: {
             </div>
             <div class="command-palette-v2-row-text">
               <span class="command-palette-v2-title" classList={{ "opacity-70": !!props.item.archived }}>
-                {props.item.title}
+                <Lit text={props.item.title} query={props.query} />
               </span>
               <Show when={props.item.description}>
                 <span class="command-palette-v2-description" classList={{ "opacity-70": !!props.item.archived }}>

@@ -6,6 +6,7 @@ import { useLanguage } from "@/context/language"
 import { useServerJson } from "@/utils/server-json"
 import "./notebook.css"
 import "./week.css"
+import { WeekLynx } from "./week-lynx"
 
 type Week = {
   since: number
@@ -97,6 +98,7 @@ export function WeekPage() {
       >
         {(data) => (
           <div class="week-body">
+            <WeekLynx week={data()} money={money} />
             <section class="week-tiles">
               <Tile label={language.t("week.sessions")} value={String(data().sessions)} />
               <Tile label={language.t("week.cost")} value={money(data().cost)} />

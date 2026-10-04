@@ -20,6 +20,9 @@ const builtIns = Layer.effectDiscard(
       `  Is directory a git repo: ${location.vcs?.type === "git" ? "yes" : "no"}`,
       `  Platform: ${process.platform}`,
       "</env>",
+      "",
+      // The person reads everything in Portuguese, including the model's running commentary.
+      "Always write in Brazilian Portuguese (pt-BR): your thinking and reasoning, the short notes between tool calls about what you see and will do next, and your answers. Keep code, commands, file names and quoted text from pages as they are.",
     ].join("\n")
     const context = SystemContext.combine([
       SystemContext.make({

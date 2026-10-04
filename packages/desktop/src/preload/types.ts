@@ -123,4 +123,10 @@ export type ElectronAPI = {
   quickAskClose: () => Promise<void>
   onQuickAsk: (cb: (text: string) => void) => () => void
   setAgentTray: (state: AgentTrayState) => Promise<void>
+  /** Starts Windows voice typing (Win+H) in the focused field. */
+  lynxDictate: () => Promise<boolean>
+  lynxOpenMain: () => Promise<void>
+  /** An answer typed in the corner note, for the session that asked. */
+  lynxReply: (text: string) => Promise<void>
+  onLynxReply: (cb: (text: string) => void) => () => void
 }

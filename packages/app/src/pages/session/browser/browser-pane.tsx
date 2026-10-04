@@ -4,6 +4,8 @@ import { EASE, motionLevel } from "@/utils/motion"
 import { createBrowserFeed, type BrowserActivity } from "./browser-feed"
 import { createFramePainter, type FramePainter } from "./frame-painter"
 import { BrowserHistory } from "./browser-history"
+import { BrowserLynxLayer, BrowserLynxTools, type LynxView } from "./browser-lynx"
+import { browserPane } from "./pane-state"
 import "./browser-pane.css"
 
 /**
@@ -116,6 +118,8 @@ export function BrowserPane(props: {
   let viewport = { width: 0, height: 0 }
 
   const [hasFrame, setHasFrame] = createSignal(false)
+  const [lynxView, setLynxView] = createSignal<LynxView>()
+  const [xray, setXray] = createSignal(false)
   const [address, setAddress] = createSignal("")
   const [editing, setEditing] = createSignal(false)
   const [now, setNow] = createSignal(Date.now())
@@ -428,6 +432,18 @@ export function BrowserPane(props: {
           <Glyph d={GLYPH.plus} />
         </button>
         <span class="browser-pane-spacer" />
+        <BrowserLynxTools
+          tabs={() => status()?.tabs.length ?? 0}
+          view={lynxView}
+          setView={setLynxView}
+          floating={browserPane.floating}
+          setFloating={browserPane.setFloating}
+          xray={xray}
+          setXray={(on) => {
+            setXray(on)
+            void feed.control({ action: "xray", on })
+          }}
+        />
         <Show when={live()}>
           <span class="browser-pane-live" data-chroma>
             <span class="browser-pane-led" />
@@ -573,6 +589,17 @@ export function BrowserPane(props: {
             <p class="browser-pane-empty-hint">{language.t("ui.browserPane.connecting")}</p>
           </div>
         </Show>
+        <BrowserLynxLayer
+          status={status}
+          activity={feed.activity}
+          agentActive={agentActive}
+          working={() => props.working?.() === true}
+          view={lynxView}
+          setView={setLynxView}
+          control={(command) => void feed.control(command)}
+          onTakeOver={props.onStop}
+          directory={props.directory}
+        />
       </div>
 
       <div class="browser-pane-caption" data-active={caption() ? "" : undefined} aria-live="polite">

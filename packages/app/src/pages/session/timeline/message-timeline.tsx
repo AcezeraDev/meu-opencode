@@ -81,6 +81,10 @@ import { toolTarget } from "../scope/turn-meter"
 import { TurnStats } from "../scope/turn-stats"
 import { TurnRating } from "../scope/turn-rating"
 import { stamp, writingFront } from "@/utils/motion"
+import { useLynxPrefs } from "@/context/lynx-prefs"
+import { LynxReplay, type ReplayStep } from "../lynx/lynx-replay"
+import { LynxSessionBar } from "../lynx/lynx-session-bar"
+import { LynxTeam } from "../lynx/lynx-team"
 
 const emptyMessages: MessageType[] = []
 const emptyParts: PartType[] = []
@@ -997,6 +1001,46 @@ export function MessageTimeline(props: {
     }),
   )
 
+  const lynx = useLynxPrefs()
+  // Every prompt, tool and error in order, for the replay track.
+  const replaySteps = createMemo<ReplayStep[]>(() =>
+    timelineRows().flatMap((row, index): ReplayStep[] => {
+      if (row._tag === "UserMessage") return [{ index, kind: "user", label: userPreview(row.userMessageID) ?? "" }]
+      if (row._tag === "Error") return [{ index, kind: "error", label: language.t("scope.overview.error") }]
+      if (row._tag !== "AssistantPart" || row.group.type !== "part") return []
+      const part = getMsgPart(row.group.ref.messageID, row.group.ref.partID)
+      if (part?.type !== "tool") return []
+      const target = toolTarget(part)
+      return [
+        {
+          index,
+          kind: part.state.status === "error" ? "error" : "tool",
+          label: target ? `${part.tool} · ${target}` : part.tool,
+        },
+      ]
+    }),
+  )
+  // In focus mode everything before the last prompt fades back.
+  const lastUserIndex = createMemo(() => {
+    const rows = timelineRows()
+    for (let index = rows.length - 1; index >= 0; index--) if (rows[index]?._tag === "UserMessage") return index
+    return -1
+  })
+  const jumpTo = (index: number) => {
+    const root = listRoot()
+    if (root) props.onMarkScrollGesture(root)
+    props.onUserScroll()
+    virtualizer.scrollToIndex(index, { align: "center" })
+    setTimeout(() => {
+      const element = listRoot()?.querySelector<HTMLElement>(`[data-index="${index}"]`)
+      if (!element) return
+      element.dataset.lynxFlash = ""
+      setTimeout(() => delete element.dataset.lynxFlash, 1400)
+    }, 260)
+  }
+  const openSession = (id: string) =>
+    navigate(params.serverKey ? sessionHref(requireServerKey(params.serverKey), id) : legacySessionHref(sdk().directory, id))
+
   const turnDurationMs = (userMessageID: string) => {
     const message = messageByID().get(userMessageID)
     if (!message || message.role !== "user") return
@@ -1358,6 +1402,7 @@ export function MessageTimeline(props: {
     return (
       <div
         data-timeline-key={props.rowKey}
+        data-lynx-old={lynx.get("focus") && item().index < lastUserIndex() ? "" : undefined}
         style={{
           position: "absolute",
           top: `${item().start - (showHeader() ? 64 : 0)}px`,
@@ -1459,6 +1504,10 @@ export function MessageTimeline(props: {
             virtualizer.scrollToIndex(index, { align: "start" })
           }}
         />
+      </Show>
+      <LynxTeam sessionID={sessionID()} />
+      <Show when={lynx.get("replay") && replaySteps().length > 0}>
+        <LynxReplay steps={replaySteps()} onJump={jumpTo} />
       </Show>
       <ScrollView
         viewportRef={bindListRoot}
@@ -1584,6 +1633,11 @@ export function MessageTimeline(props: {
                       "gap-3": !settings.general.newLayoutDesigns(),
                     }}
                   >
+                    <LynxSessionBar
+                      session={info()}
+                      sessions={sync().data.session ?? []}
+                      onOpenSession={openSession}
+                    />
                     <SessionContextUsage
                       placement="bottom"
                       buttonAppearance={settings.general.newLayoutDesigns() ? "v2" : "default"}

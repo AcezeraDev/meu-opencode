@@ -31,7 +31,7 @@ export function trackAgentTray(input: {
   const steps = new Map<string, string>()
   const state = { finished: undefined as { sessionID: string; directory: string } | undefined, shown: "" }
 
-  const name = (directory: string, sessionID: string) => input.title(directory, sessionID) ?? "OpenCode"
+  const name = (directory: string, sessionID: string) => input.title(directory, sessionID) ?? "Lynx Code"
 
   const show = () => {
     const ask = [...asks.values()].at(-1)

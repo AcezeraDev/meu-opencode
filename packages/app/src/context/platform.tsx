@@ -53,6 +53,12 @@ type PlatformBase = {
   /** Text typed in the global quick-ask box, to start a conversation with (desktop only) */
   onQuickAsk?(cb: (text: string) => void): () => void
 
+  /** Starts the system's voice typing in the focused field (desktop only, Windows: Win+H) */
+  dictate?(): Promise<boolean>
+
+  /** An answer typed in the desktop's corner note, for the session that asked (desktop only) */
+  onLynxReply?(cb: (text: string) => void): () => void
+
   /** Shows the agent's state on the tray icon next to the clock (desktop only) */
   setAgentTray?(state: { status: "idle" | "working" | "done" | "attention"; tooltip: string }): void
 

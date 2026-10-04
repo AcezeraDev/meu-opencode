@@ -65,6 +65,7 @@ export type Command =
   | { action: "close_tab"; tab: string }
   | { action: "resize"; width: number; height: number }
   | { action: "open_external" }
+  | { action: "xray"; on: boolean }
 
 /** Bounds for the viewport the live view asks for, whatever size its pane is. */
 const VIEWPORT_MIN = { width: 320, height: 240 }
@@ -403,7 +404,7 @@ const layer = Layer.effect(
           options,
           external: BrowserInstall.external(options),
           mode,
-          accent: BrowserAccent.of(ctx.project),
+          accent: BrowserAccent.of(),
           sounds: options.sounds !== false,
           thoughts: options.thoughts ?? "cursor",
           bridge,
@@ -899,7 +900,7 @@ const layer = Layer.effect(
         if (!s.bridge?.connected) {
           yield* Effect.die(
             new BrowserStartError(
-              "the OpenCode Browser Bridge extension is not connected. Open the browser panel to see the port, load the extension, and pair it (set browser.extensionToken and enter it in the extension popup).",
+              "the Lynx Code browser extension is not connected. Open the browser panel to see the port, load the extension, and pair it (set browser.extensionToken and enter it in the extension popup).",
             ),
           )
         }
@@ -1098,6 +1099,13 @@ const layer = Layer.effect(
         const active = yield* current()
         const url = active ? yield* Effect.promise(() => active.url()) : undefined
         if (url) yield* handoff(url)
+        return yield* status()
+      }
+
+      if (command.action === "xray") {
+        // Only a page already open is drawn on; this must not start a browser.
+        const active = yield* current()
+        if (active) yield* Effect.promise(() => active.xray(command.on))
         return yield* status()
       }
 

@@ -28,7 +28,7 @@ const STEPS: ReadonlyArray<readonly [string, BuildStep]> = [
   ["Gerando instalador", "installer"],
 ]
 /** Where a build begins and ends in the log. */
-const BUILD_START = /Compilando o OpenCode Personal|Esperando a compilação em andamento/
+const BUILD_START = /Compilando o (Lynx Code|OpenCode Personal)|Esperando a compilação em andamento/
 const BUILD_END = /Compilado em|ERRO|Nenhuma mudança nova/
 /** Printed by update.ts once it is really compiling (or waiting for a build in progress). */
 const BUILDING_MARKER = "::opencode-personal-building::"

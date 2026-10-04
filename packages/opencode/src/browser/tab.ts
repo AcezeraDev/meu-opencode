@@ -188,6 +188,9 @@ const CLICK_SETTLE = 40
 const TYPE_TICK = 16
 const TYPE_BUDGET = 300
 const SCROLL_SETTLE = 350
+/** A watched scroll is turned in this many eased steps, this far apart: about half a second of glide. */
+const SCROLL_STEPS = 10
+const SCROLL_STEP_MS = 45
 
 /**
  * Settling after an action. A click that does not navigate never fires a load
@@ -1437,6 +1440,11 @@ export class Tab {
     return this.evaluate(this.cursorCall(method, args)).catch(() => {})
   }
 
+  /** Shows or hides the boxes and ref_N tags over everything the agent can act on. Never fails. */
+  xray(on: boolean) {
+    return this.cursor("xray", String(on))
+  }
+
   /**
    * Reads the page outline. Refs already on the page are kept, and new ones
    * continue from the highest this tab has handed out.
@@ -2456,13 +2464,20 @@ export class Tab {
     }
 
     const before = await this.scrollState(selector, where.point)
-    await this.connection.send("Input.dispatchMouseEvent", {
-      type: "mouseWheel",
-      x: where.point.x,
-      y: where.point.y,
-      deltaX: x,
-      deltaY: y,
-    })
+    // While someone watches, the wheel turns in small eased steps so the page
+    // glides instead of jumping; unwatched, one turn does the same work.
+    const steps = this.presenting ? SCROLL_STEPS : 1
+    const share = (step: number) => (1 - Math.cos((Math.PI * step) / steps)) / 2
+    for (const step of Array.from({ length: steps }, (_, index) => index + 1)) {
+      await this.connection.send("Input.dispatchMouseEvent", {
+        type: "mouseWheel",
+        x: where.point.x,
+        y: where.point.y,
+        deltaX: Math.round(x * share(step)) - Math.round(x * share(step - 1)),
+        deltaY: Math.round(y * share(step)) - Math.round(y * share(step - 1)),
+      })
+      if (step < steps) await new Promise((resolve) => setTimeout(resolve, SCROLL_STEP_MS))
+    }
     await this.scrollSettled()
     let after = await this.scrollState(selector, where.point)
     let method: "wheel" | "script" = "wheel"
@@ -2475,7 +2490,7 @@ export class Tab {
       await this.evaluate(
         `(() => {
           const el = ${selector ? this.locate(selector) : "window"}
-          if (el) el.scrollBy({ left: ${x}, top: ${y}, behavior: "auto" })
+          if (el) el.scrollBy({ left: ${x}, top: ${y}, behavior: "${this.presenting ? "smooth" : "auto"}" })
         })()`,
       ).catch(() => {})
       await this.scrollSettled()

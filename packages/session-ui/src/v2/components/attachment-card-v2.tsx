@@ -1,7 +1,34 @@
 import type { JSX } from "solid-js"
 import "./attachment-card-v2.css"
 
-/** Shared 160px two-line card used by v2 file and comment attachments in the composer and timeline. */
+/** The file's kind as a short tag for the card's thumbnail: PDF, MD, PNG… */
+function kind(title: string) {
+  const ext = title.includes(".") ? title.split(".").pop()!.toUpperCase() : ""
+  return ext.length > 0 && ext.length <= 4 ? ext : "ARQ"
+}
+
+const TONES: Record<string, string> = {
+  PDF: "pdf",
+  PNG: "img",
+  JPG: "img",
+  JPEG: "img",
+  GIF: "img",
+  WEBP: "img",
+  SVG: "img",
+  MD: "doc",
+  TXT: "doc",
+  DOCX: "doc",
+  DOC: "doc",
+  CSV: "data",
+  XLSX: "data",
+  JSON: "data",
+}
+
+/**
+ * Shared card used by v2 file and comment attachments in the composer and
+ * timeline: a small thumbnail tagged with the file's kind beside its name,
+ * dropping in with a little spring when it is added.
+ */
 export function AttachmentCardV2(props: {
   title: string
   active?: boolean
@@ -24,10 +51,15 @@ export function AttachmentCardV2(props: {
       title={props.hover}
       onClick={() => props.onClick?.()}
     >
-      <span ref={(element) => props.titleRef?.(element)} data-slot="attachment-card-v2-title">
-        {props.title}
+      <span data-slot="attachment-card-v2-thumb" data-tone={TONES[kind(props.title)] ?? "other"} aria-hidden="true">
+        {kind(props.title)}
       </span>
-      <span data-slot="attachment-card-v2-subtitle">{props.children}</span>
+      <span data-slot="attachment-card-v2-text">
+        <span ref={(element) => props.titleRef?.(element)} data-slot="attachment-card-v2-title">
+          {props.title}
+        </span>
+        <span data-slot="attachment-card-v2-subtitle">{props.children}</span>
+      </span>
     </div>
   )
 }

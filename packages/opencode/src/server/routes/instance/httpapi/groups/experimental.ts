@@ -105,6 +105,24 @@ const UsageWeek = Schema.Struct({
   ),
 }).annotate({ identifier: "UsageWeek" })
 
+// What the agent learned about the site that is open: notes and saved programs.
+export const BrowserSiteQuery = Schema.Struct({
+  ...WorkspaceRoutingQueryFields,
+  url: Schema.String,
+})
+export const BrowserSiteForgetQuery = Schema.Struct({
+  ...WorkspaceRoutingQueryFields,
+  url: Schema.String,
+  note: Schema.String,
+})
+const BrowserSiteInfo = Schema.Struct({
+  host: Schema.String,
+  notes: Schema.Array(Schema.Struct({ text: Schema.String, at: Schema.Number })),
+  programs: Schema.Array(
+    Schema.Struct({ name: Schema.String, description: Schema.String, runs: Schema.Number, failures: Schema.Number }),
+  ),
+}).annotate({ identifier: "BrowserSiteInfo" })
+
 // The study notebook: explained answers the agent gave on pages, by subject.
 const NotebookSubject = Schema.Struct({
   slug: Schema.String,
@@ -291,6 +309,7 @@ export const BrowserCommand = Schema.Union([
   Schema.Struct({ action: Schema.Literal("new_tab"), url: Schema.optional(Schema.String) }),
   Schema.Struct({ action: Schema.Literals(["select_tab", "close_tab"]), tab: Schema.String }),
   Schema.Struct({ action: Schema.Literal("resize"), width: Schema.Number, height: Schema.Number }),
+  Schema.Struct({ action: Schema.Literal("xray"), on: Schema.Boolean }),
 ]).annotate({ identifier: "BrowserCommand" })
 const WorktreeErrorName = Schema.Union([
   Schema.Literal("WorktreeNotGitError"),
@@ -346,6 +365,7 @@ export const ExperimentalPaths = {
   browserStream: "/experimental/browser/stream",
   browserInput: "/experimental/browser/input",
   browserControl: "/experimental/browser/control",
+  browserSite: "/experimental/browser/site",
 } as const
 
 export const ExperimentalApi = HttpApi.make("experimental")
@@ -521,6 +541,26 @@ export const ExperimentalApi = HttpApi.make("experimental")
             summary: "Get the weekly summary",
             description:
               "Sessions, time, spend, tool errors and the most reliable model since `since` (ms), across all sessions.",
+          }),
+        ),
+        HttpApiEndpoint.get("browserSite", ExperimentalPaths.browserSite, {
+          query: BrowserSiteQuery,
+          success: described(Schema.optional(BrowserSiteInfo), "What the agent learned about a site"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.browser.site",
+            summary: "Get what the agent learned about a site",
+            description: "Notes and saved programs kept for the site of `url`; nothing for pages off the web.",
+          }),
+        ),
+        HttpApiEndpoint.delete("browserSiteForget", ExperimentalPaths.browserSite, {
+          query: BrowserSiteForgetQuery,
+          success: described(Schema.optional(BrowserSiteInfo), "The site after forgetting the note"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.browser.site.forget",
+            summary: "Forget one note about a site",
+            description: "Removes note number `note` (1-based) from the site of `url`.",
           }),
         ),
         HttpApiEndpoint.get("notebook", ExperimentalPaths.notebook, {

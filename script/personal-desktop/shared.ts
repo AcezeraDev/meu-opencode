@@ -34,8 +34,10 @@ export const RELEASE_FILES = ["OpenCodePersonalSetup.exe", "OpenCodePersonalSetu
  */
 export const FOLLOW = path.join(HOME, "follow.json")
 
-export const PRODUCT = "OpenCode Personal"
+export const PRODUCT = "Lynx Code"
 export const EXE = `${PRODUCT}.exe`
+/** The executable of builds made before the app became Lynx Code; one may still be running. */
+export const LEGACY_EXE = "OpenCode Personal.exe"
 export const INSTALLED_EXE = path.join(LOCAL, "Programs", "opencode-personal", EXE)
 
 /** Build output, dependencies, tests and files the build itself writes. */
@@ -162,8 +164,8 @@ export async function releaseLock(file: string) {
 }
 
 export async function appRunning() {
-  const output = await $`tasklist /FI ${`IMAGENAME eq ${EXE}`} /NH`.nothrow().quiet().text()
-  return output.toLowerCase().includes(EXE.toLowerCase())
+  const output = (await $`tasklist /NH`.nothrow().quiet().text()).toLowerCase()
+  return [EXE, LEGACY_EXE].some((exe) => output.includes(exe.toLowerCase()))
 }
 
 /** Windows balloon notification; failures are ignored (it's only a courtesy). */

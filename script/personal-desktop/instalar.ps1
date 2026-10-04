@@ -1,4 +1,4 @@
-﻿# Instala o OpenCode Personal num PC novo, baixando o app JÁ PRONTO.
+﻿# Instala o Lynx Code num PC novo, baixando o app JÁ PRONTO.
 #
 # Num PowerShell comum (não precisa de administrador):
 #
@@ -27,7 +27,7 @@ $Repo = "AcezeraDev/meu-opencode"
 $Tag = "personal-latest"
 $Base = "https://github.com/$Repo/releases/download/$Tag"
 $Casa = Join-Path $env:LOCALAPPDATA "OpenCodePersonal"
-$AppExe = Join-Path $env:LOCALAPPDATA "Programs\opencode-personal\OpenCode Personal.exe"
+$AppExe = Join-Path $env:LOCALAPPDATA "Programs\opencode-personal\Lynx Code.exe"
 $Pacote = if ($env:OPENCODE_PACOTE) { $env:OPENCODE_PACOTE } else { "" }
 
 $ErrorActionPreference = "Stop"
@@ -61,7 +61,7 @@ function Baixar([string]$url, [string]$destino) {
 New-Item -ItemType Directory -Force $Casa | Out-Null
 
 # ------------------------------------------------------------------ 1. baixar
-Etapa "Baixando o OpenCode Personal (instalador pronto, ~160 MB)"
+Etapa "Baixando o Lynx Code (instalador pronto, ~160 MB)"
 $Setup = Join-Path $Casa "OpenCodePersonalSetup.exe"
 $Importador = Join-Path $Casa "opencode-import.exe"
 Baixar "$Base/OpenCodePersonalSetup.exe" $Setup
@@ -77,7 +77,7 @@ foreach ($velho in "opencode-atualizar.exe", "atualizar.vbs", "release.json", "v
 
 # ------------------------------------------------------------------ 2. instalar
 Etapa "Instalando (segundos)"
-Get-Process "OpenCode Personal" -ErrorAction SilentlyContinue | ForEach-Object {
+Get-Process "Lynx Code", "OpenCode Personal" -ErrorAction SilentlyContinue | ForEach-Object {
   Aviso "Fechando o app aberto para instalar..."
   $_.CloseMainWindow() | Out-Null; Start-Sleep -Seconds 3
 }
@@ -120,7 +120,7 @@ if ($Pacote) {
 }
 
 # ------------------------------------------------------------------ 4. abrir + Brave
-Etapa "Abrindo o OpenCode Personal"
+Etapa "Abrindo o Lynx Code"
 Start-Process $AppExe
 
 $brave = @(
@@ -148,5 +148,5 @@ if ($brave -and (Test-Path $brave)) { Start-Process $brave "brave://extensions" 
 if (Test-Path $extensao) { Start-Process explorer.exe $extensao }
 
 Write-Host ""
-Write-Host "Pronto! O OpenCode Personal está instalado em $AppExe" -ForegroundColor Green
+Write-Host "Pronto! O Lynx Code está instalado em $AppExe" -ForegroundColor Green
 Write-Host "Ele se atualiza sozinho: quando houver versão nova, use o botão Atualizar na barra de título." -ForegroundColor Green

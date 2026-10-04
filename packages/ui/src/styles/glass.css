@@ -77,7 +77,7 @@
   --letter-spacing-tight: -0.011em;
   --letter-spacing-tightest: -0.022em;
 
-  @media (prefers-color-scheme: dark) {
+  &[data-color-scheme="dark"] {
     --glass-surface-weak: rgba(30, 30, 36, 0.52);
     --glass-surface: rgba(30, 30, 36, 0.68);
     --glass-surface-strong: rgba(34, 34, 40, 0.82);

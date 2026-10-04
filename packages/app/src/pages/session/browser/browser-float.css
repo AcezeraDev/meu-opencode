@@ -1,0 +1,57 @@
+.lynx-float {
+  position: fixed;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--v2-background-bg-base);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.55),
+    0 0 0 1px color-mix(in srgb, var(--lynx-cyan) 45%, transparent);
+  animation: lynx-float-in var(--motion-move) var(--motion-ease-spring) both;
+}
+.lynx-float-grip {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  padding: 0 6px 0 10px;
+  background: color-mix(in srgb, var(--lynx-cyan) 10%, var(--v2-background-bg-layer-01));
+  color: var(--v2-text-text-muted);
+  font-size: 11.5px;
+  cursor: grab;
+  user-select: none;
+}
+.lynx-float-grip:active { cursor: grabbing; }
+.lynx-float-dots {
+  width: 14px;
+  height: 8px;
+  background: radial-gradient(circle, currentColor 1px, transparent 1.5px) 0 0 / 4.5px 4px;
+  opacity: 0.6;
+}
+.lynx-float-grip button {
+  margin-left: auto;
+  height: 20px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--v2-text-text-base);
+  font-size: 11px;
+  cursor: pointer;
+}
+.lynx-float-grip button:hover { background: var(--v2-overlay-simple-overlay-hover); }
+.lynx-float-body { flex: 1; min-height: 0; }
+.lynx-float-body > * { height: 100%; }
+.lynx-float-size {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, color-mix(in srgb, var(--lynx-cyan) 60%, transparent) 50%);
+}
+@keyframes lynx-float-in { from { opacity: 0; transform: translate(20px, 20px) scale(0.92); } }

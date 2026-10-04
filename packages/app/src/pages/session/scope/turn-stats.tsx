@@ -1,6 +1,7 @@
 import type { Message, Part } from "@opencode-ai/sdk/v2/client"
 import { createMemo, Show } from "solid-js"
 import { announceSpend } from "@/components/day-spend"
+import { createUsdBrlRate } from "@/components/exchange-rate"
 import { useLanguage } from "@/context/language"
 import { ClockReadout, Readout } from "./readout"
 import { turnFor, turnStats } from "./turn-meter"
@@ -22,6 +23,9 @@ export function TurnStats(props: {
   fresh: boolean
 }) {
   const language = useLanguage()
+  const rate = createUsdBrlRate()
+  // The taxi meter speaks the person's money: reais when the app is in Portuguese.
+  const brl = () => (language.intl().toLowerCase().startsWith("pt") ? rate() : undefined)
   const stats = createMemo(() => {
     const turn = turnFor(props.messages, props.userMessageID)
     return turn && turn.assistants.length > 0 ? turnStats(turn, props.parts) : undefined
@@ -77,8 +81,12 @@ export function TurnStats(props: {
             }}
           >
             <span class="scope-label">{language.t("scope.stats.cost")}</span>
-            <span class="scope-readout">$</span>
-            <Readout value={value().cost} digits={1} decimals={value().cost < 1 ? 4 : 2} />
+            <span class="scope-readout">{brl() ? "R$" : "$"}</span>
+            <Readout
+              value={value().cost * (brl() ?? 1)}
+              digits={1}
+              decimals={value().cost * (brl() ?? 1) < 1 ? 3 : 2}
+            />
           </span>
         </div>
       )}

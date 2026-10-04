@@ -63,7 +63,7 @@ const APP_IDS: Record<string, string> = {
   prod: "ai.opencode.desktop",
 }
 // Personal builds get their own name, app id and data folder so they install next to the official app.
-const PERSONAL_NAME = "OpenCode Personal"
+const PERSONAL_NAME = "Lynx Code"
 const PERSONAL_ID = "ai.opencode.desktop.personal"
 const TEST_ONBOARDING = process.env.OPENCODE_TEST_ONBOARDING === "1"
 const SIDECAR_VERSION = process.env.OPENCODE_SIDECAR_V2 === "1" ? "v2" : "v1"

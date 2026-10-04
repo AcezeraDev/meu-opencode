@@ -90,6 +90,14 @@ export function createBrowserSettingsController() {
 
   return {
     extension: () => current().mode === "extension",
+    // The extension only pairs with a shared secret, so turning the mode on
+    // makes one when the config has none (a fresh PC never had it set by hand).
+    setExtension: (value: boolean) =>
+      set({
+        mode: value ? "extension" : "process",
+        extensionToken: current().extensionToken || crypto.randomUUID().replaceAll("-", ""),
+      }),
+    token: () => current().extensionToken ?? "",
     ownWindow: () => current().ownWindow === true,
     setOwnWindow: (value: boolean) => set({ ownWindow: value }),
     sounds: () => current().sounds !== false,

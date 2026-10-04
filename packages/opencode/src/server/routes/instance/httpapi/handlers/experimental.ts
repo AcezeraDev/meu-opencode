@@ -5,6 +5,7 @@ import { BackgroundJob } from "@/background/job"
 import { Browser, type BrowserEvent } from "@/browser/session"
 import { BrowserTrail } from "@/browser/trail"
 import { BrowserNotebook } from "@/browser/notebook"
+import { BrowserSite } from "@/browser/site"
 import { SessionWeek } from "@/session/week"
 import { Config } from "@/config/config"
 import { InstanceState } from "@/effect/instance-state"
@@ -40,6 +41,8 @@ import {
   SessionListQuery,
   ToolListQuery,
   UsageEtaQuery,
+  BrowserSiteForgetQuery,
+  BrowserSiteQuery,
   UsageSpendQuery,
   UsageWeekQuery,
   RoteiaStatusQuery,
@@ -260,6 +263,38 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
         : []
       const notebook = yield* Effect.promise(() => BrowserNotebook.countSince(since))
       return SessionWeek.summarize({ since, messages, tools, sessions: titles, notebook })
+    })
+
+    const siteInfo = async (url: string) => {
+      const host = BrowserSite.hostOf(url)
+      if (!host) return undefined
+      const [notes, programs] = await Promise.all([BrowserSite.notes(host), BrowserSite.programs(host)])
+      return {
+        host,
+        notes,
+        programs: programs.map((item) => ({
+          name: item.name,
+          description: item.description,
+          runs: item.runs,
+          failures: item.failures,
+        })),
+      }
+    }
+
+    const browserSite = Effect.fn("ExperimentalHttpApi.browserSite")(function* (ctx: {
+      query: typeof BrowserSiteQuery.Type
+    }) {
+      return yield* Effect.promise(() => siteInfo(ctx.query.url))
+    })
+
+    const browserSiteForget = Effect.fn("ExperimentalHttpApi.browserSiteForget")(function* (ctx: {
+      query: typeof BrowserSiteForgetQuery.Type
+    }) {
+      const host = BrowserSite.hostOf(ctx.query.url)
+      const number = Number(ctx.query.note)
+      if (host && Number.isInteger(number) && number > 0)
+        yield* Effect.promise(() => BrowserSite.removeNotes(host, [number]))
+      return yield* Effect.promise(() => siteInfo(ctx.query.url))
     })
 
     const notebook = Effect.fn("ExperimentalHttpApi.notebook")(function* () {
@@ -652,6 +687,8 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       .handle("datasetExport", datasetExport)
       .handle("usageEta", usageEta)
       .handle("usageWeek", usageWeek)
+      .handle("browserSite", browserSite)
+      .handle("browserSiteForget", browserSiteForget)
       .handle("notebook", notebook)
       .handle("notebookSubject", notebookSubject)
       .handle("webVideoModels", webVideoModels)

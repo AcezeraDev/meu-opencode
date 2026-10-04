@@ -98,6 +98,9 @@ export const SCRIPT = String.raw`(function (startX, startY, accent, sound, thoug
     flash: null,
     wheel: null,
     notch: null,
+    rail: null,
+    thumb: null,
+    railing: 0,
     float: null,
     motion: null,
     drift: null,
@@ -131,6 +134,12 @@ export const SCRIPT = String.raw`(function (startX, startY, accent, sound, thoug
     glow.style.cssText =
       "position:fixed;left:0;top:0;right:0;bottom:0;pointer-events:none;opacity:0;will-change:opacity;" +
       "transition:opacity 260ms ease;"
+
+    /** The spotlight: the rest of the page dims for a moment around what the agent is about to touch. */
+    var spot = document.createElement("div")
+    spot.style.cssText =
+      "position:fixed;left:0;top:0;width:0;height:0;pointer-events:none;border-radius:10px;opacity:0;" +
+      "box-shadow:0 0 0 200vmax rgba(5, 8, 18, 0.34);will-change:opacity;"
 
     var box = document.createElement("div")
     box.style.cssText =
@@ -167,25 +176,30 @@ export const SCRIPT = String.raw`(function (startX, startY, accent, sound, thoug
 
     var pointer = document.createElement("div")
     pointer.style.cssText =
-      "position:fixed;left:0;top:0;width:22px;height:22px;pointer-events:none;will-change:transform,opacity;" +
+      "position:fixed;left:0;top:0;width:40px;height:40px;pointer-events:none;will-change:transform,opacity;" +
       "opacity:0;transition:opacity 180ms ease;" +
       "transform:translate(" + (state.x - 3) + "px," + (state.y - 2) + "px);"
 
     /** Leans, presses and floats on its own, while the pointer around it only travels. */
     var body = document.createElement("div")
     body.style.cssText =
-      "position:absolute;left:0;top:0;width:22px;height:22px;transform-origin:3px 2px;will-change:transform;"
+      "position:absolute;left:0;top:0;width:40px;height:40px;transform-origin:3px 2px;will-change:transform;"
     pointer.appendChild(body)
 
     var svg = document.createElementNS(NS, "svg")
-    svg.setAttribute("width", "22")
-    svg.setAttribute("height", "22")
-    svg.setAttribute("viewBox", "0 0 24 24")
+    svg.setAttribute("width", "40")
+    svg.setAttribute("height", "40")
+    // A rounded arrowhead with a soft notch underneath. The viewBox is shifted so
+    // its tip lands at (3, 2) px, the hot spot every translate below assumes.
+    svg.setAttribute("viewBox", "2.1 1.1 24 24")
     var arrow = document.createElementNS(NS, "path")
-    arrow.setAttribute("d", "M3 2 L3 19.5 L7.6 15 L10.6 21.8 L13.5 20.5 L10.5 13.8 L17 13.8 Z")
+    arrow.setAttribute(
+      "d",
+      "M3.1 4.7 L3.67 17.4 Q3.86 20.2 6.33 18.7 L9 15.45 Q10.33 13.74 12.7 13.74 L15.67 13.74 Q19.86 12.8 16.5 10.2 L6.7 2.3 Q3.1 -0.07 3.1 4.7 Z",
+    )
     arrow.setAttribute("fill", "#0b0f12")
     arrow.setAttribute("stroke", "#ffffff")
-    arrow.setAttribute("stroke-width", "1.5")
+    arrow.setAttribute("stroke-width", "1.1")
     arrow.setAttribute("stroke-linejoin", "round")
     svg.appendChild(arrow)
     body.appendChild(svg)
@@ -194,7 +208,7 @@ export const SCRIPT = String.raw`(function (startX, startY, accent, sound, thoug
     var tag = document.createElement("div")
     tag.textContent = "IA"
     tag.style.cssText =
-      "position:absolute;left:15px;top:17px;padding:1px 5px;border-radius:99px;max-width:230px;" +
+      "position:absolute;left:28px;top:31px;padding:1px 5px;border-radius:99px;max-width:230px;" +
       "font:700 9px/1.4 system-ui,-apple-system,'Segoe UI',sans-serif;letter-spacing:0.04em;color:#0b0b10;" +
       "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
     body.appendChild(tag)
@@ -250,23 +264,36 @@ export const SCRIPT = String.raw`(function (startX, startY, accent, sound, thoug
       "position:absolute;left:50%;top:50%;width:3px;height:5px;margin:-2.5px 0 0 -1.5px;border-radius:2px;"
     wheel.appendChild(notch)
 
+    /** A thin rail on the right edge whose thumb glides as the agent scrolls the page. */
+    var rail = document.createElement("div")
+    rail.style.cssText =
+      "position:fixed;right:5px;top:12%;height:76%;width:4px;border-radius:2px;pointer-events:none;opacity:0;" +
+      "background:rgba(255, 255, 255, 0.14);box-shadow:0 0 0 1px rgba(0, 0, 0, 0.18);transition:opacity 0.25s ease;"
+    var thumb = document.createElement("div")
+    thumb.style.cssText = "position:absolute;left:0;width:4px;height:18%;top:0;border-radius:2px;will-change:top;"
+    rail.appendChild(thumb)
+
     root.appendChild(glow)
+    root.appendChild(spot)
     root.appendChild(box)
     root.appendChild(halo)
     root.appendChild(ripple)
     root.appendChild(trail)
     root.appendChild(wheel)
+    root.appendChild(rail)
     root.appendChild(pointer)
     root.appendChild(flash)
     root.appendChild(card)
     doc.appendChild(host)
 
     state.host = host
+    state.root = root
     state.pointer = pointer
     state.trail = trail
     state.ripple = ripple
     state.halo = halo
     state.box = box
+    state.spot = spot
     state.glow = glow
     state.tag = tag
     state.label = label
@@ -274,6 +301,8 @@ export const SCRIPT = String.raw`(function (startX, startY, accent, sound, thoug
     state.flash = flash
     state.wheel = wheel
     state.notch = notch
+    state.rail = rail
+    state.thumb = thumb
     state.card = card
     state.now = now
     state.detail = detail
@@ -298,6 +327,8 @@ export const SCRIPT = String.raw`(function (startX, startY, accent, sound, thoug
     state.tag.style.background = "rgb(" + rgb + ")"
     state.wheel.style.borderColor = "rgb(" + rgb + ")"
     state.notch.style.background = "rgb(" + rgb + ")"
+    state.thumb.style.background = "rgb(" + rgb + ")"
+    state.thumb.style.boxShadow = "0 0 8px " + tone(0.7)
     state.card.style.borderLeft = "3px solid rgb(" + rgb + ")"
     state.pulse.style.background = "rgb(" + rgb + ")"
     state.status.style.color = "rgb(" + rgb + ")"
@@ -429,9 +460,16 @@ export const SCRIPT = String.raw`(function (startX, startY, accent, sound, thoug
     key: function (a, t) {
       burst(a, t, 0.022, "bandpass", 1700 + Math.random() * 1500, 1.6, 0.14 + Math.random() * 0.08)
     },
-    // The notches of a wheel turning, fading as it spins down.
+    // A soft wheel rolling: quiet notches that speed up and slow down with the
+    // page, over a faint brush of air, small enough to sit under anything.
     scroll: function (a, t) {
-      for (var i = 0; i < 4; i++) burst(a, t + i * 0.045, 0.012, "highpass", 2600, 0.7, 0.14 - i * 0.025)
+      burst(a, t, 0.42, "lowpass", 900, 0.6, 0.035)
+      var at = 0
+      for (var i = 0; i < 9; i++) {
+        var gap = 0.03 + Math.abs(i - 4) * 0.012
+        burst(a, t + at, 0.009, "bandpass", 2300 + Math.random() * 500, 1.1, 0.06 - Math.abs(i - 4) * 0.008)
+        at += gap
+      }
     },
     // A camera shutter: open, the curtain, close.
     shot: function (a, t) {
@@ -618,6 +656,18 @@ export const SCRIPT = String.raw`(function (startX, startY, accent, sound, thoug
     box.style.top = y - 4 + "px"
     box.style.width = width + 8 + "px"
     box.style.height = height + 8 + "px"
+    var spot = state.spot
+    spot.style.left = x - 6 + "px"
+    spot.style.top = y - 6 + "px"
+    spot.style.width = width + 12 + "px"
+    spot.style.height = height + 12 + "px"
+    if (spot.animate) {
+      // Gone again before the press lands, so a picture taken right after shows the page as it is.
+      spot.animate(
+        [{ opacity: 0 }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.55 }, { opacity: 0, offset: 0.8 }, { opacity: 0 }],
+        { duration: duration || 700, easing: "ease-out" }
+      )
+    }
     if (box.animate) {
       box.animate(
         [
@@ -703,6 +753,13 @@ export const SCRIPT = String.raw`(function (startX, startY, accent, sound, thoug
    */
   function typing(count, duration) {
     if (!build()) return
+    // The field being filled lights up with a tag, so it is clear where the words are going.
+    var field = document.activeElement
+    if (field && field !== document.body && field.getBoundingClientRect) {
+      var rect = field.getBoundingClientRect()
+      if (rect.width > 0 && rect.height > 0)
+        highlight(rect.left, rect.top, rect.width, rect.height, Math.max(900, (duration || 300) + 600), "digitando…")
+    }
     var ticks = Math.max(1, Math.min(count || 1, 24))
     var span = Math.max(60, duration || 300)
     for (var i = 0; i < ticks; i++) play("key", (span / ticks) * i + Math.random() * 18)
@@ -744,8 +801,32 @@ export const SCRIPT = String.raw`(function (startX, startY, accent, sound, thoug
         { duration: 220, iterations: 3, easing: "ease-in" }
       )
     }
+    rail()
     play("scroll")
     wake()
+  }
+
+  /** Shows the rail on the right edge for a moment, its thumb following the page as it moves. */
+  function rail() {
+    var scroller = document.scrollingElement || document.documentElement
+    var room = scroller.scrollHeight - innerHeight
+    if (!(room > 8)) return
+    var until = Date.now() + 1100
+    state.rail.style.opacity = "1"
+    state.thumb.style.height = Math.max(10, Math.min(60, (innerHeight / scroller.scrollHeight) * 100)) + "%"
+    if (state.railing) return
+    var follow = function () {
+      var max = scroller.scrollHeight - innerHeight
+      var ratio = max > 0 ? Math.min(1, Math.max(0, scroller.scrollTop / max)) : 0
+      state.thumb.style.top = ratio * (100 - parseFloat(state.thumb.style.height)) + "%"
+      if (Date.now() < until) {
+        state.railing = requestAnimationFrame(follow)
+        return
+      }
+      state.railing = 0
+      state.rail.style.opacity = "0"
+    }
+    state.railing = requestAnimationFrame(follow)
   }
 
   /** The page lighting up and a shutter, once the picture has been taken. */
@@ -854,6 +935,51 @@ export const SCRIPT = String.raw`(function (startX, startY, accent, sound, thoug
     wake()
   }
 
+  /**
+   * X-ray: a thin box with its ref_N tag around every element the agent can
+   * act on, the page as the agent sees it. Follows scrolling while it is on.
+   */
+  function xray(on) {
+    if (!build()) return
+    if (state.xray) {
+      state.xray.remove()
+      removeEventListener("scroll", state.xrayDraw, true)
+      removeEventListener("resize", state.xrayDraw)
+      state.xray = null
+    }
+    if (!on) return
+    var layer = document.createElement("div")
+    layer.style.cssText = "position:fixed;left:0;top:0;right:0;bottom:0;pointer-events:none;"
+    // Inside the overlay's own (closed) shadow root, so the page and its serialized HTML never see it.
+    state.root.appendChild(layer)
+    var draw = function () {
+      while (layer.firstChild) layer.removeChild(layer.firstChild)
+      var found = document.querySelectorAll("[data-oc-ref]")
+      var shown = 0
+      for (var i = 0; i < found.length && shown < 400; i++) {
+        var rect = found[i].getBoundingClientRect()
+        if (rect.width < 2 || rect.height < 2 || rect.bottom < 0 || rect.top > innerHeight) continue
+        shown++
+        var box = document.createElement("div")
+        box.style.cssText =
+          "position:fixed;box-sizing:border-box;border:1px solid " + tone(0.9) + ";background:" + tone(0.07) +
+          ";border-radius:3px;left:" + rect.left + "px;top:" + rect.top + "px;width:" + rect.width + "px;height:" + rect.height + "px;"
+        var tag = document.createElement("span")
+        tag.textContent = found[i].getAttribute("data-oc-ref")
+        tag.style.cssText =
+          "position:absolute;left:-1px;top:-13px;padding:0 3px;border-radius:3px 3px 0 0;background:" + tone(1) +
+          ";color:#0b0b10;font:600 9px/13px ui-monospace,Consolas,monospace;white-space:nowrap;"
+        box.appendChild(tag)
+        layer.appendChild(box)
+      }
+    }
+    draw()
+    state.xray = layer
+    state.xrayDraw = draw
+    addEventListener("scroll", draw, true)
+    addEventListener("resize", draw)
+  }
+
   function hide(hidden) {
     if (state.host) state.host.style.display = hidden ? "none" : "block"
   }
@@ -875,6 +1001,7 @@ export const SCRIPT = String.raw`(function (startX, startY, accent, sound, thoug
     shot: shot,
     arrive: arrive,
     say: say,
+    xray: xray,
   }
   // Not enumerable, so it does not show up for pages that walk window.
   Object.defineProperty(window, KEY, { value: api, configurable: true, enumerable: false })

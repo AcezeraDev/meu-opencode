@@ -199,7 +199,7 @@ export const dict: Record<string, string> = {
   "ui.browserPane.connecting": "Waiting for the first picture",
   "ui.browserPane.pairTitle": "Pair the browser extension",
   "ui.browserPane.pairHint":
-    "In the OpenCode Browser Bridge extension popup, enter port {{port}} and the token from your config (browser.extensionToken), then Save and connect.",
+    "In the Lynx Code extension popup, enter port {{port}} and the token shown in Settings › General › Browser (Copy token button), then Save and connect.",
   "ui.browserPane.agent.label": "Agent",
   "ui.browserPane.stop": "Stop the agent",
   "ui.browserPane.stopHint": "Interrupts what the agent is doing; the page stays as it is, for you to carry on.",

@@ -380,6 +380,10 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
       get current() {
         return store
       },
+      /** Writes one value by its path, for undoing a change from the history. */
+      setPath(path: string[], value: unknown) {
+        setStore(...(path as [never]), value as never)
+      },
       general: {
         autoSave: withFallback(() => store.general?.autoSave, defaultSettings.general.autoSave),
         setAutoSave(value: boolean) {

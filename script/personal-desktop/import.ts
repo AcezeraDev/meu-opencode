@@ -22,11 +22,12 @@ import { PLACES, TEXT, relocate, type Place } from "./places"
 // Inlined from shared.ts on purpose: this file is also compiled to a standalone
 // exe (bun build --compile, see release.ts) that a new PC runs with no repository
 // present, and shared.ts reads the repo's package.json files at import time.
-const PRODUCT = "OpenCode Personal"
-const EXE = `${PRODUCT}.exe`
+const PRODUCT = "Lynx Code"
+// Builds made before the app became Lynx Code run as OpenCode Personal.exe.
+const EXES = [`${PRODUCT}.exe`, "OpenCode Personal.exe"]
 async function appRunning() {
-  const output = await $`tasklist /FI ${`IMAGENAME eq ${EXE}`} /NH`.nothrow().quiet().text()
-  return output.toLowerCase().includes(EXE.toLowerCase())
+  const output = (await $`tasklist /NH`.nothrow().quiet().text()).toLowerCase()
+  return EXES.some((exe) => output.includes(exe.toLowerCase()))
 }
 
 const file = process.argv.slice(2).find((arg) => !arg.startsWith("--"))

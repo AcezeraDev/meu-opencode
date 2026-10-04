@@ -1,23 +1,27 @@
 ---
-name: OpenCode Personal
-description: Colored spaces for a personal AI coding agent; the app takes on the tone of the project you are in.
+name: Lynx Code
+description: A personal AI coding agent that always wears its logo's colors — white, cyan, indigo and a dark blue.
 colors:
-  space-purple: "#9b7bff"
-  space-blue: "#5b8cff"
-  space-cyan: "#2fc4de"
-  space-green: "#34cc88"
-  space-yellow: "#f0bd45"
-  space-orange: "#ff8a4c"
-  space-red: "#ff5d6c"
-  space-pink: "#ff66b8"
-  space-gray: "#9aa3b2"
-  space-on: "#0b0b10"
-  ground-deep: "#07080b"
-  panel-base: "#111217"
-  layer-01: "#17181e"
-  layer-02: "#1d1e26"
-  layer-03: "#25262f"
-  layer-04: "#2e2f3a"
+  lynx-cyan: "#22d3ee"
+  lynx-indigo: "#6366f1"
+  lynx-navy: "#0b1226"
+  lynx-fill: "#4f46e5 light / #6366f1 dark"
+  space-cyan: "#22d3ee"
+  space-green: "#2dd4bf"
+  space-yellow: "#67e8f9"
+  space-blue: "#38bdf8"
+  space-orange: "#60a5fa"
+  space-purple: "#818cf8"
+  space-red: "#6366f1"
+  space-pink: "#a5b4fc"
+  space-gray: "#94a3b8"
+  space-on: "#0b1226"
+  ground-deep: "#070b19"
+  panel-base: "#0b1226"
+  layer-01: "#101831"
+  layer-02: "#152040"
+  layer-03: "#1b284d"
+  layer-04: "#22305c"
   readout: "#eef0f6"
   user-mark: "#c7cede"
   error: "#ff5a4e"
@@ -114,53 +118,47 @@ components:
 
 ## Overview
 
-**Creative North Star: "Colored Spaces"**
+**Creative North Star: "Lynx Code"**
 
-Every project is a space with a color of its own, and the app takes on the tone of the space you are in. The ground and every panel lean toward that hue; the color itself lands only on what is yours and active: the open tab, the selected project or settings page, focus, and the send button. You know where you are by color alone. Home, which belongs to no project, is the violet space.
+The app always wears its logo: a command prompt (>_) lit inside a cyan-to-indigo circle on dark blue (`branding/lynx-code.svg`). Its colors are permanent: the dark blue ground, white text, the logo's cyan as the one accent, and its indigo for filled controls. They do not change with the project in use.
 
-The world is built from one variable. `html[data-space]` (set by the tab in use through `enterSpace`) picks `--space` from nine hues, and every neutral, border, wash and accent derives from it with `color-mix`, so a new space is one line. Surfaces are rounded cards (14 to 20px) lifted off a near-black ground with soft shadows that have a real offset. The app stays open all day, so it is calm at rest: backgrounds never move, Lite mode (on by default) stops continuous animation, and the optional RGB cycle for live work exists only when the user turns it on and Lite mode is off.
-
-It refuses the grey chat app with one static blue accent. Tokens live in `packages/ui/src/v2/styles/scope.css`; the shell's use of them lives in `packages/app/src/spaces.css`.
+The world is still built on the colored spaces structure: tokens in `packages/ui/src/v2/styles/scope.css`, the shell's use of them in `packages/app/src/spaces.css`, and the default theme (`oc-2`, shown as "Lynx Code") carrying the same palette for text, syntax and avatars. Surfaces are rounded cards (14 to 20px) lifted off the dark blue ground with soft offset shadows. The app stays open all day, so it is calm at rest: backgrounds never move, Lite mode (on by default) stops continuous animation, and the optional live-color cycle only sweeps between the logo's cyan and indigo.
 
 **Key Characteristics:**
-- Nine space hues; one of them is the app's accent at any moment, chosen by the project in use.
-- Near-black neutrals tinted 6 to 10% toward the space hue; no pure grey surfaces.
-- The space color marks only what is yours and active; everything else stays in tinted neutrals.
-- Rounded cards with soft offset shadows and a hairline in the space tone.
-- A quiet wash of the space color at the top of the session card and the composer, painted once.
-- Errors and warnings keep fixed colors in every space.
+- One accent, always: the logo cyan (`--space`). Filled controls use the indigo (`--lynx-fill`), which white text reads on.
+- Dark blue neutrals (`#070b19` to `#22305c`) in the dark scheme; white and pale blue-grey (`#ffffff` to `#d3dbec`) in the light one.
+- Each project keeps a shade between cyan and indigo for its own tab and avatar, so projects still tell apart without leaving the palette.
+- A quiet cyan wash at the top of the session card and the composer, painted once.
+- Errors and warnings keep fixed red and amber.
 
 ## Colors
 
-A multi-accent system where exactly one accent is live at a time: the space you are in.
-
 ### Primary
-- **The Space** (`--space`): the active project's hue, one of the nine below. It fills the send button, the focus ring, the active tab tint, the selected project row and settings page, text selection, caret, scrollbars and native controls. Derived tones: **Space Ink** (`--space-ink`, space mixed 82% toward white in dark, 72% toward ink in light) for accent text and icons; **Space Soft** (16%), **Space Line** (42%) and **Space Wash** (28% dark, 10% light) as translucent layers; **On Space** (`space-on`) for text on a space fill.
-- **Violet Space** (`space-purple`): the default and home space.
-- **Blue, Cyan, Green, Yellow, Orange, Red, Pink Spaces** (`space-blue` … `space-pink`): the eight hues a project can own. Tuned to read on the dark ground and as a fill.
-- **Slate Space** (`space-gray`): only for a project someone explicitly chose grey for; never auto-assigned.
+- **Lynx Cyan** (`--space`, `--lynx-cyan`): the accent everywhere — focus ring, the active tab tint, the selected project row and settings page, text selection, caret, scrollbars, native controls, the send button and the agent's cursor in the browser. Derived tones: **Space Ink** (`--space-ink`, cyan mixed 82% toward white in dark; the indigo `#4f46e5` in light, where cyan would not read on white) for accent text and icons; **Space Soft** (16%), **Space Line** (42%) and **Space Wash** (28% dark, 10% light); **On Space** (`space-on`, the dark blue) for text on a cyan fill.
+- **Lynx Indigo** (`--lynx-fill`, `--v2-background-bg-accent`): checkboxes, switches, radios, badges and other filled controls with white on them.
+- **Project shades** (`space-cyan` … `space-gray`): a project's own color for its tab and avatar (`--own-space`). The names are the colors a project can pick, kept so saved choices still resolve; each now maps to a shade from cyan to indigo.
 
-A project's color resolves as: explicit pick in project settings, else the color the layout auto-assigned, else a stable hash of its folder over the eight chromatic spaces. Every view of a project shows the same color.
+A project's shade resolves as: explicit pick in project settings, else the color the layout auto-assigned, else a stable hash of its folder.
 
 ### Session Tones
-Each session wears a tone of its own inside its project's space: the same hue turned 25 or 50 degrees either way, or softened (`[data-tone]` 0 to 5 in `spaces.css`, `context/session-tone.ts`). It replaces `--own-space` on the session's tab and its home row (a small dot on the avatar), so sessions of one project tell apart; the app itself keeps the project's space. A new tab takes a tone no open sibling wears; the tab's menu has "Cor da sessão" to pick another.
+Each session wears a tone of its own inside its project's shade: the same hue turned 15 or 30 degrees either way (kept small so it stays between cyan and indigo), or softened (`[data-tone]` 0 to 5 in `spaces.css`, `context/session-tone.ts`). It replaces `--own-space` on the session's tab and its home row.
 
 ### Tertiary
 - **Error** (`error`, light scheme `#d92d20`) and **Warn** (`warn`, light scheme `#b7791f`): fixed state colors, identical in every space, never cycled.
 
 ### Neutral
-- **Deep Ground** (`ground-deep`, mixed 7% toward the space): the window behind every card.
-- **Panel Base** (`panel-base`, 6%): session card and inputs.
-- **Layers 01 to 04** (`layer-01` … `layer-04`, 7 to 10%): composer, lists, nav, raised controls, one step lighter each.
-- **Borders** muted / base / strong: white at 5 / 8 / 15% mixed 12 / 16 / 22% toward the space.
+- **Deep Ground** (`ground-deep`, `#070b19`): the window behind every card.
+- **Panel Base** (`panel-base`, the logo dark blue `#0b1226`): session card and inputs.
+- **Layers 01 to 04** (`layer-01` … `layer-04`): composer, lists, nav, raised controls, one step lighter each.
+- **Borders** muted / base / strong: white at 5 / 8 / 15% mixed 12 / 16 / 22% toward the cyan.
 - **Readout** (`readout`): measured values in mono. **User Mark** (`user-mark`): prompt markers and quiet text.
 
-The hex values above are the neutral bases before the space tint; the built value is always `color-mix(in oklab, var(--space) N%, base)`. The light scheme mirrors the same structure on a near-white ground (`#ffffff` to `#d4d8e1` bases).
+The light scheme mirrors the same structure on white (`#ffffff` panels over a `#eef2fa` ground, layers down to `#d3dbec`). The default theme ramps (`v2-grey-*`) lean toward the dark blue in both schemes.
 
 ### Named Rules
 **The Yours-and-Active Rule.** The space color marks only what is yours and active: the active tab, focus, the send button, the selected project, the selected settings page. Everything else, including hovers, stays in space-tinted neutrals (hover tints stay at 9 to 12%).
 
-**The One Space Rule.** The app wears one space at a time. The only other hues on screen are each tab's and project row's own color (`--own-space`), shown at a faint 10% tint when inactive and filled at 22 to 24% when selected.
+**The One Accent Rule.** The app wears the logo cyan in every project. The only other hues on screen are each tab's and project row's own color (`--own-space`), shown at a faint 10% tint when inactive and filled at 22 to 24% when selected.
 
 **The Fixed State Rule.** Errors and warnings never take the space color and never cycle.
 

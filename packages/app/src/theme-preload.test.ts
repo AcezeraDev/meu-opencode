@@ -34,7 +34,20 @@ describe("theme preload", () => {
     expect(document.getElementById("oc-theme-preload")).toBeNull()
   })
 
+  test("moves a theme picked before Lynx Code to the default once", () => {
+    localStorage.setItem("opencode-theme-id", "nightowl")
+    localStorage.setItem("opencode-theme-css-light", "--background-base:#fff;")
+
+    run()
+
+    expect(document.documentElement.dataset.theme).toBe("oc-2")
+    expect(localStorage.getItem("opencode-theme-id")).toBe("oc-2")
+    expect(localStorage.getItem("opencode-theme-css-light")).toBeNull()
+    expect(localStorage.getItem("lynx-code-theme")).toBe("1")
+  })
+
   test("keeps cached css for non-default themes", () => {
+    localStorage.setItem("lynx-code-theme", "1")
     localStorage.setItem("opencode-theme-id", "nightowl")
     localStorage.setItem("opencode-theme-css-light", "--background-base:#fff;")
 
