@@ -87,6 +87,8 @@ export function BrowserToolCard(props: ToolProps) {
       return { active: i18n.t("ui.tool.browser.notes.active"), done: i18n.t("ui.tool.browser.notes.done") }
     if (props.tool === "browser_snapshot")
       return { active: i18n.t("ui.tool.browser.read"), done: i18n.t("ui.tool.browser.read.done") }
+    if (props.tool === "browser_find")
+      return { active: i18n.t("ui.tool.browser.find"), done: i18n.t("ui.tool.browser.find.done") }
     if (props.tool === "browser_inspect") {
       const what = typeof props.input?.what === "string" ? props.input.what : "console"
       const key = INSPECT_LABELS[what]
@@ -116,6 +118,8 @@ export function BrowserToolCard(props: ToolProps) {
       if (typeof props.input?.add === "string" && props.input.add) return props.input.add
       return typeof props.metadata?.host === "string" ? props.metadata.host : ""
     }
+    if (props.tool === "browser_find")
+      return typeof props.input?.query === "string" ? `“${props.input.query}”` : ""
     if (props.tool !== "browser_act") return ""
     const target = props.metadata?.target
     if (typeof target === "string" && target) return `“${target}”`

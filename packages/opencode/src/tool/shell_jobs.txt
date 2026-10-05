@@ -1,0 +1,11 @@
+See and control the commands started with the shell tool's `background: true`.
+
+- list: every background command, with its id, status (running, completed,
+  error, cancelled), how long ago it started and the command.
+- output: the latest lines of one command's output (`lines`, default 80). The
+  whole output is in the log file the shell tool returned, for Read or Grep.
+- stop: end a running command and everything it started, such as a dev server
+  you no longer need. Stop the servers you started once the task is done.
+
+You are told on your own when a background command exits, and when its output
+matches what you passed as `watch`: do not call this in a loop to wait for it.

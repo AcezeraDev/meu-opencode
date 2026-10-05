@@ -1,6 +1,7 @@
 import { Effect, Stream } from "effect"
 import os from "os"
 import { createWriteStream } from "node:fs"
+import { ShellBackground } from "./shell/background"
 import * as Tool from "./tool"
 import path from "path"
 import { containsPath, type InstanceContext } from "../project/instance-context"
@@ -363,6 +364,7 @@ export const ShellTool = Tool.define(
     const trunc = yield* Truncate.Service
     const plugin = yield* Plugin.Service
     const flags = yield* RuntimeFlags.Service
+    const startBackground = yield* ShellBackground.make
     const defaultTimeoutMs = flags.bashDefaultTimeoutMs ?? 2 * 60 * 1000
 
     const cygpath = Effect.fn("ShellTool.cygpath")(function* (shell: string, text: string) {
@@ -415,7 +417,10 @@ export const ShellTool = Tool.define(
         const cmd = ps || shellKind === "cmd" ? tokens[0]?.toLowerCase() : tokens[0]
 
         if (tokens[0]) {
-          const name = path.basename(unquote(tokens[0])).toLowerCase().replace(/\.(exe|cmd|bat)$/, "")
+          const name = path
+            .basename(unquote(tokens[0]))
+            .toLowerCase()
+            .replace(/\.(exe|cmd|bat)$/, "")
           // A glob (`*`, `./*`) or `.` deletes in the folder it names.
           const targets = CommandRisk.DELETE.has(name)
             ? yield* Effect.forEach(pathArgs(command, ps, shellKind === "cmd"), (arg) => {
@@ -631,6 +636,47 @@ export const ShellTool = Tool.define(
       }
     })
 
+    /** A command that keeps running, such as a dev server, started as a background job (see ShellBackground). */
+    const runBackground = Effect.fn("ShellTool.runBackground")(function* (
+      input: { shell: string; command: string; cwd: string; env: NodeJS.ProcessEnv; watch?: string },
+      ctx: Tool.Context,
+    ) {
+      const started = yield* startBackground(
+        {
+          command: cmd(input.shell, input.command, input.cwd, input.env),
+          title: input.command,
+          cwd: input.cwd,
+          watch: input.watch,
+        },
+        ctx,
+      )
+      const metadata = { exit: null, truncated: false, background: true, jobId: started.id, log: started.log }
+      if (started.ended !== undefined) {
+        return {
+          title: input.command,
+          metadata: { ...metadata, output: preview(started.ended) },
+          output: [
+            `The command ended within ${ShellBackground.FIRST_LOOK / 1000} s, before going to the background.`,
+            started.ended,
+          ].join("\n"),
+        }
+      }
+      return {
+        title: input.command,
+        metadata: { ...metadata, output: preview(started.first) },
+        output: [
+          `Running in the background as ${started.id}.`,
+          `log: ${started.log}`,
+          input.watch
+            ? `You will be told when it exits, and when its output matches /${input.watch}/.`
+            : "You will be told when it exits.",
+          "Do not sleep or poll for it: carry on. Read the log with Read, or use shell_jobs to see its latest output or stop it.",
+          "",
+          started.first ? `What it printed so far:\n${started.first}` : "It printed nothing yet.",
+        ].join("\n"),
+      }
+    })
+
     return () =>
       Effect.gen(function* () {
         const cfg = yield* config.get()
@@ -676,6 +722,12 @@ export const ShellTool = Tool.define(
                 }),
               )
 
+              if (params.background || params.watch) {
+                return yield* runBackground(
+                  { shell, command: params.command, cwd, env: yield* shellEnv(ctx, cwd), watch: params.watch },
+                  ctx,
+                )
+              }
               return yield* run(
                 {
                   shell,

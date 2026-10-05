@@ -529,6 +529,18 @@ export function getToolInfo(
         title: i18n.t("ui.tool.shell"),
         subtitle: input.command,
       }
+    case "shell_jobs":
+      return {
+        icon: "console",
+        title: i18n.t("ui.tool.shellJobs"),
+        subtitle: [input.action, input.id].filter(Boolean).join(" "),
+      }
+    case "preview":
+      return {
+        icon: "window-cursor",
+        title: i18n.t("ui.tool.preview"),
+        subtitle: input.name ?? input.path,
+      }
     case "edit":
       return {
         icon: "code-lines",
@@ -2687,6 +2699,7 @@ ToolRegistry.register({
 for (const name of [
   "browser_navigate",
   "browser_snapshot",
+  "browser_find",
   "browser_act",
   "browser_screenshot",
   "browser_inspect",

@@ -8,6 +8,8 @@ import path from "path"
 import { Config } from "@/config/config"
 import { Shell } from "@opencode-ai/core/shell"
 import { ShellTool } from "../../src/tool/shell"
+import { ShellJobsTool } from "../../src/tool/shell_jobs"
+import type { TaskPromptOps } from "../../src/tool/task"
 import { Filesystem } from "@/util/filesystem"
 import { provideInstance, testInstanceStoreLayer, tmpdirScoped } from "../fixture/fixture"
 import type { Permission } from "../../src/permission"
@@ -21,6 +23,7 @@ import { testEffect } from "../lib/effect"
 import { Tool } from "@/tool/tool"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { InstanceStore } from "@/project/instance-store"
+import { BackgroundJob } from "@/background/job"
 
 const shellLayer = Layer.mergeAll(
   LayerNode.compile(
@@ -32,6 +35,7 @@ const shellLayer = Layer.mergeAll(
       Config.node,
       Agent.node,
       RuntimeFlags.node,
+      BackgroundJob.node,
     ]),
   ),
   testInstanceStoreLayer,
@@ -1162,6 +1166,117 @@ describe("tool.shell abort", () => {
         expect(updates.length).toBeGreaterThan(1)
       }),
     ),
+  )
+})
+
+describe("tool.shell background", () => {
+  /** A script for the shell under test, quoted the way it needs. */
+  const script = (code: string) => {
+    const text = `${bin} -e ${evalarg(code)}`
+    if (PS.has(sh())) return `& ${text}`
+    return text
+  }
+  /** What the conversation is told, through the same door a background task uses. */
+  const listening = () => {
+    const told: string[] = []
+    const ops = {
+      prompt: (input: { parts: readonly { type: string; text?: string }[] }) =>
+        Effect.sync(() => {
+          told.push(input.parts.map((part) => part.text ?? "").join(""))
+        }),
+    } as unknown as TaskPromptOps
+    return { told, ctx: { ...ctx, extra: { promptOps: ops } } }
+  }
+  const until = (test: () => boolean, ms = 20_000) =>
+    Effect.gen(function* () {
+      const end = Date.now() + ms
+      while (!test() && Date.now() < end) yield* Effect.sleep("100 millis")
+    })
+
+  it.live(
+    "a server goes to the background, says when it is ready and when it exits",
+    () =>
+      runIn(
+        projectRoot,
+        Effect.gen(function* () {
+          const heard = listening()
+          // The first command loads the shell's parser, which is not what is timed here.
+          yield* run({ command: script("0") })
+          const started = Date.now()
+          const result = yield* run(
+            {
+              command: script(
+                "console.log(`starting`);setTimeout(()=>console.log(`server ready`),4500);setTimeout(()=>process.exit(3),7000)",
+              ),
+              background: true,
+              watch: "ready",
+            },
+            heard.ctx,
+          )
+          expect(Date.now() - started).toBeLessThan(6_000)
+          expect(result.output).toMatch(/Running in the background as shell_[0-9a-f]{8}/)
+          expect(result.output).toContain("starting")
+          expect(heard.told).toEqual([])
+
+          yield* until(() => heard.told.length >= 2)
+          expect(heard.told[0]).toContain("server ready")
+          expect(heard.told[0]).toContain("Lines matching /ready/")
+          expect(heard.told[1]).toContain("exit code: 3")
+
+          const log = (result.metadata as { log?: string }).log
+          const saved = yield* (yield* FSUtil.Service).readFileString(log!)
+          expect(saved).toContain("server ready")
+        }),
+      ),
+    40_000,
+  )
+
+  it.live("a command that ends at once returns its output, with nothing told later", () =>
+    runIn(
+      projectRoot,
+      Effect.gen(function* () {
+        const heard = listening()
+        // Warm, so the command ends well inside the first look on a slow machine too.
+        yield* run({ command: script("0") })
+        const result = yield* run({ command: script("console.log(`quick one`)"), background: true }, heard.ctx)
+        expect(result.output).toContain("ended within")
+        expect(result.output).toContain("quick one")
+        yield* Effect.sleep("500 millis")
+        expect(heard.told).toEqual([])
+      }),
+    ),
+  )
+
+  it.live(
+    "shell_jobs lists, shows and stops a background command, and a stopped one is not reported",
+    () =>
+      runIn(
+        projectRoot,
+        Effect.gen(function* () {
+          const heard = listening()
+          const result = yield* run(
+            { command: script("setInterval(()=>console.log(`tick`),300)"), background: true },
+            heard.ctx,
+          )
+          const id = (result.metadata as { jobId?: string }).jobId!
+          const jobs = yield* (yield* ShellJobsTool).init()
+
+          const list = yield* jobs.execute({ action: "list" }, ctx)
+          expect(list.output).toContain(`${id}  running`)
+          const output = yield* jobs.execute({ action: "output", id, lines: 2 }, ctx)
+          expect(output.output).toContain("tick")
+
+          const stopped = yield* jobs.execute({ action: "stop", id }, ctx)
+          expect(stopped.output).toContain(`Stopped ${id}`)
+          expect(stopped.metadata.status).toBe("cancelled")
+          yield* Effect.sleep("1 second")
+          expect(heard.told).toEqual([])
+
+          const missing = yield* jobs.execute({ action: "output", id: "shell_nothere" }, ctx)
+          expect(missing.output).toContain("No background command shell_nothere")
+        }),
+      ),
+    30_000,
   )
 })
 

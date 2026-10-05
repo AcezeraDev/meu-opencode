@@ -6,6 +6,7 @@ import { Browser, type BrowserEvent } from "@/browser/session"
 import { BrowserTrail } from "@/browser/trail"
 import { BrowserNotebook } from "@/browser/notebook"
 import { BrowserSite } from "@/browser/site"
+import { BrowserLessons } from "@/browser/lessons"
 import { SessionWeek } from "@/session/week"
 import { Config } from "@/config/config"
 import { InstanceState } from "@/effect/instance-state"
@@ -285,6 +286,21 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       query: typeof BrowserSiteQuery.Type
     }) {
       return yield* Effect.promise(() => siteInfo(ctx.query.url))
+    })
+
+    // Reads the page the person has open (in extension mode, their own tab), so
+    // a browser that is not there is an answer to show, not a failure.
+    const browserLessons = Effect.fn("ExperimentalHttpApi.browserLessons")(function* () {
+      const browser = yield* Browser.Service
+      const empty = { course: "", url: "", sections: [] }
+      const tab = yield* browser.tab().pipe(Effect.catchCause(() => Effect.succeed(undefined)))
+      if (!tab) return { ...empty, error: "browser" }
+      const read = yield* Effect.promise(() =>
+        tab.evaluate<BrowserLessons.Course>(BrowserLessons.READ).catch(() => undefined),
+      )
+      if (!read) return { ...empty, error: "page" }
+      if (read.sections.length === 0) return { ...read, error: "index" }
+      return read
     })
 
     const browserSiteForget = Effect.fn("ExperimentalHttpApi.browserSiteForget")(function* (ctx: {
@@ -689,6 +705,7 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       .handle("usageWeek", usageWeek)
       .handle("browserSite", browserSite)
       .handle("browserSiteForget", browserSiteForget)
+      .handle("browserLessons", browserLessons)
       .handle("notebook", notebook)
       .handle("notebookSubject", notebookSubject)
       .handle("webVideoModels", webVideoModels)

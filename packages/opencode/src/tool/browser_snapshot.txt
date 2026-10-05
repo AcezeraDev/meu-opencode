@@ -27,3 +27,8 @@ guess, so a ref never quietly comes to mean a different element.
 You rarely need this after browser_navigate, browser_act or browser_batch: they
 already return the outline, or what changed in it. Use it to re-read the whole
 page, or to read it in another format.
+
+To read only part of a big page, pass `within` (a ref, or words of a heading,
+form or element: "Questão 3", "ref_40"), `interactive: true` to keep just what
+can be acted on, or `maxChars`. To look for one element, browser_find is cheaper
+still.

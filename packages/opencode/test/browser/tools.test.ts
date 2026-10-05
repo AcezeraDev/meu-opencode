@@ -8,12 +8,23 @@ import { Config } from "@/config/config"
 import { InstanceState } from "@/effect/instance-state"
 import { Truncate } from "@/tool/truncate"
 import { Question } from "@/question"
+import { Provider } from "@/provider/provider"
+import { Auth } from "@/auth"
 import { Agent } from "../../src/agent/agent"
 import { BrowserActTool } from "../../src/tool/browser_act"
 import { BrowserBatchTool } from "../../src/tool/browser_batch"
 import { BrowserNavigateTool } from "../../src/tool/browser_navigate"
 import { BrowserScriptTool } from "../../src/tool/browser_script"
 import { BrowserNotesTool } from "../../src/tool/browser_notes"
+import { BrowserFindTool } from "../../src/tool/browser_find"
+import { BrowserSnapshotTool } from "../../src/tool/browser_snapshot"
+import { PreviewTool } from "../../src/tool/preview"
+import { ShellJobsTool } from "../../src/tool/shell_jobs"
+import { BackgroundJob } from "@/background/job"
+import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
+import { FSUtil } from "@opencode-ai/core/fs-util"
+import fs from "fs/promises"
+import net from "net"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { TestConfig } from "../fixture/config"
 import { testEffect } from "../lib/effect"
@@ -46,6 +57,14 @@ const server = Bun.serve({
       const next = number < 3 ? `<a href="/list?page=${number + 1}">Próxima</a>` : ""
       return page(`Lista ${number}`, `<ul>${items.join("")}</ul>${next}`)
     }
+    if (url.pathname === "/prova") {
+      // A long page with two questions, the case where reading it whole is what costs.
+      const menu = Array.from({ length: 40 }, (_, index) => `<a href="/aula/${index}">Aula ${index}</a>`).join("")
+      return page(
+        "Prova",
+        `<nav>${menu}</nav><h2>Questão 1</h2><label><input type="radio" name="q1"> Sim</label><label><input type="radio" name="q1"> Não</label><h2>Questão 2</h2><label><input type="radio" name="q2"> Verdadeiro</label><label><input type="radio" name="q2"> Falso</label><p>Escolha uma opção</p><button>Próxima página</button>`,
+      )
+    }
     if (url.pathname === "/opener") return page("Aula", `<a href="/material" target="_blank">Material da aula</a>`)
     if (url.pathname === "/material") return page("Material", `<p>Formas normais</p><button>Baixar</button>`)
     // A quiz that shows its question only once started, as Moodle's do.
@@ -71,15 +90,29 @@ const server = Bun.serve({
 afterAll(() => server.stop(true))
 
 const it = testEffect(
-  LayerNode.compile(LayerNode.group([Browser.node, Truncate.node, Agent.node, Question.node, Config.node]), [
-    [
+  LayerNode.compile(
+    LayerNode.group([
+      Browser.node,
+      Truncate.node,
+      Agent.node,
+      Question.node,
       Config.node,
-      TestConfig.layer({
-        directories: () => InstanceState.directory.pipe(Effect.map((dir) => [path.join(dir, ".opencode")])),
-        get: () => Effect.succeed({ browser: { headless: true, profile: "test-tools", timeout: 20_000 } }),
-      }),
+      Provider.node,
+      Auth.node,
+      BackgroundJob.node,
+      CrossSpawnSpawner.node,
+      FSUtil.node,
+    ]),
+    [
+      [
+        Config.node,
+        TestConfig.layer({
+          directories: () => InstanceState.directory.pipe(Effect.map((dir) => [path.join(dir, ".opencode")])),
+          get: () => Effect.succeed({ browser: { headless: true, profile: "test-tools", timeout: 20_000 } }),
+        }),
+      ],
     ],
-  ]),
+  ),
 )
 
 const ctx = {
@@ -396,4 +429,117 @@ describeBrowser("browser tools", () => {
       }),
     120_000,
   )
+
+  it.instance(
+    "find lists the elements a query names, and a snapshot can read just one part",
+    () =>
+      Effect.gen(function* () {
+        const navigate = yield* (yield* BrowserNavigateTool).init()
+        yield* navigate.execute({ url: `http://127.0.0.1:${server.port}/prova` }, ctx)
+        const find = yield* (yield* BrowserFindTool).init()
+
+        // Accents and case aside, and every word has to be there.
+        const next = yield* find.execute({ query: "proxima PAGINA" }, ctx)
+        expect(next.output).toMatch(/button "Próxima página" \[ref_\d+/)
+        expect(next.metadata.matches).toBe(1)
+        expect(next.metadata.page).toBe("part")
+
+        // Answers come grouped under the question they belong to.
+        const answers = yield* find.execute({ query: "", role: "radio" }, ctx)
+        expect(answers.metadata.matches).toBe(4)
+        const lines = answers.output.split("\n")
+        const second = lines.findIndex((line) => line.includes("Questão 2"))
+        expect(second).toBeGreaterThan(lines.findIndex((line) => line.includes("Questão 1")))
+        expect(lines[second + 1]).toContain("Verdadeiro")
+
+        // Words the page shows without anything to act on.
+        const text = yield* find.execute({ query: "escolha uma" }, ctx)
+        expect(text.metadata.matches).toBe(0)
+        expect(text.output).toContain("Escolha uma opção")
+
+        const snapshot = yield* (yield* BrowserSnapshotTool).init()
+        const whole = yield* snapshot.execute({}, ctx)
+        const part = yield* snapshot.execute({ within: "Questão 2" }, ctx)
+        expect(part.output).toContain("Verdadeiro")
+        expect(part.output).toContain("Próxima página")
+        expect(part.output).not.toContain("Sim")
+        expect(part.output).not.toContain("Aula 3")
+        expect(part.output.length).toBeLessThan(whole.output.length / 3)
+        expect(part.metadata.page).toBe("part")
+
+        const missing = yield* snapshot.execute({ within: "Questão 9" }, ctx)
+        expect(missing.output).toContain("Nothing in the outline")
+
+        const short = yield* snapshot.execute({ maxChars: 300 }, ctx)
+        expect(short.output).toMatch(/note: \d+ more lines left out/)
+
+        const browser = yield* Browser.Service
+        yield* browser.shutdown()
+      }),
+    60_000,
+  )
+
+  it.instance(
+    "preview starts the project's dev server, opens it once it answers, and reuses it",
+    () =>
+      Effect.gen(function* () {
+        const directory = (yield* InstanceState.context).directory
+        const preview = yield* (yield* PreviewTool).init()
+        const missing = yield* preview.execute({}, ctx)
+        expect(missing.output).toContain("has no .opencode/launch.json yet")
+
+        // A server slower to listen than the first look, as dev servers are.
+        const port = yield* Effect.promise(freePort)
+        yield* Effect.promise(async () => {
+          await fs.mkdir(path.join(directory, ".opencode"), { recursive: true })
+          await fs.writeFile(
+            path.join(directory, "server.js"),
+            `console.log("starting"); setTimeout(() => Bun.serve({ port: ${port}, hostname: "127.0.0.1", fetch: () => new Response("<title>Loja</title><h1>Vitrine pronta</h1><button>Comprar</button>", { headers: { "content-type": "text/html" } }) }), 4500)`,
+          )
+          await fs.writeFile(
+            path.join(directory, ".opencode/launch.json"),
+            JSON.stringify({
+              configurations: [
+                {
+                  name: "web",
+                  runtimeExecutable: process.execPath,
+                  runtimeArgs: ["server.js"],
+                  url: `http://127.0.0.1:${port}`,
+                },
+              ],
+            }),
+          )
+        })
+
+        const opened = yield* preview.execute({}, ctx)
+        expect(opened.output).toContain('Started "web" in the background')
+        expect(opened.output).toContain("Vitrine pronta")
+        expect(opened.output).toMatch(/button "Comprar" \[ref_\d+/)
+        expect(opened.metadata.started).toBe(true)
+
+        const again = yield* preview.execute({ name: "web" }, ctx)
+        expect(again.output).toContain(`"web" was already running as ${opened.metadata.jobId}`)
+        const unknown = yield* preview.execute({ name: "api" }, ctx)
+        expect(unknown.output).toContain('has no configuration named "api". It has: web.')
+
+        const jobs = yield* (yield* ShellJobsTool).init()
+        const stopped = yield* jobs.execute({ action: "stop", id: opened.metadata.jobId! }, ctx)
+        expect(stopped.metadata.status).toBe("cancelled")
+
+        const browser = yield* Browser.Service
+        yield* browser.shutdown()
+      }),
+    120_000,
+  )
 })
+
+/** A port nothing listens on, for a server the test starts. */
+function freePort() {
+  return new Promise<number>((resolve) => {
+    const server = net.createServer()
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address()
+      server.close(() => resolve(typeof address === "object" && address ? address.port : 0))
+    })
+  })
+}

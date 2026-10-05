@@ -7,6 +7,9 @@ import type { SnapshotResult } from "@/browser/snapshot"
 import type { Tab } from "@/browser/tab"
 import { ActionVerifier, type Verdict } from "@/browser/verify"
 import { Writer } from "@/writer/writer"
+import { Checker } from "@/checker/checker"
+import { Auth } from "@/auth"
+import { Provider } from "@/provider/provider"
 import { Config } from "@/config/config"
 import { ModelRoles } from "@/provider/roles"
 import { Step } from "./browser_act"
@@ -54,6 +57,8 @@ export const BrowserBatchTool = Tool.define(
   Effect.gen(function* () {
     const browser = yield* Browser.Service
     const config = yield* Config.Service
+    const provider = yield* Provider.Service
+    const auth = yield* Auth.Service
 
     return {
       description: DESCRIPTION,
@@ -109,6 +114,21 @@ export const BrowserBatchTool = Tool.define(
               always: ["*"],
               metadata: { action: step.action, url, ref: step.ref, selector: step.selector, text },
             })
+            // Checked here rather than up front, so it reads the answers the steps before typed.
+            const unchecked = yield* Checker.gate({
+              tab,
+              ref: step.ref,
+              action: step.action,
+              sessionID: ctx.sessionID,
+              signal: ctx.abort,
+              config,
+              provider,
+              auth,
+            })
+            if (unchecked) {
+              failure = new Error(unchecked)
+              break
+            }
             const before = tab.pdf
             const started = Date.now()
             const outcome = yield* Effect.promise(() =>

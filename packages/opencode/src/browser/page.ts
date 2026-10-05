@@ -884,4 +884,145 @@ export const handOver = Effect.fn("BrowserPage.handOver")(function* (
   }
 })
 
+/** At most this many elements are listed by `find`, unless asked for more. */
+const FIND_LIMIT = 20
+const OUTLINE_REF = /\bref_\d+\b/
+
+/**
+ * The elements a query names, as their outline lines, grouped under the heading
+ * each sits under. Finding "Next", or the answers of one question, this way
+ * costs a few hundred characters where the whole of a Moodle page costs tens of
+ * thousands. Every word of the query has to be on the element's line (accents
+ * and case aside), so "enviar tarefa" finds `button "Enviar tarefa"` and not
+ * every "Enviar"; the line carries role and href, so "link inicio" works too.
+ */
+export function find(result: SnapshotResult, query: string, options: { role?: string; limit?: number } = {}) {
+  const words = fold(query).split(/\s+/).filter(Boolean)
+  const lines = result.outline.split("\n")
+  const matches = lines.flatMap((line, index) => {
+    const ref = line.match(OUTLINE_REF)?.[0]
+    if (!ref) return []
+    const identity = result.identities?.[ref]
+    if (options.role && identity?.role !== options.role) return []
+    const haystack = fold([line, identity?.placeholder ?? ""].join(" "))
+    if (!words.every((word) => haystack.includes(word))) return []
+    return [{ line: line.trim(), under: headingAbove(lines, index) }]
+  })
+  const limit = Math.max(1, options.limit ?? FIND_LIMIT)
+  const header = [`url: ${result.url}`, `title: ${result.title || "(untitled)"}`, ""]
+  if (matches.length === 0) {
+    // Text the page shows but nothing to act on, such as a question's wording.
+    const texts = lines
+      .filter((line) => !OUTLINE_REF.test(line) && words.every((word) => fold(line).includes(word)))
+      .slice(0, 5)
+      .map((line) => line.trim().slice(0, 200))
+    return {
+      count: 0,
+      output: [
+        ...header,
+        `No element to act on matches "${query}".`,
+        ...(texts.length ? ["", "It does appear in the page's text:", ...texts] : []),
+        "",
+        "Try other words, or read the page with browser_snapshot.",
+      ].join("\n"),
+    }
+  }
+  const shown = matches.slice(0, limit)
+  const groups = shown.reduce<{ under?: string; lines: string[] }[]>((all, match) => {
+    const last = all.at(-1)
+    if (last && last.under === match.under) last.lines.push(match.line)
+    else all.push({ under: match.under, lines: [match.line] })
+    return all
+  }, [])
+  return {
+    count: matches.length,
+    output: [
+      ...header,
+      matches.length > shown.length
+        ? `${matches.length} elements match "${query}"; the first ${shown.length} are below (narrow the query or raise limit).`
+        : `${matches.length} element${matches.length === 1 ? "" : "s"} match "${query}":`,
+      ...groups.flatMap((group) =>
+        group.under ? [group.under, ...group.lines.map((line) => `  ${line}`)] : group.lines,
+      ),
+    ].join("\n"),
+  }
+}
+
+/**
+ * Part of an outline: what lies within one element or under one heading, only
+ * what can be acted on, or no more than so many characters. Undefined when
+ * `within` names nothing in the outline.
+ */
+export function focus(result: SnapshotResult, options: { within?: string; interactive?: boolean; maxChars?: number }) {
+  const all = result.outline.split("\n")
+  const lines = options.within ? section(all, options.within) : all
+  if (!lines) return undefined
+  const kept = options.interactive
+    ? lines.filter((line) => OUTLINE_REF.test(line) || line.trimStart().startsWith("- heading"))
+    : lines
+  const max = options.maxChars ?? Infinity
+  const cut = kept.reduce<{ lines: string[]; size: number; left: number }>(
+    (acc, line) => {
+      if (acc.left > 0 || acc.size + line.length + 1 > max) return { ...acc, left: acc.left + 1 }
+      acc.lines.push(line)
+      return { ...acc, size: acc.size + line.length + 1 }
+    },
+    { lines: [], size: 0, left: 0 },
+  )
+  const notes = [
+    options.within ? `part: within "${options.within}"` : undefined,
+    options.interactive ? "part: only what can be acted on, and headings" : undefined,
+    cut.left ? `note: ${cut.left} more lines left out (raise maxChars, or narrow with within)` : undefined,
+  ].filter((note): note is string => note !== undefined)
+  return [
+    `url: ${result.url}`,
+    `title: ${result.title || "(untitled)"}`,
+    ...notes,
+    "",
+    cut.lines.join("\n").trim() || "(nothing here)",
+  ].join("\n")
+}
+
+/**
+ * The lines of the element `within` names (a ref, or words on its line) and of
+ * what it contains, moved to the left edge. A heading contains what follows it
+ * up to the next heading at its depth or shallower, since headings do not nest.
+ */
+function section(lines: string[], within: string) {
+  const wanted = within.trim()
+  const byRef = /^ref_\d+$/.test(wanted)
+  const test = (line: string) => (byRef ? new RegExp(`\\b${wanted}\\b`).test(line) : fold(line).includes(fold(wanted)))
+  // An element or heading of that name before a text line that merely mentions it.
+  const start = [
+    lines.findIndex((line) => test(line) && !line.trimStart().startsWith("- text:")),
+    lines.findIndex(test),
+  ].find((index) => index >= 0)
+  if (start === undefined) return undefined
+  const depth = indent(lines[start])
+  const heading = lines[start].trimStart().startsWith("- heading")
+  const end = lines.findIndex((line, index) => {
+    if (index <= start) return false
+    if (indent(line) < depth) return true
+    if (heading) return indent(line) === depth && line.trimStart().startsWith("- heading")
+    return indent(line) === depth
+  })
+  return lines.slice(start, end < 0 ? undefined : end).map((line) => line.slice(depth))
+}
+
+function indent(line: string) {
+  return line.length - line.trimStart().length
+}
+
+function headingAbove(lines: string[], index: number) {
+  return lines
+    .slice(0, index)
+    .findLast((line) => line.trimStart().startsWith("- heading"))
+    ?.trim()
+}
+
+/** Lower case without accents, so "Proxima" finds "Próxima". */
+function fold(text: string) {
+  return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+}
+
 export * as BrowserPage from "./page"

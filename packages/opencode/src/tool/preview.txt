@@ -1,0 +1,21 @@
+Start this project's dev server and open it in the built-in browser, to see a
+change working.
+
+The servers come from `.opencode/launch.json` (or `.claude/launch.json`) in the
+project: each configuration has a `name`, the command (`runtimeExecutable` and
+`runtimeArgs`), the `port` it listens on, and optionally `cwd`, `env` and `url`.
+When the file is missing the result says how to write it: create it, then call
+preview again.
+
+The server runs in the background (see shell_jobs) and is reused while it runs,
+as is a server that already answers on that port. The call returns once the
+server answers, with the page opened in the browser and its outline, so you can
+go on with browser_snapshot, browser_act or browser_screenshot. You are told if
+the server prints an error or exits.
+
+Use it after changing something the browser shows, instead of starting the dev
+server with the shell yourself. Then:
+- check the pages with site_check (errors, overflow, sizes), and look again;
+- read the server's log, or browser_inspect for the page's console and network,
+  when something fails;
+- stop the server with shell_jobs once the task is done.

@@ -159,6 +159,13 @@ const SCENARIOS: Scenario[] = [
       (o) => ({ tool: "browser_act", args: { action: "click", ref: ref(o, /link "Apostila" \[(ref_\d+)/) } }),
       () => ({ tool: "browser_navigate", args: { url: `${site}/planilha.xlsx` } }),
       () => ({ tool: "site_check", args: { url: `${site}/form`, crawl: 0, viewports: ["desktop", "mobile"] } }),
+      () => ({ tool: "browser_navigate", args: { url: `${site}/form` } }),
+      () => ({ tool: "browser_find", args: { query: "enviar" } }),
+      () => ({ tool: "browser_snapshot", args: { interactive: true, maxChars: 400 } }),
+      // A command that keeps running goes to the background, and is stopped by its id.
+      () => ({ tool: "bash", args: { command: 'node -e "setInterval(() => console.log(1), 200)"', background: true } }),
+      (o) => ({ tool: "shell_jobs", args: { action: "stop", id: ref(o, /background as (shell_[0-9a-f]+)/) } }),
+      () => ({ tool: "preview", args: { path: "/form" } }),
     ],
     check: (out, expect) => {
       expect("the click on the PDF read its text", out(1).includes("Formas normais"))
@@ -175,6 +182,11 @@ const SCENARIOS: Scenario[] = [
       expect("a click that downloads a Word file reads it", out(13).includes("Capítulo 1: normalização"))
       expect("navigating to a workbook reads it", out(14).includes("Ana\t9.5"))
       expect("a site check measured the page at two sizes", out(15).includes("1 página(s) × desktop, mobile"))
+      expect("find lists the button it names", /button "Enviar" \[ref_\d+/.test(out(17)))
+      expect("a snapshot reads only what can be acted on", out(18).includes("part: only what can be acted on"))
+      expect("a command went to the background", out(19).includes("Running in the background as shell_"))
+      expect("the background command was stopped", out(20).includes("Stopped shell_"))
+      expect("preview opened the project's server", out(21).includes("A server already answers") && out(21).includes('button "Enviar"'))
     },
   },
   {
@@ -211,6 +223,8 @@ const SCENARIOS: Scenario[] = [
       }),
       () => ({ tool: "browser_inspect", args: { what: "evaluate", expression: "document.title" } }),
       () => ({ tool: "site_check", args: { url: `${site}/form`, crawl: 0, viewports: ["mobile"] } }),
+      () => ({ tool: "browser_navigate", args: { url: `${site}/form` } }),
+      () => ({ tool: "browser_find", args: { query: "nome", role: "textbox" } }),
     ],
     check: async (out, expect, ms) => {
       expect("a site check ran in the person's browser", out(13).includes("1 página(s) × mobile"))
@@ -227,6 +241,7 @@ const SCENARIOS: Scenario[] = [
       expect("the agent carried on once the user said it was done", out(9).includes("The user says it is done"))
       expect("the user was asked once", answered.length === 1 && answered[0]!.includes("entrar na sua conta"))
       expect("a file was sent although the browser refused to name it", out(12).includes("Recebido trabalho.txt 20"))
+      expect("find works through the extension", out(15).includes('textbox "Nome"'))
     },
   },
 ]
@@ -280,6 +295,10 @@ const model = Bun.serve({
 for (const scenario of SCENARIOS) {
   const project = path.join(work, `project-${scenario.name}`)
   await fs.mkdir(path.join(project, ".opencode"), { recursive: true })
+  await fs.writeFile(
+    path.join(project, ".opencode", "launch.json"),
+    JSON.stringify({ configurations: [{ name: "lab", url: site }] }),
+  )
   await fs.writeFile(
     path.join(project, ".opencode", "opencode.jsonc"),
     JSON.stringify({

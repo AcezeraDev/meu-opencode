@@ -5,6 +5,7 @@ import path from "path"
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { CDPConnection } from "../../src/browser/cdp"
 import { BrowserInstall } from "../../src/browser/install"
+import { BrowserLessons } from "../../src/browser/lessons"
 import { BrowserPage } from "../../src/browser/page"
 import { BrowserPdf } from "../../src/browser/pdf"
 import { BrowserSnapshot, type SnapshotResult } from "../../src/browser/snapshot"
@@ -657,6 +658,103 @@ describeBrowser("browser over CDP", () => {
     expect(await tab.evaluate<string>("document.getElementById('d').value")).toBe("2008-03-15")
     await tab.fill("#r", "75")
     expect(await tab.evaluate<string>("document.getElementById('r').value")).toBe("75")
+  })
+
+  // Moodle's "Texto online": a textarea that TinyMCE hides once it loads,
+  // replacing it with a frame, under a fixed bar at the top of the page.
+  const EDITOR_PAGE = `<!doctype html><html><body style="margin:0">
+    <nav style="position:fixed;top:0;left:0;right:0;height:60px;background:#eee">Calendário 54</nav>
+    <form style="margin-top:80px">
+      <label for="id_onlinetext">Texto online</label>
+      <textarea id="id_onlinetext" rows="5"></textarea>
+      <button type="button" id="ltr" aria-label="Esquerda para direita" onclick="document.body.dataset.pressed='yes'">⇥</button>
+    </form>
+    <script>
+      function load() {
+        var field = document.getElementById("id_onlinetext")
+        field.style.display = "none"
+        var frame = document.createElement("iframe")
+        frame.id = "id_onlinetext_ifr"
+        frame.title = "Área de texto avançado"
+        frame.srcdoc = '<body contenteditable="true"><p></p></body>'
+        field.after(frame)
+      }
+    </script>
+  </body></html>`
+
+  test("a ref to a field an editor took over fills the editor, not the hidden field", async () => {
+    await tab.navigate(`data:text/html,${encodeURIComponent(EDITOR_PAGE)}`, "load", 20_000)
+    const outline = (await tab.snapshot()).outline
+    const ref = /textbox "Texto online" \[(ref_\d+)/.exec(outline)?.[1]
+    expect(ref).toBeDefined()
+    await tab.evaluate("load()")
+    const deadline = Date.now() + 5_000
+    while (!(await tab.evaluate<boolean>("!!document.getElementById('id_onlinetext_ifr').contentDocument?.body?.isContentEditable")) && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    await BrowserPage.perform(tab, { action: "fill", ref, text: "Relatório da aula" }, 10_000)
+    expect(await tab.evaluate<string>("document.getElementById('id_onlinetext_ifr').contentDocument.body.innerText.trim()")).toBe("Relatório da aula")
+  })
+
+  test("the outline waits for a rich text editor that is still loading", async () => {
+    const page = `<!doctype html><html><head><meta charset="utf-8"></head><body>
+      <label for="id_onlinetext_editor">Texto online</label>
+      <textarea id="id_onlinetext_editor" data-fieldtype="editor"></textarea>
+      <script>
+        setTimeout(function () {
+          var field = document.getElementById("id_onlinetext_editor")
+          field.style.display = "none"
+          var frame = document.createElement("iframe")
+          frame.id = "id_onlinetext_editor_ifr"
+          frame.title = "Área de texto avançado"
+          frame.srcdoc = '<body contenteditable="true" aria-label="Área de texto avançado"><p></p></body>'
+          field.after(frame)
+        }, 800)
+      </script>
+    </body></html>`
+    await tab.navigate(`data:text/html,${encodeURIComponent(page)}`, "load", 20_000)
+    const outline = (await tab.snapshot()).outline
+    expect(outline).toContain('iframe "Área de texto avançado"')
+    expect(outline).not.toContain('textbox "Texto online"')
+  })
+
+  test("the course index lists each activity under its lesson, with what is done", async () => {
+    // Moodle 4's course index as the Educação Profissional site renders it: a
+    // week holding its lessons, completion marks, and a page with no tracking.
+    const item = (id: number, name: string, mod: string, value?: string) =>
+      `<li class="courseindex-item" data-for="cm" data-id="${id}"><a class="courseindex-link" href="https://ead.example/mod/${mod}/view.php?id=${id}">${name}</a>${value === undefined ? "" : `<span class="completioninfo" data-for="cm_completion" data-value="${value}"></span>`}</li>`
+    const page = `<!doctype html><html><head><meta charset="utf-8"></head><body>
+      <header><h1>Programação Front-End – 4º Bimestre</h1></header>
+      <div class="courseindex-section"><div class="courseindex-section-title"><a class="courseindex-link">Semana 22 (S22)</a></div>
+        <ul>
+          <li><div class="courseindex-section"><div class="courseindex-section-title"><a class="courseindex-link">Aula 3: Autenticação com OAuth e JWT</a></div>
+            <ul>
+              ${item(1, "Material da Aula (S22A3)", "url", "1")}
+              ${item(2, "Registro da Aula (S22A3)", "assign", "0")}
+              ${item(3, "Pause e Responda (S22A3a)", "h5pactivity", "0")}
+              ${item(4, "Leia antes", "page")}
+            </ul>
+          </div></li>
+        </ul>
+      </div>
+    </body></html>`
+    await tab.navigate(`data:text/html,${encodeURIComponent(page)}`, "load", 20_000)
+    const course = await tab.evaluate<BrowserLessons.Course>(BrowserLessons.READ)
+    expect(course.course).toBe("Programação Front-End – 4º Bimestre")
+    expect(course.sections.map((section) => section.name)).toEqual(["Semana 22 (S22) › Aula 3: Autenticação com OAuth e JWT"])
+    expect(course.sections[0]!.lessons.map((lesson) => [lesson.name, lesson.done, lesson.tracked, lesson.kind])).toEqual([
+      ["Material da Aula (S22A3)", true, true, "url"],
+      ["Registro da Aula (S22A3)", false, true, "assign"],
+      ["Pause e Responda (S22A3a)", false, true, "h5pactivity"],
+      ["Leia antes", false, false, "page"],
+    ])
+  })
+
+  test("filling a button refuses without pressing it or typing anywhere", async () => {
+    await tab.navigate(`data:text/html,${encodeURIComponent(EDITOR_PAGE)}`, "load", 20_000)
+    const error = await tab.fill("#ltr", "Relatório da aula").then(() => undefined, (cause: Error) => cause)
+    expect(error?.message).toContain("is a button, not a text field")
+    expect(await tab.evaluate<string | undefined>("document.body.dataset.pressed")).toBeUndefined()
+    expect(await tab.evaluate<string>("document.getElementById('id_onlinetext').value")).toBe("")
   })
 
   test("actions on one tab run one at a time, not interleaved", async () => {

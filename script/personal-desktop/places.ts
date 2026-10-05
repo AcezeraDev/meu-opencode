@@ -19,6 +19,11 @@ export const PLACES = {
   data: path.join(home, ".local", "share", "opencode"),
   /** The desktop app's own preferences: models per project, shortcuts, window layout. */
   app: path.join(roaming, "ai.opencode.desktop.personal"),
+  /** The model last chosen, which a new conversation starts with. */
+  state: path.join(home, ".local", "state", "opencode"),
+  /** Skills the app also reads from outside its config, as Claude Code and other agents install them. */
+  claudeSkills: path.join(home, ".claude", "skills"),
+  agentsSkills: path.join(home, ".agents", "skills"),
 } as const
 
 export type Place = keyof typeof PLACES
@@ -27,8 +32,18 @@ export type Place = keyof typeof PLACES
 export const SKIP_IN_CONFIG = /(^|[\\/])(node_modules|\.git)([\\/]|$)|\.log$/
 
 /** The data files that are settings, not caches. Everything else there is rebuilt by use. */
-export const DATA_FILES = ["auth.json", "web-video.json"]
-export const DATA_FOLDERS = ["storage"]
+export const DATA_FILES = ["auth.json", "web-video.json", "mcp-auth.json"]
+/**
+ * What the app learned and kept as it was used: per-site notes and routines,
+ * saved browser programs, the notebook, lessons, the writer's texts and plans.
+ * Without them the other PC would start over on every site and lesson.
+ */
+export const DATA_FOLDERS = ["storage", "browser-sites", "browser-scripts", "notebook", "lessons", "textos", "plans"]
+export const STATE_FILES = ["model.json"]
+/** Where skills live as folders, some of them links into another of these. */
+export const SKILL_PLACES = ["claudeSkills", "agentsSkills"] as const satisfies readonly Place[]
+/** Name of the pack entry that lists the links between skill folders, to make them again. */
+export const LINKS_ENTRY = "links.json"
 /** Accounts and credentials of the local server, which also keeps its sessions there. Always taken. */
 export const DATA_DATABASES = ["opencode-local.db"]
 /** The conversation history; left out with --sem-historico. */

@@ -70,6 +70,7 @@ import { NewHome } from "@/pages/home"
 import { SessionBoard } from "@/pages/board"
 import { AgentsPage } from "@/pages/agents"
 import { NotebookPage } from "@/pages/notebook"
+import { LessonsPage } from "@/pages/lessons"
 import { WeekPage } from "@/pages/week"
 import { useLocal } from "@/context/local"
 import { LegacyHome } from "@/pages/home/legacy-home"
@@ -668,6 +669,7 @@ function Routes(props: { serverScoped?: JSX.Element }) {
         <Route path="/agents" component={AgentsPage} />
         <Route path="/notebook" component={NotebookPage} />
         <Route path="/week" component={WeekPage} />
+        <Route path="/lessons" component={LessonsPage} />
         <Route path="/:dir/session/:id" component={NewLayoutLegacySessionRedirect} />
         <Route path="/server/:serverKey/session/:id" component={TargetSessionRoute} />
       </Show>

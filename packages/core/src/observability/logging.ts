@@ -1,7 +1,10 @@
 import { Formatter, Logger, type LogLevel } from "effect"
+import fs from "fs"
 import path from "path"
 import { Global } from "../global"
 import { runID } from "./shared"
+
+const MAX_LOG_SIZE = 20 * 1024 * 1024
 
 function formatter(id: string = runID) {
   return Logger.map(Logger.formatStructured, (output) => {
@@ -47,8 +50,18 @@ function format(input: unknown) {
 }
 
 export function fileLogger(file = path.join(Global.Path.log, "opencode.log"), id: string = runID) {
+  rotate(file)
   // Do not set batchWindow to 0; it causes high idle CPU usage.
   return Logger.toFile(formatter(id), file, { flag: "a" })
+}
+
+/** Every run appends to the same file, so past a size it starts over and keeps the previous one as `.old`. */
+function rotate(file: string) {
+  if ((fs.statSync(file, { throwIfNoEntry: false })?.size ?? 0) < MAX_LOG_SIZE) return
+  // Another process may hold the file or have just rotated it; logging must start regardless.
+  try {
+    fs.renameSync(file, `${file}.old`)
+  } catch {}
 }
 
 const stderrLogger = Logger.make((options) => process.stderr.write(formatter().log(options) + "\n"))

@@ -1,0 +1,79 @@
+.lessons-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lessons-project {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border-weak-base);
+  border-radius: 8px;
+  color: var(--text-strong);
+  background: var(--background-base);
+  font-size: 13px;
+}
+
+.lessons-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px var(--notebook-gutter) 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lessons-summary {
+  margin: 0;
+  color: var(--text-weak);
+  font-size: 13px;
+}
+
+.lessons-section {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-weak-base);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.lessons-section-head,
+.lessons-item {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.lessons-section-head {
+  background: var(--surface-raised-base);
+  border-bottom: 1px solid var(--border-weak-base);
+}
+
+.lessons-section-name {
+  font: var(--font-weight-medium) 14px/1.35 var(--font-family-text);
+}
+
+.lessons-section-done,
+.lessons-item-kind {
+  color: var(--text-weak);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.lessons-item + .lessons-item {
+  border-top: 1px solid var(--border-weak-base);
+}
+
+.lessons-item:hover,
+.lessons-section-head:hover {
+  background: var(--surface-raised-base-hover);
+}
+
+.lessons-item-name {
+  font-size: 14px;
+  line-height: 1.4;
+}

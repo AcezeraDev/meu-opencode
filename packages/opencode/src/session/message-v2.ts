@@ -56,6 +56,7 @@ export { isMedia }
 const PAGE_TOOLS = new Set([
   "browser_navigate",
   "browser_snapshot",
+  "browser_find",
   "browser_act",
   "browser_batch",
   "browser_screenshot",
@@ -150,6 +151,21 @@ function pdfAsText(url: string, filename?: string) {
   })
 }
 
+/** Strings in an earlier step's tool input past this length are cut down to their start. */
+const OLD_INPUT_CHARS = 2000
+
+/** An earlier tool input with its long texts (a file written, a text typed) cut to their start. */
+function shrinkInput(value: unknown): unknown {
+  if (typeof value === "string") {
+    if (value.length <= OLD_INPUT_CHARS) return value
+    return `${value.slice(0, 200)}… [${value.length - 200} more characters, already used]`
+  }
+  if (Array.isArray(value)) return value.map(shrinkInput)
+  if (value && typeof value === "object")
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, shrinkInput(item)]))
+  return value
+}
+
 function truncateToolOutput(text: string, maxChars?: number) {
   if (!maxChars || text.length <= maxChars) return text
   const omitted = text.length - maxChars
@@ -240,6 +256,16 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
   const result: UIMessage[] = []
   const toolNames = new Set<string>()
   const stale = stalePageReads(input)
+  // Only the latest step carries its long tool inputs in full (a file written,
+  // a text typed); earlier ones were resent on every step of a long lesson.
+  // What changes is always the step just behind, so the cached start of the
+  // conversation stays put. Reasoning is kept whole: a thinking model that
+  // writes little keeps its plan there, and without it it lost track of what
+  // it had done and repeated itself.
+  // A step cut off before it said or did anything is left out below, so it is not the latest.
+  const latest = input.findLast(
+    (msg) => msg.info.role === "assistant" && msg.parts.some((part) => part.type !== "step-start" && part.type !== "reasoning"),
+  )?.info.id
   const readsPdf = model.capabilities.input.pdf
   // Track media from tool results that need to be injected as user messages
   // for providers that don't support that media type in tool results.
@@ -441,7 +467,7 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
               type: ("tool-" + part.tool) as `tool-${string}`,
               state: "output-available",
               toolCallId: part.callID,
-              input: part.state.input,
+              input: msg.info.id === latest ? part.state.input : shrinkInput(part.state.input),
               output,
               ...(part.metadata?.providerExecuted ? { providerExecuted: true } : {}),
               ...(differentModel ? {} : { callProviderMetadata: providerMeta(part.metadata) }),
@@ -454,7 +480,7 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
                 type: ("tool-" + part.tool) as `tool-${string}`,
                 state: "output-available",
                 toolCallId: part.callID,
-                input: part.state.input,
+                input: msg.info.id === latest ? part.state.input : shrinkInput(part.state.input),
                 output,
                 ...(part.metadata?.providerExecuted ? { providerExecuted: true } : {}),
                 ...(differentModel ? {} : { callProviderMetadata: providerMeta(part.metadata) }),
@@ -464,7 +490,7 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
                 type: ("tool-" + part.tool) as `tool-${string}`,
                 state: "output-error",
                 toolCallId: part.callID,
-                input: part.state.input,
+                input: msg.info.id === latest ? part.state.input : shrinkInput(part.state.input),
                 errorText: part.state.error,
                 ...(part.metadata?.providerExecuted ? { providerExecuted: true } : {}),
                 ...(differentModel ? {} : { callProviderMetadata: providerMeta(part.metadata) }),
@@ -478,7 +504,7 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
               type: ("tool-" + part.tool) as `tool-${string}`,
               state: "output-error",
               toolCallId: part.callID,
-              input: part.state.input,
+              input: msg.info.id === latest ? part.state.input : shrinkInput(part.state.input),
               errorText: "[Tool execution was interrupted]",
               ...(part.metadata?.providerExecuted ? { providerExecuted: true } : {}),
               ...(differentModel ? {} : { callProviderMetadata: providerMeta(part.metadata) }),

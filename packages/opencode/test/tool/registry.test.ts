@@ -61,6 +61,7 @@ const replacements = [
 const BROWSER_TOOLS = [
   "browser_navigate",
   "browser_snapshot",
+  "browser_find",
   "browser_act",
   "browser_screenshot",
   "browser_inspect",

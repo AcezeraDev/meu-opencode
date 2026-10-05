@@ -19,6 +19,14 @@ export function parameterSchema() {
     workdir: Schema.optional(Schema.String).annotate({
       description: `The working directory to run the command in. Defaults to the current directory. Use this instead of 'cd' commands.`,
     }),
+    background: Schema.optional(Schema.Boolean).annotate({
+      description:
+        "Run the command in the background and return at once, for dev servers, watchers and long builds or test runs. You are told when it exits.",
+    }),
+    watch: Schema.optional(Schema.String).annotate({
+      description:
+        'With background: a regular expression (case-insensitive) over its output lines. You are told each time lines match, such as "ready|listening|error|failed".',
+    }),
   })
 }
 
@@ -95,6 +103,7 @@ function bashCommandSection(chain: string, limits: Limits, defaultTimeoutMs: num
 Usage notes:
   - The command argument is required.
   - You can specify an optional timeout in milliseconds. If not specified, commands will time out after ${defaultTimeoutMs}ms.
+  - Commands that keep running (dev servers, watch modes) or take minutes (full builds, test suites) go in the background: set \`background: true\`, and \`watch\` to be told when their output says ready or fails. The call returns at once with a job id and a log file; you are told when the command exits. Do not sleep or poll for it: carry on, read the log with Read, and use shell_jobs to see its latest output or stop it. Never end a command with \`&\`, \`nohup\` or \`Start-Process\` to background it yourself.
   - If the output exceeds ${limits.maxLines} lines or ${limits.maxBytes} bytes, it will be truncated and the full output will be written to a file. You can use Read with offset/limit to read specific sections or Grep to search the full content. Do NOT use \`head\`, \`tail\`, or other truncation commands to limit output; the full output will already be captured to a file for more precise searching.
 
   - Avoid using Bash with the \`find\`, \`grep\`, \`cat\`, \`head\`, \`tail\`, \`sed\`, \`awk\`, or \`echo\` commands, unless explicitly instructed or when these commands are truly necessary for the task. Instead, always prefer using the dedicated tools for these commands:
@@ -146,6 +155,7 @@ Before executing the command, please follow these steps:
 Usage notes:
   - The command argument is required.
   - You can specify an optional timeout in milliseconds. If not specified, commands will time out after ${defaultTimeoutMs}ms.
+  - Commands that keep running (dev servers, watch modes) or take minutes (full builds, test suites) go in the background: set \`background: true\`, and \`watch\` to be told when their output says ready or fails. The call returns at once with a job id and a log file; you are told when the command exits. Do not sleep or poll for it: carry on, read the log with Read, and use shell_jobs to see its latest output or stop it. Never end a command with \`&\`, \`nohup\` or \`Start-Process\` to background it yourself.
   - If the output exceeds ${limits.maxLines} lines or ${limits.maxBytes} bytes, it will be truncated and the full output will be written to a file. You can use Read with offset/limit to read specific sections or Grep to search the full content. Do NOT use \`Select-Object -First\`, \`Select-Object -Last\`, or other truncation commands to limit output; the full output will already be captured to a file for more precise searching.
 
   - Avoid using Shell with PowerShell file/content cmdlets unless explicitly instructed or when these cmdlets are truly necessary for the task. Instead, always prefer using the dedicated tools for these commands:
@@ -195,6 +205,7 @@ Before executing the command, please follow these steps:
 Usage notes:
   - The command argument is required.
   - You can specify an optional timeout in milliseconds. If not specified, commands will time out after ${defaultTimeoutMs}ms.
+  - Commands that keep running (dev servers, watch modes) or take minutes (full builds, test suites) go in the background: set \`background: true\`, and \`watch\` to be told when their output says ready or fails. The call returns at once with a job id and a log file; you are told when the command exits. Do not sleep or poll for it: carry on, read the log with Read, and use shell_jobs to see its latest output or stop it. Never end a command with \`&\`, \`nohup\` or \`Start-Process\` to background it yourself.
   - If the output exceeds ${limits.maxLines} lines or ${limits.maxBytes} bytes, it will be truncated and the full output will be written to a file. You can use Read with offset/limit to read specific sections or Grep to search the full content. Do NOT use \`more\` or other pagination commands to limit output; the full output will already be captured to a file for more precise searching.
 
   - Avoid using Shell with cmd.exe file/content commands unless explicitly instructed or when these commands are truly necessary for the task. Instead, always prefer using the dedicated tools for these commands:

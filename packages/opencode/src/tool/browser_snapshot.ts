@@ -12,6 +12,16 @@ export const Parameters = Schema.Struct({
   maxNodes: Schema.optional(Schema.Number).annotate({
     description: "Maximum number of elements in the outline (default: 1500). Raise it for very large pages.",
   }),
+  within: Schema.optional(Schema.String).annotate({
+    description:
+      'Outline only: return just one part of the page, what is inside the element with this ref ("ref_12") or under the heading, form or element whose line has these words.',
+  }),
+  interactive: Schema.optional(Schema.Boolean).annotate({
+    description: "Outline only: keep just the elements that can be acted on, and headings.",
+  }),
+  maxChars: Schema.optional(Schema.Number).annotate({
+    description: "Outline only: return no more than this many characters of outline.",
+  }),
   tab: Schema.optional(Schema.String).annotate({ description: "Tab id to read. Defaults to the active tab." }),
 })
 
@@ -91,6 +101,18 @@ export const BrowserSnapshotTool = Tool.define(
           }
 
           const result = yield* Effect.promise(() => tab.snapshot({ maxNodes: params.maxNodes }))
+          // A part of the page is not a picture of all of it, so later actions
+          // keep being compared against the last whole outline.
+          if (params.within || params.interactive || params.maxChars) {
+            const part = BrowserPage.focus(result, params)
+            return {
+              output:
+                part ??
+                `Nothing in the outline of ${result.url} matches "${params.within}". Read it whole, or try other words.`,
+              title: result.title || result.url,
+              metadata: { format, url: result.url, refs: result.refs, page: "part" },
+            }
+          }
           return {
             output: BrowserPage.outline(tab, result),
             title: result.title || result.url,

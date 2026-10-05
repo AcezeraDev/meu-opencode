@@ -119,8 +119,37 @@ if ($Pacote) {
   Aviso "  $Importador <arquivo.ocpack>"
 }
 
-# ------------------------------------------------------------------ 4. abrir + Brave
+# ------------------------------------------------------------------ 4. programas
+# Funções que dependem de programas do Windows. Nada é instalado sem perguntar.
+function Existe([string]$comando) {
+  $achado = Get-Command $comando -ErrorAction SilentlyContinue | Select-Object -First 1
+  # O "python" da pasta WindowsApps só abre a Microsoft Store; não é o Python.
+  return [bool]$achado -and ($achado.Source -notlike "*\WindowsApps\*")
+}
+$temWinget = [bool](Get-Command winget -ErrorAction SilentlyContinue)
+function Garantir([string]$nome, [string]$comando, [string]$id, [string]$para) {
+  if (Existe $comando) { Ok "${nome}: já instalado"; return }
+  Aviso "$nome não está instalado (serve para $para)."
+  if (-not $temWinget) { Aviso "  Instale pelo site oficial do $nome e rode este instalador de novo."; return }
+  $resposta = Read-Host "    Instalar o $nome agora? (S/n)"
+  if ($resposta -match "^[nN]") { return }
+  & winget install --id $id -e --silent --accept-source-agreements --accept-package-agreements | Out-Host
+  # Esta janela não enxerga o programa recém-instalado até reler o PATH.
+  $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
+}
+Etapa "Programas que algumas funções usam"
+Garantir "Git" "git" "Git.Git" "desfazer alterações da IA, comparar mudanças e trabalhar em cópias separadas do projeto"
+Garantir "Python" "python" "Python.Python.3.12" "as skills que criam Word, PowerPoint, Excel e PDF"
+
+# ------------------------------------------------------------------ 5. abrir + Brave
 Etapa "Abrindo o Lynx Code"
+# O importador grava as chaves como variáveis do usuário, que esta janela ainda
+# não tem; sem isto o app abriria sem elas até o próximo login no Windows.
+foreach ($nome in [Environment]::GetEnvironmentVariables("User").Keys) {
+  if ($nome -match "(_API_KEY|_TOKEN)$|^OPENCODE_BROWSER_") {
+    Set-Item "Env:$nome" ([Environment]::GetEnvironmentVariable($nome, "User"))
+  }
+}
 Start-Process $AppExe
 
 $brave = @(
@@ -147,6 +176,37 @@ Write-Host "         porta e o código; coloque os dois no ícone da extensão, 
 if ($brave -and (Test-Path $brave)) { Start-Process $brave "brave://extensions" }
 if (Test-Path $extensao) { Start-Process explorer.exe $extensao }
 
+# ------------------------------------------------------------------ 6. conferir
+Etapa "Conferindo se está tudo no lugar"
+$script:faltou = 0
+function Item([string]$nome, [bool]$certo, [string]$dica) {
+  if ($certo) { Write-Host "    [ok] $nome" -ForegroundColor Green; return }
+  Write-Host "    [  ] $nome" -ForegroundColor Yellow
+  if ($dica) { Write-Host "         $dica" }
+  $script:faltou++
+}
+$cfg = Join-Path $HOME ".config\opencode"
+$dados = Join-Path $HOME ".local\share\opencode"
+$semPacote = "Vem no arquivo .ocpack: & `"$Importador`" <arquivo.ocpack> (com o app fechado)"
+$versao = (Get-Item $AppExe).VersionInfo.ProductVersion
+Item "App instalado (versão $versao)" (Test-Path $AppExe) ""
+Item "Extensão do Brave dentro do app" (Test-Path (Join-Path $extensao "manifest.json")) "O instalador veio sem ela; rode este instalador de novo mais tarde."
+Item "Brave" ([bool]$brave -and (Test-Path "$brave")) "Instale o Brave para a IA usar o seu navegador."
+Item "Configurações (provedores, navegador, papéis dos modelos)" ((Test-Path "$cfg\opencode.jsonc") -or (Test-Path "$cfg\opencode.json")) $semPacote
+Item "Contas e logins" (Test-Path "$dados\auth.json") $semPacote
+$pastas = @("$cfg\skills", "$HOME\.claude\skills", "$HOME\.agents\skills") | Where-Object { Test-Path $_ }
+$skills = ($pastas | ForEach-Object { @(Get-ChildItem $_ -Directory -Force).Count } | Measure-Object -Sum).Sum
+Item "Skills ($([int]$skills))" ($skills -gt 0) $semPacote
+$chaves = @([Environment]::GetEnvironmentVariables("User").Keys | Where-Object { $_ -match "(_API_KEY|_TOKEN)$" })
+Item "Chaves de API ($($chaves.Count))" ($chaves.Count -gt 0) "$semPacote. Se você não usa nenhuma chave, ignore."
+Item "Git" (Existe "git") "Rode este instalador de novo e aceite instalar o Git."
+Item "Python" (Existe "python") "Rode este instalador de novo e aceite instalar o Python."
+
 Write-Host ""
-Write-Host "Pronto! O Lynx Code está instalado em $AppExe" -ForegroundColor Green
+if ($script:faltou -eq 0) {
+  Write-Host "Pronto! O Lynx Code está completo neste PC, em $AppExe" -ForegroundColor Green
+} else {
+  Write-Host "O Lynx Code está instalado em $AppExe." -ForegroundColor Green
+  Write-Host "Falta(m) $($script:faltou) item(ns) acima; o resto já funciona." -ForegroundColor Yellow
+}
 Write-Host "Ele se atualiza sozinho: quando houver versão nova, use o botão Atualizar na barra de título." -ForegroundColor Green

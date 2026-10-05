@@ -1041,6 +1041,39 @@ describe("session.message-v2.toModelMessage", () => {
     ])
   })
 
+  // Two steps of a long lesson: each thought and wrote a long text through a tool.
+  const steps = (): SessionV1.WithParts[] =>
+    ["m-step-1", "m-step-2"].map((id, index) => ({
+      info: assistantInfo(id, "m-parent"),
+      parts: [
+        { ...basePart(id, `${index}-r`), type: "reasoning", text: `thought ${index + 1}`, time: { start: 0 } },
+        {
+          ...basePart(id, `${index}-t`),
+          type: "tool",
+          callID: `call-${index + 1}`,
+          tool: "write",
+          state: {
+            status: "completed",
+            input: { filePath: "page.html", content: "x".repeat(5000) },
+            output: "Wrote file",
+            title: "page.html",
+            metadata: {},
+            time: { start: 0, end: 1 },
+          },
+        },
+      ] as SessionV1.Part[],
+    }))
+
+  test("earlier steps keep their reasoning but not the long texts of their tool inputs", async () => {
+    const [first, second] = (await MessageV2.toModelMessages(steps(), model)).filter((message) => message.role === "assistant")
+    const parts = (message: unknown) => (message as { content: { type: string; text?: string; input?: { content: string } }[] }).content
+    // The plan of a model that thinks more than it writes lives in its reasoning.
+    expect(parts(first).find((part) => part.type === "reasoning")?.text).toBe("thought 1")
+    expect(parts(first).find((part) => part.type === "tool-call")?.input?.content).toContain("already used")
+    expect(parts(second).find((part) => part.type === "reasoning")?.text).toBe("thought 2")
+    expect(parts(second).find((part) => part.type === "tool-call")?.input?.content).toHaveLength(5000)
+  })
+
   test("preserves OpenRouter reasoning details through provider transform", async () => {
     const assistantID = "m-assistant"
     const openrouterModel: Provider.Model = {

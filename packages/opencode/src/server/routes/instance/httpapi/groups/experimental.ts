@@ -123,6 +123,27 @@ const BrowserSiteInfo = Schema.Struct({
   ),
 }).annotate({ identifier: "BrowserSiteInfo" })
 
+// The activities of the course open in the browser, and which are done.
+const BrowserLessons = Schema.Struct({
+  course: Schema.String,
+  url: Schema.String,
+  sections: Schema.Array(
+    Schema.Struct({
+      name: Schema.String,
+      lessons: Schema.Array(
+        Schema.Struct({
+          name: Schema.String,
+          url: Schema.String,
+          done: Schema.Boolean,
+          tracked: Schema.Boolean,
+          kind: Schema.String,
+        }),
+      ),
+    }),
+  ),
+  error: Schema.optional(Schema.String),
+}).annotate({ identifier: "BrowserLessons" })
+
 // The study notebook: explained answers the agent gave on pages, by subject.
 const NotebookSubject = Schema.Struct({
   slug: Schema.String,
@@ -366,6 +387,7 @@ export const ExperimentalPaths = {
   browserInput: "/experimental/browser/input",
   browserControl: "/experimental/browser/control",
   browserSite: "/experimental/browser/site",
+  browserLessons: "/experimental/browser/lessons",
 } as const
 
 export const ExperimentalApi = HttpApi.make("experimental")
@@ -551,6 +573,17 @@ export const ExperimentalApi = HttpApi.make("experimental")
             identifier: "experimental.browser.site",
             summary: "Get what the agent learned about a site",
             description: "Notes and saved programs kept for the site of `url`; nothing for pages off the web.",
+          }),
+        ),
+        HttpApiEndpoint.get("browserLessons", ExperimentalPaths.browserLessons, {
+          query: WorkspaceRoutingQuery,
+          success: described(BrowserLessons, "The activities of the course open in the browser"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.browser.lessons",
+            summary: "List the course's activities",
+            description:
+              "Reads the course index of the page open in the browser (Moodle) and says which activities are done. Only reads; `error` says why nothing was read.",
           }),
         ),
         HttpApiEndpoint.delete("browserSiteForget", ExperimentalPaths.browserSite, {

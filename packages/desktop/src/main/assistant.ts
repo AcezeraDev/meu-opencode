@@ -237,9 +237,28 @@ function updateTray(state: AgentTrayState) {
   if (state.status !== current.status) tray.setImage(iconFor(state.status))
   // Windows cuts tooltips at 127 characters.
   if (state.tooltip !== current.tooltip) tray.setToolTip(state.tooltip.slice(0, 127))
-  if (state.status === "attention" && current.status !== "attention") showNote(state)
-  if (state.status !== "attention") closeNote()
+  if (state.status === "attention" && current.status !== "attention") {
+    showNote(state)
+    flash(true)
+  }
+  if (state.status !== "attention") {
+    closeNote()
+    if (current.status === "attention") flash(false)
+  }
   current = state
+}
+
+/**
+ * Flashes the app's taskbar button while the agent waits on the person, who is
+ * usually watching it work in their own browser with this window behind it.
+ */
+function flash(on: boolean) {
+  const win = getMainWindow()
+  if (!win || win.isDestroyed()) return
+  if (!on) return win.flashFrame(false)
+  if (win.isFocused()) return
+  win.flashFrame(true)
+  win.once("focus", () => win.flashFrame(false))
 }
 
 /** The app's icon with a coloured dot in the corner for the agent's state. */

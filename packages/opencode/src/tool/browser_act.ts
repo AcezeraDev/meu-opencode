@@ -6,6 +6,9 @@ import { ActionVerifier, type Verdict } from "@/browser/verify"
 import { BrowserSite } from "@/browser/site"
 import { BrowserTab } from "@/browser/tab"
 import { Writer } from "@/writer/writer"
+import { Checker } from "@/checker/checker"
+import { Auth } from "@/auth"
+import { Provider } from "@/provider/provider"
 import { Config } from "@/config/config"
 import { ModelRoles } from "@/provider/roles"
 import * as Tool from "./tool"
@@ -79,6 +82,8 @@ export const BrowserActTool = Tool.define(
   Effect.gen(function* () {
     const browser = yield* Browser.Service
     const config = yield* Config.Service
+    const provider = yield* Provider.Service
+    const auth = yield* Auth.Service
 
     return {
       description: DESCRIPTION,
@@ -114,6 +119,19 @@ export const BrowserActTool = Tool.define(
               file: params.file,
             },
           })
+
+          // A lesson is read by the checking model before its send button is pressed.
+          const unchecked = yield* Checker.gate({
+            tab,
+            ref: params.ref,
+            action: params.action,
+            sessionID: ctx.sessionID,
+            signal: ctx.abort,
+            config,
+            provider,
+            auth,
+          })
+          if (unchecked) throw new Error(unchecked)
 
           const timeout = yield* browser.timeout()
           const before = tab.pdf

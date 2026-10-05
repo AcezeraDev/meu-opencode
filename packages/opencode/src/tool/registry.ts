@@ -5,6 +5,8 @@ import { PlanExitTool } from "./plan"
 import { Session } from "@/session/session"
 import { QuestionTool } from "./question"
 import { ShellTool } from "./shell"
+import { ShellJobsTool } from "./shell_jobs"
+import { PreviewTool } from "./preview"
 import { EditTool } from "./edit"
 import { GlobTool } from "./glob"
 import { GrepTool } from "./grep"
@@ -15,6 +17,7 @@ import { TodoWriteTool } from "./todo"
 import { WebFetchTool } from "./webfetch"
 import { BrowserNavigateTool } from "./browser_navigate"
 import { BrowserSnapshotTool } from "./browser_snapshot"
+import { BrowserFindTool } from "./browser_find"
 import { BrowserActTool } from "./browser_act"
 import { BrowserBatchTool } from "./browser_batch"
 import { BrowserScreenshotTool } from "./browser_screenshot"
@@ -91,6 +94,7 @@ export function webSearchEnabled(
 const BROWSER_TOOL_IDS = new Set<string>([
   BrowserNavigateTool.id,
   BrowserSnapshotTool.id,
+  BrowserFindTool.id,
   BrowserActTool.id,
   BrowserBatchTool.id,
   BrowserScreenshotTool.id,
@@ -146,6 +150,7 @@ const layer = Layer.effect(
     const webfetch = yield* WebFetchTool
     const browserNavigate = yield* BrowserNavigateTool
     const browserSnapshot = yield* BrowserSnapshotTool
+    const browserFind = yield* BrowserFindTool
     const browserAct = yield* BrowserActTool
     const browserBatch = yield* BrowserBatchTool
     const browserScreenshot = yield* BrowserScreenshotTool
@@ -159,6 +164,8 @@ const layer = Layer.effect(
     const webvideo = yield* WebVideoTool
     const websearch = yield* WebSearchTool
     const shell = yield* ShellTool
+    const shellJobs = yield* ShellJobsTool
+    const preview = yield* PreviewTool
     const globtool = yield* GlobTool
     const writetool = yield* WriteTool
     const edit = yield* EditTool
@@ -260,6 +267,8 @@ const layer = Layer.effect(
         const tool = yield* Effect.all({
           invalid: Tool.init(invalid),
           shell: Tool.init(shell),
+          shellJobs: Tool.init(shellJobs),
+          preview: Tool.init(preview),
           read: Tool.init(read),
           glob: Tool.init(globtool),
           grep: Tool.init(greptool),
@@ -269,6 +278,7 @@ const layer = Layer.effect(
           fetch: Tool.init(webfetch),
           browserNavigate: Tool.init(browserNavigate),
           browserSnapshot: Tool.init(browserSnapshot),
+          browserFind: Tool.init(browserFind),
           browserAct: Tool.init(browserAct),
           browserBatch: Tool.init(browserBatch),
           browserScreenshot: Tool.init(browserScreenshot),
@@ -296,6 +306,8 @@ const layer = Layer.effect(
             tool.invalid,
             ...(questionEnabled ? [tool.question] : []),
             tool.shell,
+            tool.shellJobs,
+            tool.preview,
             tool.read,
             tool.glob,
             tool.grep,
@@ -305,6 +317,7 @@ const layer = Layer.effect(
             tool.fetch,
             tool.browserNavigate,
             tool.browserSnapshot,
+            tool.browserFind,
             tool.browserAct,
             tool.browserBatch,
             tool.browserScreenshot,

@@ -13,11 +13,11 @@
  */
 import { $ } from "bun"
 import { existsSync } from "node:fs"
-import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import { copyFile, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { open, type Entry } from "./pack"
-import { PLACES, TEXT, relocate, type Place } from "./places"
+import { LINKS_ENTRY, PLACES, TEXT, relocate, type Place } from "./places"
 
 // Inlined from shared.ts on purpose: this file is also compiled to a standalone
 // exe (bun build --compile, see release.ts) that a new PC runs with no repository
@@ -101,6 +101,29 @@ for (const entry of entries) {
   counts[place] = (counts[place] ?? 0) + 1
 }
 
+// Skill folders that were links on the other PC become links here too, made as
+// junctions, which need no administrator. One already here as a real folder stays.
+const links = JSON.parse(entries.find((entry) => entry.name === LINKS_ENTRY)?.data.toString("utf8") ?? "[]") as {
+  place: Place
+  name: string
+  target: Place
+  to: string
+}[]
+let linked = 0
+for (const link of links) {
+  const root = PLACES[link.place]
+  const into = PLACES[link.target]
+  if (!root || !into) continue
+  const at = path.resolve(root, link.name)
+  const to = path.resolve(into, link.to)
+  if (!at.toLowerCase().startsWith(path.resolve(root).toLowerCase() + path.sep)) continue
+  if (!to.toLowerCase().startsWith(path.resolve(into).toLowerCase() + path.sep)) continue
+  if (existsSync(at) || !existsSync(to)) continue
+  await mkdir(root, { recursive: true })
+  await symlink(to, at, "junction")
+  linked++
+}
+
 for (const [name, value] of Object.entries(env)) {
   await $`powershell -NoProfile -Command ${`[Environment]::SetEnvironmentVariable('${name.replaceAll("'", "''")}', $env:OC_VALOR, 'User')`}`
     .env({ ...process.env, OC_VALOR: value })
@@ -112,6 +135,10 @@ console.log(`\nConfigurações importadas (pacote de ${made}):`)
 console.log(`  - configuração, agentes e skills: ${counts.config ?? 0} arquivos`)
 console.log(`  - chaves, logins e histórico: ${counts.data ?? 0} arquivos`)
 console.log(`  - preferências do app: ${counts.app ?? 0} arquivos`)
+console.log(
+  `  - skills de ~/.claude e ~/.agents: ${(counts.claudeSkills ?? 0) + (counts.agentsSkills ?? 0)} arquivos, ${linked} atalhos refeitos`,
+)
+if (counts.state) console.log("  - último modelo escolhido")
 console.log(`  - variáveis de ambiente: ${Object.keys(env).join(", ") || "nenhuma"}`)
 if (moved) console.log(`  - caminhos de ${meta.home} trocados por ${os.homedir()}`)
 if (backedUp) console.log(`\nO que já existia aqui foi guardado em ${backup}`)

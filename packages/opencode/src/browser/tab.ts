@@ -251,6 +251,8 @@ const CURSOR_CATCHUP = 90
  * and event stream spent CPU on while the agent browsed.
  */
 const CAST_INTERVAL = 100
+/** How long a page's rich text editor may take to replace its field before the outline is read anyway. */
+const EDITOR_WAIT = 3000
 /** How much longer the next picture may wait for the agent's commands to be answered first. */
 const CAST_YIELD = 300
 
@@ -423,6 +425,42 @@ const FIND = String.raw`(function (selector, identity) {
   return candidates[0] || null
 })`
 
+/**
+ * The editable area that stands in for a field a rich text editor took over.
+ * Editors such as Moodle's TinyMCE hide the textarea they replace, so a ref
+ * handed out before the editor loaded would measure as a box of no size at
+ * the top of the page, and look covered by whatever sits there.
+ */
+const EDITOR = String.raw`(function (el) {
+  if (!el || el.tagName !== "TEXTAREA" || el.getClientRects().length) return el
+  var doc = el.ownerDocument
+  var body = function (frame) {
+    var inner = null
+    try {
+      inner = frame && frame.contentDocument
+    } catch (error) {}
+    return inner && inner.body && inner.body.isContentEditable ? inner.body : null
+  }
+  var shown = function (node) {
+    return !!node && node.getClientRects().length > 0
+  }
+  // TinyMCE names its frame after the field, and Moodle's Atto its editable area.
+  var named = el.id ? body(doc.getElementById(el.id + "_ifr")) : null
+  if (named) return named
+  var atto = el.id ? doc.getElementById(el.id + "editable") : null
+  if (shown(atto) && atto.isContentEditable) return atto
+  // Any other editor puts its editable area or frame right after the field.
+  for (var scope = el.parentElement, depth = 0; scope && depth < 3; scope = scope.parentElement, depth++) {
+    var nodes = scope.querySelectorAll('[contenteditable=""], [contenteditable="true"], iframe')
+    for (var i = 0; i < nodes.length; i++) {
+      if (!(el.compareDocumentPosition(nodes[i]) & Node.DOCUMENT_POSITION_FOLLOWING) || !shown(nodes[i])) continue
+      var area = nodes[i].tagName === "IFRAME" ? body(nodes[i]) : nodes[i]
+      if (area) return area
+    }
+  }
+  return el
+})`
+
 /** An element's box in the top page's viewport, adding up the frames it sits in. */
 const RECT = String.raw`(function (el) {
   var r = el.getBoundingClientRect()
@@ -507,7 +545,7 @@ const VISIBLE_TEXT = String.raw`(function (whole, max) {
  * the same way the action did, frames included.
  */
 export function find(selector: string, identity?: RefIdentity) {
-  return `(${FIND})(${JSON.stringify(selector)}, ${JSON.stringify(identity)})`
+  return `(${EDITOR})((${FIND})(${JSON.stringify(selector)}, ${JSON.stringify(identity)}))`
 }
 
 /** CDP wants a bitmask, and key events want a numeric code per key. */
@@ -835,6 +873,8 @@ interface Measured extends Rect {
   name: string
   checked: boolean
   draggable: boolean
+  /** What the element is when it is plainly not a field, such as "button"; empty otherwise. */
+  inert: string
   ox: number
   oy: number
   cover: string
@@ -850,6 +890,7 @@ interface Target {
   duration: number
   checked: boolean
   draggable: boolean
+  inert: string
   /** The page around the element when it was measured, for the trace. */
   view: Measured["view"]
 }
@@ -963,6 +1004,17 @@ const MEASURE = String.raw`(function (el, spots) {
   var field = el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT"
   var buttonInput = el.tagName === "INPUT" && /^(submit|button|reset)$/i.test(el.type || "")
   var label = el.labels && el.labels[0] ? el.labels[0].innerText : ""
+  // Something plainly not a field, with no field inside it, for an action
+  // that types: a toolbar button next to an editor, say.
+  var role = clean(el.getAttribute("role")).split(" ")[0]
+  var inert =
+    !el.isContentEditable &&
+    !/^(textbox|searchbox|combobox|spinbutton)$/.test(role) &&
+    !el.querySelector('input, textarea, select, [contenteditable=""], [contenteditable="true"], iframe') &&
+    (/^(BUTTON|A|IMG|SUMMARY|OPTION)$/.test(el.tagName) ||
+      buttonInput ||
+      (el.tagName === "INPUT" && /^(checkbox|radio)$/i.test(el.type || "")) ||
+      /^(button|link|menuitem|menuitemcheckbox|menuitemradio|tab|checkbox|radio|switch|img|option)$/.test(role))
   var name =
     clean(el.getAttribute("aria-label")) ||
     clean(label) ||
@@ -980,6 +1032,7 @@ const MEASURE = String.raw`(function (el, spots) {
     name: name.slice(0, 48),
     checked: el.checked === true || el.getAttribute("aria-checked") === "true",
     draggable: el.draggable === true,
+    inert: inert ? role || el.tagName.toLowerCase() : "",
     ox: offset[0],
     oy: offset[1],
     cover: cover,
@@ -992,6 +1045,16 @@ const MEASURE = String.raw`(function (el, spots) {
     },
   }
 })`
+
+/** A fill aimed at something that takes no text, such as a button. */
+export class NotAFieldError extends Error {
+  constructor(target: string, kind: string) {
+    super(
+      `${target} is a ${kind}, not a text field, so nothing was typed or clicked. Use the ref of the textbox itself; for a rich text editor that is the textbox inside its frame.`,
+    )
+    this.name = "NotAFieldError"
+  }
+}
 
 export class CoveredError extends Error {
   readonly retryable = true as const
@@ -1055,6 +1118,8 @@ export class Tab {
   /** Last known identity for each ref, retained when a framework replaces its node. */
   private refIdentities = new Map<string, RefIdentity>()
   private refDocument?: string
+  /** The page whose rich text editor was already waited for, so a field that never gets one costs the wait once. */
+  private editorWaited?: string
   /**
    * Refs from an earlier page that point at the same element on this one: a
    * menu that was left out of the outline because it had not changed keeps the
@@ -1461,6 +1526,18 @@ export class Tab {
       throw error
     })
     if (!result) return this.snapshot(options, false)
+    // Once per page, a rich text editor still loading is waited for, so the
+    // agent gets the editor rather than the field it is about to hide.
+    if (result.editorLoading && result.documentId && result.documentId !== this.editorWaited) {
+      this.editorWaited = result.documentId
+      await this.evaluate(
+        `(async () => {
+          const until = Date.now() + ${EDITOR_WAIT}
+          while (${BrowserSnapshot.EDITOR_LOADING} && Date.now() < until) await new Promise((resolve) => setTimeout(resolve, 100))
+        })()`,
+      ).catch(() => {})
+      return this.snapshot(options, retry)
+    }
     this.refMax = Math.max(this.refMax, number(result.lastRef))
     if (result.documentId && result.documentId !== this.refDocument) this.refIdentities.clear()
     this.refDocument = result.documentId
@@ -1783,7 +1860,7 @@ export class Tab {
       })()`,
     )
     if (!found) throw new ElementNotFoundError(selector)
-    const { name, checked, draggable, duration, ox, oy, cover, view, ...rect } = found
+    const { name, checked, draggable, inert, duration, ox, oy, cover, view, ...rect } = found
     if (cover && (options.reach ?? true)) throw new CoveredError(name ? `"${name}"` : selector, cover)
     return {
       rect,
@@ -1791,6 +1868,7 @@ export class Tab {
       name,
       checked,
       draggable,
+      inert,
       duration: number(duration),
       view,
     }
@@ -2177,6 +2255,9 @@ export class Tab {
    */
   async fill(selector: string, text: string) {
     const target = await this.target(selector)
+    // Clicking it first would press a button, and the text would then go out
+    // as keystrokes to whatever has focus.
+    if (target.inert) throw new NotAFieldError(target.name ? `"${target.name}"` : selector, target.inert)
     this.announce("fill", target.name)
     const { x, y } = await this.point(selector, target)
     await this.pressAt(x, y, "left", 1)

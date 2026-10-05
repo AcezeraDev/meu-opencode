@@ -273,13 +273,31 @@ export function queueFlight(text: string, from: DOMRect | undefined) {
 export function riseIn(el: HTMLElement) {
   const level = motionLevel()
   if (level === "none") return
-  el.animate(
-    [
-      { transform: "translateY(14px) scaleY(0.94)", opacity: 0, transformOrigin: "bottom" },
-      { transform: "none", opacity: 1, transformOrigin: "bottom" },
-    ],
-    { duration: level === "lite" ? 220 : 420, easing: level === "lite" ? EASE.out : EASE.spring, fill: "backwards" },
+  const duration = level === "lite" ? 220 : 420
+  appears(
+    el.animate(
+      [
+        { transform: "translateY(14px) scaleY(0.94)", opacity: 0, transformOrigin: "bottom" },
+        { transform: "none", opacity: 1, transformOrigin: "bottom" },
+      ],
+      { duration, easing: level === "lite" ? EASE.out : EASE.spring, fill: "backwards" },
+    ),
+    duration,
   )
+}
+
+/**
+ * Makes sure an entrance that starts invisible ends visible. Animations only
+ * advance while the window is being drawn: one that starts while the window
+ * sits behind another (the person watching the agent in their own browser)
+ * holds its first, transparent frame, and a permission card stayed invisible
+ * that way while the agent waited on it. Past its time it is cancelled, which
+ * shows the element as it is.
+ */
+function appears(animation: Animation, duration: number) {
+  setTimeout(() => {
+    if (animation.playState !== "finished") animation.cancel()
+  }, duration + 400)
 }
 
 let stoppedAt = -Infinity
@@ -334,13 +352,18 @@ export function stamp(el: HTMLElement) {
 
 function drop(el: HTMLElement, level: "lite" | "full") {
   const label = el.querySelector<HTMLElement>('[data-slot="compaction-part-label"]')
-  label?.animate(
-    [
-      { transform: "translateY(-8px) rotate(-6deg)", opacity: 0 },
-      { transform: "none", opacity: 1 },
-    ],
-    { duration: level === "lite" ? 220 : 400, easing: level === "lite" ? EASE.out : EASE.spring },
-  )
+  const duration = level === "lite" ? 220 : 400
+  if (label)
+    appears(
+      label.animate(
+        [
+          { transform: "translateY(-8px) rotate(-6deg)", opacity: 0 },
+          { transform: "none", opacity: 1 },
+        ],
+        { duration, easing: level === "lite" ? EASE.out : EASE.spring },
+      ),
+      duration,
+    )
   el.querySelectorAll<HTMLElement>('[data-slot="compaction-part-line"]').forEach((line) =>
     line.animate([{ transform: "scaleX(0)" }, { transform: "none" }], {
       duration: level === "lite" ? 220 : 480,
@@ -533,15 +556,18 @@ export function flipList(root: HTMLElement) {
         const now = last.get(row.dataset.flipKey!)
         if (now === undefined) continue
         if (was === undefined) {
-          row.animate(
-            [
-              { opacity: 0, transform: "scale(0.97)" },
-              { opacity: 1, transform: "none" },
-            ],
-            {
-              duration,
-              easing: EASE.out,
-            },
+          appears(
+            row.animate(
+              [
+                { opacity: 0, transform: "scale(0.97)" },
+                { opacity: 1, transform: "none" },
+              ],
+              {
+                duration,
+                easing: EASE.out,
+              },
+            ),
+            duration,
           )
           continue
         }

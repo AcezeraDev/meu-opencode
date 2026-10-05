@@ -1,0 +1,16 @@
+Find elements on the current page of the built-in browser by the words they
+show, and get their refs for browser_act, without reading the whole page.
+
+Every word of `query` has to appear on the element's line of the outline (its
+role, name, href or placeholder), with accents and case ignored. Each match is
+listed as its outline line, under the heading it sits beneath, so the answers of
+one question come grouped under that question.
+
+Use it when you know what you are looking for and the page is big: the
+"Próxima" button, the answers under "Questão 3", the link to a lesson, the
+search box. It costs a few hundred characters where a whole outline costs tens
+of thousands. Pass `role` to keep only buttons, links, radios and so on.
+
+When nothing to act on matches, the result says whether the words appear in the
+page's text, so you know the page has them. To read a whole section, use
+browser_snapshot with `within`.

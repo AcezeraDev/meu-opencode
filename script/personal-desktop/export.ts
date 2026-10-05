@@ -14,7 +14,7 @@
  */
 import { Database } from "bun:sqlite"
 import { $ } from "bun"
-import { existsSync, readdirSync, statSync } from "node:fs"
+import { existsSync, readdirSync, realpathSync, statSync } from "node:fs"
 import { readFile, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -28,8 +28,12 @@ import {
   DATA_FOLDERS,
   ENV,
   HISTORY_DATABASES,
+  LINKS_ENTRY,
   PLACES,
+  SKILL_PLACES,
   SKIP_IN_CONFIG,
+  STATE_FILES,
+  type Place,
 } from "./places"
 import { ROOT } from "./shared"
 
@@ -52,7 +56,7 @@ function walk(dir: string, skip?: RegExp): string[] {
   return found
 }
 
-async function addFile(place: keyof typeof PLACES, full: string) {
+async function addFile(place: Place, full: string) {
   const relative = path.relative(PLACES[place], full).split(path.sep).join("/")
   entries.push({ name: `${place}/${relative}`, data: await readFile(full) })
 }
@@ -109,14 +113,48 @@ const config = walk(PLACES.config, SKIP_IN_CONFIG)
 for (const file of config) await addFile("config", file)
 summary.push(`configuração, agentes e skills: ${config.length} arquivos`)
 
+// Skills kept outside the config, and the links between their folders, which
+// walk() leaves out since a link's files are taken where they really are.
+const links: { place: Place; name: string; target: Place; to: string }[] = []
+let skillFiles = 0
+for (const place of SKILL_PLACES) {
+  const root = PLACES[place]
+  if (!existsSync(root)) continue
+  for (const item of readdirSync(root, { withFileTypes: true })) {
+    if (!item.isSymbolicLink()) continue
+    const real = realpathSync(path.join(root, item.name))
+    const target = SKILL_PLACES.find((other) => real.toLowerCase().startsWith(PLACES[other].toLowerCase() + path.sep))
+    if (target) links.push({ place, name: item.name, target, to: path.relative(PLACES[target], real) })
+  }
+  const files = walk(root, SKIP_IN_CONFIG)
+  for (const file of files) await addFile(place, file)
+  skillFiles += files.length
+}
+entries.push({ name: LINKS_ENTRY, data: Buffer.from(JSON.stringify(links, null, 2)) })
+summary.push(`skills de ~/.claude e ~/.agents: ${skillFiles} arquivos e ${links.length} atalhos entre elas`)
+
 // Keys, sign-ins and feature settings.
 for (const name of DATA_FILES) {
   const full = path.join(PLACES.data, name)
   if (existsSync(full)) await addFile("data", full)
 }
-for (const folder of DATA_FOLDERS) for (const file of walk(path.join(PLACES.data, folder))) await addFile("data", file)
+const learned = DATA_FOLDERS.map((folder) => {
+  const files = walk(path.join(PLACES.data, folder))
+  return { folder, files }
+})
+for (const item of learned) for (const file of item.files) await addFile("data", file)
 for (const name of DATA_DATABASES) addDatabase("data", name)
-summary.push("chaves de API, logins e contas, e configurações de recursos")
+for (const name of STATE_FILES) {
+  const full = path.join(PLACES.state, name)
+  if (existsSync(full)) await addFile("state", full)
+}
+summary.push("chaves de API, logins e contas (incluindo os de MCP), e configurações de recursos")
+summary.push(
+  `o que a IA aprendeu e guardou: ${learned
+    .filter((item) => item.folder !== "storage")
+    .map((item) => `${item.folder} (${item.files.length})`)
+    .join(", ")}`,
+)
 
 if (withHistory) {
   const saved = HISTORY_DATABASES.filter((name) => addDatabase("data", name))
@@ -162,4 +200,8 @@ console.log("\nPacote de configurações criado:")
 console.log(`  ${target} (${(sealed.length / 1024 / 1024).toFixed(1)} MB)`)
 console.log("\nLeva:")
 for (const line of summary) console.log(`  - ${line}`)
+console.log("\nNão vai (e não precisa):")
+console.log("  - os logins dos sites no Brave: entre neles no Brave do outro PC, ou ligue a sincronização do Brave")
+console.log("  - os modelos do Ollama: o outro PC usa o Ollama da rede que estiver nas configurações, ou baixa os dele")
+console.log("  - caches, prints dos passos e logs, que o app refaz com o uso")
 console.log("\nGuarde a senha: sem ela o arquivo não abre. Não coloque o arquivo no GitHub.")
