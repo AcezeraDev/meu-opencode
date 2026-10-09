@@ -175,8 +175,11 @@ export const BrowserActTool = Tool.define(
           }
           if (failure) throw failure
 
-          const opened = yield* BrowserPage.openedTab(browser, tab, started, verdict)
-          if (opened) {
+          // A tab the click opened has normally shown up by the time the page settled,
+          // so this only looks. The longer wait for a slow popup is kept for a click
+          // the outline below also finds did nothing: waiting here cost 1.5 s on every
+          // click (a Moodle answer, say) whose change only the outline sees.
+          const popup = Effect.fn("BrowserAct.popup")(function* (opened: BrowserTab.Tab) {
             const page = yield* Effect.promise(() => opened.snapshot())
             const extra = yield* Effect.promise(() =>
               BrowserSite.aside(ctx.sessionID, { steps: [step], from: url, to: page.url }),
@@ -197,7 +200,9 @@ export const BrowserActTool = Tool.define(
                 outcome: "navigation",
               },
             }
-          }
+          })
+          const opened = yield* BrowserPage.openedTab(browser, tab, started, verdict, 0)
+          if (opened) return yield* popup(opened)
 
           // A click or a search can land on a captcha as easily as a link can.
           const handed = yield* BrowserPage.handOver(browser, tab)
@@ -216,6 +221,8 @@ export const BrowserActTool = Tool.define(
           }
 
           if (params.snapshot === false) {
+            const late = yield* BrowserPage.openedTab(browser, tab, started, verdict)
+            if (late) return yield* popup(late)
             const [current, title] = yield* Effect.promise(() => Promise.all([tab.url(), tab.title()]))
             const extra = yield* Effect.promise(() =>
               BrowserSite.aside(ctx.sessionID, { steps: [step], from: url, to: current }),
@@ -240,6 +247,10 @@ export const BrowserActTool = Tool.define(
           // The outline is the broadest sign there is, and only the tool holds
           // it: an action that looked like it did nothing may well have.
           const told = verdict ? ActionVerifier.withOutline(verdict, change.changed) : undefined
+          if (told?.outcome === "success_no_visible_change") {
+            const late = yield* BrowserPage.openedTab(browser, tab, started, told)
+            if (late) return yield* popup(late)
+          }
           const slow = tab.takeSlow()
           const extra = yield* Effect.promise(() =>
             BrowserSite.aside(ctx.sessionID, { steps: [step], from: url, to: result.url }),

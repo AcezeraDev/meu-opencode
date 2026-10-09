@@ -5,7 +5,7 @@ import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { useNavigate } from "@solidjs/router"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { DateTime } from "luxon"
-import { For, Show, createMemo, createSignal, onCleanup, onMount, type Accessor } from "solid-js"
+import { For, Show, createMemo, createResource, createSignal, onCleanup, onMount, type Accessor } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Portal } from "solid-js/web"
 import createPresence from "solid-presence"
@@ -25,6 +25,7 @@ import { NEW_SESSION_CONTENT_WIDTH } from "@/pages/session/new-session-layout"
 import { LynxMark } from "@/pages/home/lynx-home"
 import { sessionTitle } from "@/utils/session-title"
 import { Persist, persisted } from "@/utils/persist"
+import { useServerJson } from "@/utils/server-json"
 import type { NewSessionDraftController } from "./new-session-draft-controller"
 import type { NewSessionWorkspaceController } from "./new-session-workspace-controller"
 import "./new-session-view.css"
@@ -94,6 +95,7 @@ export function NewSessionView(props: {
                   <h1 class="new-session-title">{language.t(greeting())}</h1>
                   <p class="new-session-sub">{language.t("lynx.new.sub")}</p>
                 </div>
+                <FavoriteSkills input={props.input} />
                 <div class="new-session-composer">
                   <PromptInputV2Composer controller={props.input} />
                 </div>
@@ -123,6 +125,60 @@ export function NewSessionView(props: {
         <ProviderTip />
       </div>
     </div>
+  )
+}
+
+/** A skill must have been used this often to earn a shortcut, so one-off tries stay out. */
+const FAVORITE_MIN_USES = 2
+const FAVORITE_LIMIT = 4
+
+/**
+ * The skills the person runs most, one click from the start of a conversation:
+ * the click attaches the skill and puts the cursor in the box, so the request
+ * goes in the same message instead of a greeting and "execute a skill" first.
+ */
+function FavoriteSkills(props: { input: NewSessionDraftController["input"] }) {
+  const language = useLanguage()
+  const json = useServerJson()
+  const [usage] = createResource(
+    () => json<{ skills: { name: string; count: number }[] }>("/experimental/usage/skills").catch(() => undefined),
+    { initialValue: undefined },
+  )
+  const favorites = createMemo(() => {
+    const known = new Map(props.input.skills.list().map((skill) => [skill.name, skill]))
+    return (usage.latest?.skills ?? [])
+      .filter((item) => item.count >= FAVORITE_MIN_USES)
+      .flatMap((item) => {
+        const skill = known.get(item.name)
+        return skill ? [skill] : []
+      })
+      .slice(0, FAVORITE_LIMIT)
+  })
+  return (
+    <Show when={favorites().length > 0}>
+      <div class="new-session-favorites" role="group" aria-label={language.t("lynx.new.favorites")}>
+        <span class="new-session-favorites-label">{language.t("lynx.new.favorites")}</span>
+        <For each={favorites()}>
+          {(skill, index) => (
+            <button
+              type="button"
+              class="new-session-example"
+              data-on={props.input.skills.selected().has(skill.name) ? "" : undefined}
+              aria-pressed={props.input.skills.selected().has(skill.name)}
+              title={skill.description}
+              style={{ "--d": `${80 + index() * 50}ms` }}
+              onClick={() => {
+                props.input.skills.toggle(skill)
+                props.input.restoreFocus()
+              }}
+            >
+              <IconV2 name="grid-plus" />
+              <span>{skill.name.replace(/[-_]+/g, " ")}</span>
+            </button>
+          )}
+        </For>
+      </div>
+    </Show>
   )
 }
 

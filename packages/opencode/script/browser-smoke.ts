@@ -24,6 +24,7 @@ import { spawn } from "child_process"
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
+import { pathToFileURL } from "url"
 import { Script } from "@opencode-ai/script"
 import { BrowserInstall } from "../src/browser/install"
 
@@ -82,6 +83,21 @@ const lab = Bun.serve({
       })
     if (url.pathname === "/upload")
       return html(`<title>Enviar</title><label>Arquivo <input type="file" onchange="document.title = 'Recebido ' + this.files[0].name + ' ' + this.files[0].size"></label>`)
+    // Like Instagram's "create" dialog: a hidden file input, a caption and Share.
+    if (url.pathname === "/instagram")
+      return html(`<title>Instagram</title><nav><button onclick="document.getElementById('d').hidden = false">Criar</button></nav>
+        <div id="d" role="dialog" aria-label="Criar nova publicação" hidden>
+          <input type="file" accept="video/*" style="display:none"
+            onchange="document.getElementById('f').textContent = 'Arquivo ' + this.files[0].name + ' ' + this.files[0].size; document.getElementById('c').hidden = false">
+          <p id="f"></p>
+          <div id="c" hidden><label>Legenda <textarea id="t"></textarea></label>
+            <button onclick="document.getElementById('ok').textContent = 'Seu reel foi compartilhado: ' + document.getElementById('t').value">Compartilhar</button></div>
+          <p id="ok"></p>
+        </div>`)
+    if (url.pathname === "/perfil")
+      return html(`<title>Doces da Ana</title><h1>docesdaana</h1><p>Confeitaria caseira em BH 🍫 Encomendas pelo link</p>
+        <article><p>Brigadeiro de colher pra adoçar a semana 💛 #brigadeiro #docecaseiro</p></article>
+        <article><p>Bolo de pote saindo agora! Link na bio 🍰 #bolodepote #docecaseiro</p></article>`)
     if (url.pathname === "/login")
       return html(`<title>Entrar</title><form><label>Senha <input type="password"></label><button>Acessar</button></form>`)
     if (url.pathname === "/planilha.xlsx")
@@ -100,6 +116,18 @@ const site = `http://127.0.0.1:${lab.port}`
 // A file of the person's to send to a site.
 const upload = path.join(work, "trabalho.txt")
 await fs.writeFile(upload, "meu trabalho de casa")
+// A video too big for one message through the extension, which goes in pieces.
+const bigVideo = path.join(work, "video-grande.mp4")
+const BIG_VIDEO_BYTES = 30 * 1024 * 1024 + 7
+await fs.writeFile(bigVideo, Buffer.alloc(BIG_VIDEO_BYTES, 7))
+// The video the social agent posts from the queue, and the post the queue made of it.
+const socialVideo = path.join(work, "promo.mp4")
+await fs.writeFile(socialVideo, Buffer.alloc(2048, 1))
+const social = { id: "", video: "", session: "" }
+// A still the app took from the video, as the page sends it when scheduling.
+const STILL =
+  "data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAAQABAAD//gAPTGF2YzYzLjEuMTAwAP/bAEMACAQEBAQEBQUFBQUFBgYGBgYGBgYGBgYGBgcHBwgICAcHBwYGBwcICAgICQkJCAgICAkJCgoKDAwLCw4ODhERFP/EAEwAAQEAAAAAAAAAAAAAAAAAAAAGAQEBAAAAAAAAAAAAAAAAAAAGBxABAAAAAAAAAAAAAAAAAAAAABEBAAAAAAAAAAAAAAAAAAAAAP/AABEIABAAEAMBIgACEQADEQD/2gAMAwEAAhEDEQA/AK0BHTp//9k="
+const PREP_CAPTION = "Brigadeiro saindo do forno 🍫 Encomendas pelo link na bio! #brigadeiro #docecaseiro"
 
 // 3. The fake model: one scripted step per tool result it has seen, from the
 // script the first message names.
@@ -116,11 +144,22 @@ const ref = (outputs: string[], pattern: RegExp) => {
 interface Scenario {
   name: string
   browser: Record<string, unknown>
+  /** Session metadata set before the prompt, such as look only. */
+  metadata?: Record<string, unknown>
+  /** Steps the server must refuse, by index. */
+  refused?: number[]
+  /**
+   * Runs as the posting queue's clock would: a queued video, claimed by a
+   * session of the social agent ("post"), or by one of the social-prep agent
+   * ten minutes before, with the video's stills attached ("prep").
+   */
+  social?: "post" | "prep"
   steps: Step[]
   check: (
     out: (index: number) => string,
     expect: (label: string, holds: boolean) => void,
     ms: (index: number) => number,
+    api: (method: string, route: string, body?: unknown) => Promise<any>,
   ) => void | Promise<void>
 }
 
@@ -225,6 +264,12 @@ const SCENARIOS: Scenario[] = [
       () => ({ tool: "site_check", args: { url: `${site}/form`, crawl: 0, viewports: ["mobile"] } }),
       () => ({ tool: "browser_navigate", args: { url: `${site}/form` } }),
       () => ({ tool: "browser_find", args: { query: "nome", role: "textbox" } }),
+      () => ({ tool: "browser_navigate", args: { url: `${site}/upload` } }),
+      (o) => ({
+        tool: "browser_act",
+        args: { action: "upload_file", ref: ref(o, /"Arquivo" \[(ref_\d+)/), file: bigVideo },
+      }),
+      () => ({ tool: "browser_inspect", args: { what: "evaluate", expression: "document.title" } }),
     ],
     check: async (out, expect, ms) => {
       expect("a site check ran in the person's browser", out(13).includes("1 página(s) × mobile"))
@@ -242,11 +287,119 @@ const SCENARIOS: Scenario[] = [
       expect("the user was asked once", answered.length === 1 && answered[0]!.includes("entrar na sua conta"))
       expect("a file was sent although the browser refused to name it", out(12).includes("Recebido trabalho.txt 20"))
       expect("find works through the extension", out(15).includes('textbox "Nome"'))
+      expect(
+        "a video past one message's size was sent in pieces through the extension",
+        out(18).includes(`Recebido video-grande.mp4 ${BIG_VIDEO_BYTES}`),
+      )
+    },
+  },
+  {
+    // The social agent posts a queued video on an Instagram-like page and reports it.
+    name: "social",
+    browser: { mode: "process", headless: true, profile: "smoke-social", timeout: 20000 },
+    social: "post",
+    steps: [
+      () => ({ tool: "browser_navigate", args: { url: `${site}/instagram` } }),
+      (o) => ({ tool: "browser_act", args: { action: "click", ref: ref(o, /button "Criar" \[(ref_\d+)/) } }),
+      () => ({
+        tool: "browser_act",
+        args: { action: "upload_file", selector: "input[type=file]", file: social.video },
+      }),
+      (o) => ({
+        tool: "browser_batch",
+        args: {
+          steps: [
+            { action: "fill", ref: ref(o, /textbox "Legenda" \[(ref_\d+)/), text: "Bastidores! #promo" },
+            { action: "click", ref: ref(o, /button "Compartilhar" \[(ref_\d+)/) },
+          ],
+        },
+      }),
+      () => ({ tool: "browser_act", args: { action: "wait_for", text: "Seu reel foi compartilhado" } }),
+      () => ({ tool: "social_report", args: { id: social.id, status: "posted", caption: "Bastidores! #promo" } }),
+    ],
+    check: async (out, expect, _ms, api) => {
+      expect("the queued copy of the video was uploaded", out(2).includes("Arquivo") || out(3).includes("Arquivo"))
+      expect("the page said the reel was shared", out(3).includes("Seu reel foi compartilhado: Bastidores! #promo"))
+      expect("the report reached the queue", out(5).includes("posted on instagram"))
+      const queue = await api("GET", "/experimental/social")
+      const post = queue.posts.find((item: { id: string }) => item.id === social.id)
+      expect("the post is marked posted with its caption", post?.status === "posted" && post?.posted === "Bastidores! #promo")
+      expect("the posted video's copy was removed", !(await fs.stat(social.video).catch(() => undefined)))
+      expect("the social agent is offered social_report", offered.get("social")?.has("social_report") === true)
+      expect("the social agent is not offered the shell", offered.get("social")?.has("bash") === false)
+      expect("other agents are not offered social_report", offered.get("process")?.has("social_report") === false)
+    },
+  },
+  {
+    // Ten minutes before, the social-prep agent reads the profile and leaves a caption the person can see.
+    name: "legenda",
+    browser: { mode: "process", headless: true, profile: "smoke-legenda", timeout: 20000 },
+    social: "prep",
+    steps: [
+      () => ({ tool: "browser_navigate", args: { url: `${site}/perfil` } }),
+      () => ({
+        tool: "social_report",
+        args: {
+          id: social.id,
+          status: "prepared",
+          caption: PREP_CAPTION,
+          analysis: "Mãos mexendo brigadeiro numa panela.",
+          profile: "Confeitaria caseira em BH; tom carinhoso; #docecaseiro; CTA link na bio.",
+        },
+      }),
+    ],
+    check: async (out, expect, _ms, api) => {
+      expect("the prep agent read the profile", out(0).includes("Confeitaria caseira"))
+      expect("the caption reached the queue", out(1).includes("is ready"))
+      const queue = await api("GET", "/experimental/social")
+      const post = queue.posts.find((item: { id: string }) => item.id === social.id)
+      expect("the post keeps the caption, still scheduled", post?.draft === PREP_CAPTION && post?.status === "scheduled")
+      expect("the prep is done", post?.prep?.status === "done" && post?.analysis?.includes("brigadeiro"))
+      expect("the profile summary was kept for next time", queue.profiles?.instagram?.summary?.includes("#docecaseiro"))
+      expect("the still reached the model as an image", stills.has("legenda"))
+      const tools = offered.get("legenda")
+      expect("the prep agent is offered social_report", tools?.has("social_report") === true)
+      expect(
+        "the prep agent cannot batch, script or run the shell",
+        tools?.has("browser_batch") === false && tools?.has("browser_script") === false && tools?.has("bash") === false,
+      )
+      // At its time, the posting agent gets the caption as a reference that types exactly.
+      await api("PATCH", `/experimental/social/${social.id}`, { at: Date.now() - 1000 })
+      const claimed = await api("POST", `/experimental/social/${social.id}/claim`, { sessionID: social.session })
+      const id = /^@texto:([a-z0-9]+)$/.exec(claimed?.captionRef ?? "")?.[1]
+      const saved = id
+        ? await fs.readFile(path.join(work, "data", "opencode", "textos", `${id}.txt`), "utf8").catch(() => "")
+        : ""
+      expect("the claim hands the prepared caption as a write_text reference", saved === PREP_CAPTION)
+    },
+  },
+  {
+    // Look only: reading goes through, anything that acts on the page is refused.
+    name: "look",
+    browser: { mode: "process", headless: true, profile: "smoke-look", timeout: 20000 },
+    metadata: { browserLook: true },
+    refused: [2],
+    // The last steps take no picture, so the earlier ones are on disk when checked.
+    steps: [
+      () => ({ tool: "browser_navigate", args: { url: `${site}/form` } }),
+      () => ({ tool: "browser_act", args: { action: "scroll" } }),
+      (o) => ({ tool: "browser_act", args: { action: "click", ref: ref(o, /button "Enviar" \[(ref_\d+)/) } }),
+      () => ({ tool: "browser_snapshot", args: {} }),
+    ],
+    check: (out, expect) => {
+      expect("look only let the page open", out(0).includes("/form"))
+      expect("look only let the page scroll", !out(1).includes("Modo só olhar"))
+      expect("look only refused the click", out(2).includes("Modo só olhar"))
+      expect("look only let the page be read", out(3).includes('button "Enviar"'))
     },
   },
 ]
 
 const toolsOffered = new Set<string>()
+/** The tools each scenario's agent was offered. */
+const offered = new Map<string, Set<string>>()
+/** The scenarios whose model was sent an image. */
+const stills = new Set<string>()
 /** The questions the stand-in for the user answered, by their text. */
 const answered: string[] = []
 const model = Bun.serve({
@@ -262,6 +415,9 @@ const model = Bun.serve({
     const asked = text(body.messages.find((message) => message.role === "user")?.content ?? "")
     const scenario = SCENARIOS.find((item) => asked.includes(`roteiro ${item.name}`))
     for (const tool of body.tools ?? []) toolsOffered.add(tool.function.name)
+    if (scenario && asked.includes("data:image/jpeg")) stills.add(scenario.name)
+    if (scenario && body.tools?.length)
+      offered.set(scenario.name, new Set(body.tools.map((tool) => tool.function.name)))
     // Titles and summaries ask without tools.
     const step = body.tools?.length && scenario ? scenario.steps[outputs.length] : undefined
     const call: Call = step ? await step(outputs) : { text: body.tools?.length ? "Pronto." : "Smoke" }
@@ -307,12 +463,22 @@ for (const scenario of SCENARIOS) {
           npm: "@ai-sdk/openai-compatible",
           name: "Fake",
           options: { baseURL: `http://127.0.0.1:${model.port}/v1`, apiKey: "fake" },
-          models: { m: { name: "m", tool_call: true, limit: { context: 200000, output: 4096 } } },
+          // Sees images, as the model that writes captions from the stills must.
+          models: {
+            m: {
+              name: "m",
+              tool_call: true,
+              attachment: true,
+              modalities: { input: ["text", "image"], output: ["text"] },
+              limit: { context: 200000, output: 4096 },
+            },
+          },
         },
       },
       model: "fake/m",
       small_model: "fake/m",
-      permission: "allow",
+      // The social agent runs on its own permissions, as with the person's config.
+      ...(scenario.social ? {} : { permission: "allow" }),
       browser: scenario.browser,
     }),
   )
@@ -414,9 +580,50 @@ async function run(base: string, scenario: Scenario) {
     const text = await response.text()
     return text ? JSON.parse(text) : undefined
   }
+  // As the app's clock does: queue the video, open a session, claim the post, tell the agent.
+  const prep = scenario.social === "prep"
+  const queued = scenario.social
+    ? (
+        await api("POST", "/experimental/social", {
+          source: socialVideo,
+          networks: ["instagram"],
+          // A prep runs ten minutes ahead; a post when it is due.
+          at: prep ? Date.now() + 5 * 60_000 : Date.now() - 1000,
+          ...(prep ? { frames: [STILL], duration: 12, width: 1080, height: 1920 } : {}),
+        })
+      )[0]
+    : undefined
   const session = await api("POST", "/session", {})
+  if (queued) {
+    const claimed = await api("POST", `/experimental/social/${queued.id}/${prep ? "prepare" : "claim"}`, {
+      sessionID: session.id,
+    })
+    const taken = prep ? claimed?.prep?.status === "running" : claimed?.status === "producing"
+    if (!taken) failures.push(`[${scenario.name}] the post was not claimed`)
+    Object.assign(social, { id: queued.id, video: queued.video, session: session.id })
+  }
+  if (scenario.metadata) await api("PATCH", `/session/${session.id}`, { metadata: scenario.metadata })
   await api("POST", `/session/${session.id}/prompt_async`, {
-    parts: [{ type: "text", text: `Faça o roteiro ${scenario.name} de fumaça.` }],
+    ...(queued ? { agent: prep ? "social-prep" : "social" } : {}),
+    parts: [
+      {
+        type: "text",
+        text: [
+          queued && !prep ? `Post agendado — id: ${queued.id}\nRede: Instagram\nVídeo: ${queued.video}\n` : "",
+          queued && prep ? `Preparar a legenda (não poste nada) — id: ${queued.id}\nRede: Instagram\n` : "",
+          `Faça o roteiro ${scenario.name} de fumaça.`,
+        ].join(""),
+      },
+      // The stills go as the app's clock sends them: files the server reads into the message.
+      ...(prep
+        ? (queued.frames as string[]).map((frame, index) => ({
+            type: "file",
+            mime: "image/jpeg",
+            filename: `quadro-${index + 1}.jpg`,
+            url: pathToFileURL(frame).href,
+          }))
+        : []),
+    ],
   })
 
   // Done once the fake model's closing text is in.
@@ -443,10 +650,14 @@ async function run(base: string, scenario: Scenario) {
   }
 
   const tools = seen.filter((part) => part.type === "tool")
-  for (const part of tools) {
+  for (const [index, part] of tools.entries()) {
     const output = part.state?.output ?? part.state?.error ?? ""
     const line = `${part.tool} ${JSON.stringify(part.state?.input)}`
-    if (part.state?.status !== "completed")
+    if (scenario.refused?.includes(index)) {
+      if (part.state?.status !== "error") failures.push(`[${scenario.name}] ${line}
+    expected a refusal, got ${part.state?.status}`)
+      else log("refused as expected", line.slice(0, 100))
+    } else if (part.state?.status !== "completed")
       failures.push(`[${scenario.name}] ${line}\n    ${part.state?.status}: ${output.slice(0, 400)}`)
     else log("ok", line.slice(0, 110))
     if (/Bun is not defined|is not a function|Cannot find module/i.test(output))
@@ -471,9 +682,10 @@ async function run(base: string, scenario: Scenario) {
   const lost = scenario.name === "extension" ? 1 : 0
   expect(`every step's picture can be fetched (${fetched.length} of ${shots.length})`, fetched.length >= shots.length - lost)
   await scenario.check(
-    (index) => tools[index]?.state?.output ?? "",
+    (index) => tools[index]?.state?.output ?? tools[index]?.state?.error ?? "",
     expect,
     (index) => (tools[index]?.state?.time?.end ?? 0) - (tools[index]?.state?.time?.start ?? 0),
+    api,
   )
 }
 

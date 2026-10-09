@@ -40,7 +40,7 @@
 
 /* A session's tone inside its project's color (context/session-tone.ts): the
  * same space turned a little either way along the hue (kept small so every
- * tone stays between the logo cyan and indigo), or softened. On a
+ * tone stays among the logo's corals), or softened. On a
  * tab or a session row it replaces --own-space, so everything that wears the
  * row's own color wears the session's tone; the app itself keeps the space. */
 [data-tone="0"] {

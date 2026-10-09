@@ -823,9 +823,15 @@ export const openedTab = Effect.fn("BrowserPage.openedTab")(function* (
   tab: Tab,
   since: number,
   verdict?: Verdict,
+  /** Overrides how long to wait; 0 only looks at the tabs opened so far. */
+  wait?: number,
 ) {
   if (!verdict || verdict.outcome === "navigation") return undefined
-  return yield* browser.opened(tab, since, verdict.outcome === "success_no_visible_change" ? POPUP_WAIT : 300)
+  return yield* browser.opened(
+    tab,
+    since,
+    wait ?? (verdict.outcome === "success_no_visible_change" ? POPUP_WAIT : 300),
+  )
 })
 
 /** How long a click that changed nothing on its page is given to show up as a new tab. */

@@ -206,3 +206,28 @@
     animation: none;
   }
 }
+
+/* The rail's first row starts a new task, like the "new" button of a task list. */
+.session-rail-new {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  margin: 0 4px 10px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #131313;
+  background: var(--lynx-coral, #ff6b5b);
+  cursor: pointer;
+}
+
+.session-rail-new:hover {
+  filter: brightness(1.08);
+}
+
+.session-rail-new span {
+  font-size: 18px;
+  line-height: 1;
+}

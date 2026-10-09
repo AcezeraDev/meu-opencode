@@ -21,17 +21,26 @@
     localStorage.removeItem("opencode-theme-css-dark")
   }
 
-  var scheme = localStorage.getItem("opencode-color-scheme") || "system"
+  // Lynx Code is black and coral: everyone starts on Dark once, and Dark is
+  // the default (theme/context.tsx too). Light stays a choice in Settings.
+  if (localStorage.getItem("lynx-black") !== "1") {
+    localStorage.setItem("lynx-black", "1")
+    localStorage.setItem("opencode-color-scheme", "dark")
+    localStorage.removeItem("opencode-theme-css-light")
+    localStorage.removeItem("opencode-theme-css-dark")
+  }
+
+  var scheme = localStorage.getItem("opencode-color-scheme") || "dark"
   var isDark = scheme === "dark" || (scheme === "system" && matchMedia("(prefers-color-scheme: dark)").matches)
   var mode = isDark ? "dark" : "light"
 
   document.documentElement.dataset.theme = themeId
   document.documentElement.dataset.colorScheme = mode
-  document.documentElement.style.backgroundColor = isDark ? "#070b19" : "#ffffff"
+  document.documentElement.style.backgroundColor = isDark ? "#0c0c0c" : "#ffffff"
 
   // Update theme-color meta tag to match app color scheme
   var metas = document.querySelectorAll("meta[name='theme-color']")
-  if (metas.length > 0) metas[0].setAttribute("content", isDark ? "#070b19" : "#ffffff")
+  if (metas.length > 0) metas[0].setAttribute("content", isDark ? "#0c0c0c" : "#ffffff")
 
   if (themeId === "oc-2") return
 

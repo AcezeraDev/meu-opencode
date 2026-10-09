@@ -4,6 +4,7 @@ import { HttpApiBuilder } from "effect/unstable/httpapi"
 import * as Socket from "effect/unstable/socket/Socket"
 import fs from "fs/promises"
 import { BrowserBridge } from "@/browser/bridge"
+import { Config } from "@/config/config"
 import { BrowserPdf } from "@/browser/pdf"
 import { BrowserBridgeApi } from "../groups/browser-bridge"
 
@@ -16,11 +17,21 @@ import { BrowserBridgeApi } from "../groups/browser-bridge"
  * PTY connect handler.
  */
 export const browserBridgeHandlers = HttpApiBuilder.group(BrowserBridgeApi, "browser-bridge", (handlers) =>
-  Effect.succeed(
-    handlers.handleRaw(
+  Effect.gen(function* () {
+    const config = yield* Config.Service
+    // The token is read from the config here too, so an extension can pair
+    // before any session has touched the browser.
+    const token = Effect.fn("BrowserBridgeHttpApi.token")(function* () {
+      const bridge = BrowserBridge.instance()
+      const saved = (yield* config.getGlobal()).browser?.extensionToken
+      if (saved) bridge.configure(saved)
+      return bridge
+    })
+    return handlers
+      .handleRaw(
       "connect",
       Effect.fn("BrowserBridgeHttpApi.connect")(function* (ctx: { request: HttpServerRequest.HttpServerRequest }) {
-        const bridge = BrowserBridge.instance()
+        const bridge = yield* token()
         // Without a shared secret the bridge would trust anything on localhost.
         if (!bridge.paired) return HttpServerResponse.empty({ status: 403 })
 
@@ -57,6 +68,22 @@ export const browserBridgeHandlers = HttpApiBuilder.group(BrowserBridgeApi, "bro
       }),
     )
     .handleRaw(
+      "pair",
+      Effect.fn("BrowserBridgeHttpApi.pair")(function* (ctx: { request: HttpServerRequest.HttpServerRequest }) {
+        // A browser sets Origin itself and no page can claim an extension's, so
+        // this hands the secret to the Lynx Code extension and nothing else. It is
+        // a POST because that is when the browser names an extension's origin.
+        if (ctx.request.headers["origin"] !== `chrome-extension://${EXTENSION_ID}`)
+          return HttpServerResponse.empty({ status: 403 })
+        const bridge = yield* token()
+        if (!bridge.paired) return HttpServerResponse.empty({ status: 409 })
+        return HttpServerResponse.text(JSON.stringify({ token: bridge.secret, protocol: BrowserBridge.EXTENSION_PROTOCOL }), {
+          contentType: "application/json",
+          headers: { "cache-control": "no-store" },
+        })
+      }),
+    )
+    .handleRaw(
       "pdf",
       Effect.fn("BrowserBridgeHttpApi.pdf")(function* (ctx: { params: { id: string } }) {
         const page = BrowserPdf.viewerPage(ctx.params.id)
@@ -78,6 +105,9 @@ export const browserBridgeHandlers = HttpApiBuilder.group(BrowserBridgeApi, "bro
           headers: { "cache-control": "no-store" },
         })
       }),
-    ),
-  ),
+    )
+  }),
 )
+
+/** The Lynx Code extension's id, fixed by the `key` in browser-extension/manifest.json. */
+const EXTENSION_ID = "njiipkoaojbcoicacncfnhgjfigecjbf"

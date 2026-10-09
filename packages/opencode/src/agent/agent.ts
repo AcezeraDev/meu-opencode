@@ -12,6 +12,8 @@ import { ProviderTransform } from "@/provider/transform"
 import PROMPT_GENERATE from "./generate.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
+import PROMPT_SOCIAL from "./prompt/social.txt"
+import PROMPT_SOCIAL_PREP from "./prompt/social-prep.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
 import { Permission } from "@/permission"
@@ -224,6 +226,66 @@ const layer = Layer.effect(
             options: {},
             mode: "subagent",
             native: true,
+          },
+          social: {
+            name: "social",
+            description:
+              "Posts the person's scheduled videos to Instagram and TikTok through their own browser, with a caption it writes.",
+            prompt: PROMPT_SOCIAL,
+            // Runs unattended at the scheduled time, so it only gets what posting
+            // needs and nothing that would stop to ask.
+            permission: Permission.merge(
+              defaults,
+              Permission.fromConfig({
+                "*": "deny",
+                browser: "allow",
+                browser_navigate: "allow",
+                browser_snapshot: "allow",
+                browser_find: "allow",
+                browser_act: "allow",
+                browser_batch: "allow",
+                browser_screenshot: "allow",
+                browser_script: "allow",
+                browser_notes: "allow",
+                write_text: "allow",
+                todowrite: "allow",
+                social_report: "allow",
+              }),
+              user,
+            ),
+            options: {},
+            mode: "primary",
+            native: true,
+            // Started by the posting queue's clock, not picked in the composer.
+            hidden: true,
+          },
+          "social-prep": {
+            name: "social-prep",
+            description:
+              "Writes the caption for a scheduled post ahead of time, from stills of the video and the person's profile.",
+            prompt: PROMPT_SOCIAL_PREP,
+            // Only looks and writes: it is never given the video's path, and has
+            // no batch or script, so it cannot upload or post.
+            permission: Permission.merge(
+              defaults,
+              Permission.fromConfig({
+                "*": "deny",
+                browser: "allow",
+                browser_navigate: "allow",
+                browser_snapshot: "allow",
+                browser_find: "allow",
+                browser_act: "allow",
+                browser_screenshot: "allow",
+                browser_notes: "allow",
+                write_text: "allow",
+                social_report: "allow",
+              }),
+              user,
+            ),
+            options: {},
+            mode: "primary",
+            native: true,
+            hidden: true,
           },
           compaction: {
             name: "compaction",

@@ -4,7 +4,7 @@
   z-index: 95;
   display: grid;
   place-items: center;
-  background: rgba(7, 11, 24, 0.55);
+  background: rgba(12, 12, 12, 0.55);
   backdrop-filter: blur(3px);
   pointer-events: none;
   animation: lynx-drop-in var(--motion-base) var(--motion-ease-out) both;
@@ -15,14 +15,14 @@
   justify-items: center;
   padding: 42px 60px;
   border-radius: 22px;
-  background: rgba(15, 24, 51, 0.92);
-  color: #e6ebf7;
-  outline: 2px dashed #22d3ee;
+  background: rgba(26, 26, 26, 0.92);
+  color: #ebebeb;
+  outline: 2px dashed #ff6b5b;
   outline-offset: -2px;
   animation: lynx-drop-pulse 1.1s ease-in-out infinite;
 }
 .lynx-drop-ring b { font-size: 18px; }
-.lynx-drop-ring span { color: #8b97b8; font-size: 13px; }
+.lynx-drop-ring span { color: #989898; font-size: 13px; }
 .lynx-drop-actions {
   position: fixed;
   left: 50%;
@@ -34,7 +34,7 @@
   padding: 8px 8px 8px 14px;
   border-radius: 14px;
   background: var(--v2-background-bg-layer-01);
-  box-shadow: var(--v2-elevation-floating), 0 0 0 1px color-mix(in srgb, var(--lynx-cyan) 45%, transparent);
+  box-shadow: var(--v2-elevation-floating), 0 0 0 1px color-mix(in srgb, var(--lynx-coral) 45%, transparent);
   color: var(--v2-text-text-base);
   font-size: 12.5px;
   transform: translateX(-50%);
@@ -46,8 +46,8 @@
   padding: 0 11px;
   border: 0;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--lynx-cyan) 14%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lynx-cyan) 45%, transparent);
+  background: color-mix(in srgb, var(--lynx-coral) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lynx-coral) 45%, transparent);
   color: var(--v2-text-text-base);
   font-size: 12px;
   cursor: pointer;
@@ -55,6 +55,6 @@
 }
 .lynx-drop-actions .lynx-drop-close { background: transparent; box-shadow: none; color: var(--v2-text-text-muted); }
 @keyframes lynx-drop-in { from { opacity: 0; } }
-@keyframes lynx-drop-pulse { 50% { outline-color: #6366f1; } }
+@keyframes lynx-drop-pulse { 50% { outline-color: #e5484d; } }
 @keyframes lynx-drop-rise { from { opacity: 0; transform: translate(-50%, 12px); } }
 @keyframes lynx-drop-chip { from { opacity: 0; transform: translateY(8px); } }

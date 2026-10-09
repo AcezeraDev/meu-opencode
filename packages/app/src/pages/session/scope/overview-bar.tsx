@@ -7,6 +7,12 @@ export type OverviewMarker = {
   label?: string
 }
 
+/** One row of the conversation drawn in the minimap: what it is, at its real height. */
+export type OverviewBlock = {
+  index: number
+  kind: "user" | "text" | "tool" | "error"
+}
+
 type Placed = OverviewMarker & { ratio: number }
 
 /**
@@ -17,8 +23,14 @@ type Placed = OverviewMarker & { ratio: number }
 export function OverviewBar(props: {
   root: () => HTMLElement | undefined
   markers: () => OverviewMarker[]
-  /** Start offset of a row and the total height, from the virtualizer's measurements. */
-  measure: () => { start: (index: number) => number | undefined; total: number }
+  /** Start offset and height of a row and the total height, from the virtualizer's measurements. */
+  measure: () => {
+    start: (index: number) => number | undefined
+    size?: (index: number) => number | undefined
+    total: number
+  }
+  /** Every row, for the minimap; without it the bar shows only the markers. */
+  blocks?: () => OverviewBlock[]
   onJump: (index: number) => void
   label: string
 }) {
@@ -80,6 +92,20 @@ export function OverviewBar(props: {
     })
   })
 
+  const drawn = createMemo(() => {
+    tick()
+    const blocks = props.blocks?.()
+    if (!blocks) return []
+    const { start, size, total } = props.measure()
+    if (total <= 0) return []
+    return blocks.flatMap((block) => {
+      const offset = start(block.index)
+      if (offset === undefined) return []
+      const height = size?.(block.index) ?? 0
+      return [{ ...block, top: offset / total, height: height / total }]
+    })
+  })
+
   const jumpToRatio = (event: MouseEvent & { currentTarget: HTMLElement }) => {
     const root = props.root()
     if (!root) return
@@ -89,9 +115,18 @@ export function OverviewBar(props: {
   }
 
   return (
-    <Show when={view().overflow && placed().length > 1}>
-      <nav class="scope-overview" aria-label={props.label}>
+    <Show when={view().overflow && (placed().length > 1 || drawn().length > 1)}>
+      <nav class="scope-overview" data-minimap={props.blocks ? "" : undefined} aria-label={props.label}>
         <div class="scope-overview-track" onClick={jumpToRatio} aria-hidden="true">
+          <For each={drawn()}>
+            {(block) => (
+              <span
+                class="scope-minimap-block"
+                data-kind={block.kind}
+                style={{ top: `${block.top * 100}%`, height: `${block.height * 100}%` }}
+              />
+            )}
+          </For>
           <span
             class="scope-overview-window"
             style={{ top: `${view().top * 100}%`, height: `${view().height * 100}%` }}

@@ -1,4 +1,4 @@
-# Lynx Code (extensão) (extensão)
+# Lynx Code (extensão)
 
 Deixa o agente do OpenCode dirigir o **seu** navegador de verdade (Brave/Chrome,
 com o seu perfil e os seus logins) pelo protocolo DevTools, via `chrome.debugger`
@@ -49,6 +49,42 @@ env; parear antes disso dá 403. Desde a 0.6.0 a extensão tenta de novo a cada
 O app desktop pessoal escuta na porta **4919** (a padrão da extensão) quando ela
 está livre, então o pareamento sobrevive a reabrir o app. Se a porta salva parar
 de responder, a extensão tenta a 4919 e passa a lembrar dela.
+
+## O que a extensão faz para você (desde a 0.9.0)
+
+- **Pareia sozinha.** Com o Lynx Code aberto e o modo extensão ligado, ela procura
+  o app (porta salva, 4919, 4096, 4097…) e pede o token por `POST
+  /experimental/browser/extension/pair`. O app só entrega o token à origem
+  `chrome-extension://njiipkoaojbcoicacncfnhgjfigecjbf`; o id é fixo pelo `key`
+  do `manifest.json`. Se o app recusar o token salvo, ela pareia de novo. A
+  configuração à mão continua no popup.
+- **Versão do fio.** No pareamento o app manda `welcome` com `protocol`. Se o app
+  for mais novo, a extensão se recarrega da pasta (no máximo uma vez a cada 10
+  min). Se a extensão for mais nova, o popup pede para atualizar o app. Ao
+  mudar mensagens, suba `PROTOCOL_VERSION` (lynx.js) e `EXTENSION_PROTOCOL`
+  (bridge.ts) juntos.
+- **Painel lateral** (Alt+L, botão do popup, menu do botão direito ou clique num
+  aviso): mostra o que a Lynx está fazendo, o passo e a resposta enquanto ela
+  escreve, botões para a permissão pendente, Parar, e uma caixa para pedir algo
+  sobre a aba atual (com a seleção, se quiser). O pedido vira uma conversa nova
+  no app, ou vai para a conversa aberta.
+- **Menu do botão direito:** explicar a seleção, mandar pro caderno, resumir a
+  página e "Lynx, faça isto aqui…".
+- **Selo no ícone:** cinza "off" desconectada, sem selo pronta, ● piscando
+  trabalhando, ! esperando você, ✓ terminou. **Avisos do Windows** quando ela
+  termina ou pede permissão (com Permitir uma vez / Recusar).
+- **Parar:** botão no painel e no popup, Alt+Shift+L, ou Esc na aba que ela
+  dirige enquanto trabalha (o Esc que ela mesma manda é ignorado). Depois de
+  parar, a extensão recusa comandos dela por 8 s e solta as abas.
+- **Sites proibidos e "só olhar"** (popup → Segurança): proibidos somem da lista
+  de abas e qualquer comando neles é recusado; em "só olhar" ela lê, mas `Input.*`
+  e envio de arquivo são recusados. Vem com uma lista de bancos já proibidos.
+- **Grupo "Lynx":** as abas que ela abre vão para um grupo de abas coral.
+
+O estado da Lynx vem do app (`browser/extension-status.ts`, mensagens `status`).
+Os pedidos (`ask`, `stop`, `answer`) viram eventos globais que o app atende em
+`app/src/components/extension-asks.tsx`, porque é o app que sabe o projeto, o
+modelo e o agente.
 
 ## Depois de atualizar esta pasta
 

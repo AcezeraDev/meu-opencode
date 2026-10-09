@@ -14,14 +14,14 @@
   height: 26px;
   padding: 0 9px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--lynx-cyan) 10%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lynx-cyan) 35%, transparent);
+  background: color-mix(in srgb, var(--lynx-coral) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lynx-coral) 35%, transparent);
   font-family: var(--font-family-mono, ui-monospace, monospace);
   font-size: 12px;
   color: var(--v2-text-text-base);
   font-variant-numeric: tabular-nums;
 }
-.lynx-meter-label { color: var(--lynx-cyan); font-weight: 600; }
+.lynx-meter-label { color: var(--lynx-coral); font-weight: 600; }
 .lynx-bar-btn {
   display: inline-flex;
   align-items: center;
@@ -42,9 +42,9 @@
 .lynx-bar-btn:hover { background: var(--v2-overlay-simple-overlay-hover); color: var(--v2-text-text-base); }
 .lynx-bar-btn[aria-pressed="true"],
 .lynx-bar-btn[aria-expanded="true"] {
-  background: color-mix(in srgb, var(--lynx-cyan) 16%, transparent);
+  background: color-mix(in srgb, var(--lynx-coral) 16%, transparent);
   color: var(--v2-text-text-base);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lynx-cyan) 50%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lynx-coral) 50%, transparent);
 }
 .lynx-pop {
   position: absolute;
@@ -88,7 +88,7 @@
 .lynx-pop-check { border-radius: 4px; }
 .lynx-pop button[aria-checked="true"] .lynx-pop-dot,
 .lynx-pop button[aria-checked="true"] .lynx-pop-check {
-  background: linear-gradient(135deg, var(--lynx-cyan), var(--lynx-indigo));
+  background: linear-gradient(135deg, var(--lynx-coral), var(--lynx-deep));
   box-shadow: none;
 }
 .lynx-branch-list { display: grid; gap: 2px; position: relative; }
@@ -101,10 +101,10 @@
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--lynx-indigo);
+  background: var(--lynx-deep);
 }
 .lynx-branch-list button[data-fork] { padding-left: 42px; }
-.lynx-branch-list button[data-fork]::before { left: 26px; background: var(--lynx-cyan); }
+.lynx-branch-list button[data-fork]::before { left: 26px; background: var(--lynx-coral); }
 .lynx-branch-list button[data-fork]::after {
   content: "";
   position: absolute;
@@ -112,11 +112,11 @@
   top: -6px;
   width: 13px;
   height: 22px;
-  border-left: 1.5px solid color-mix(in srgb, var(--lynx-cyan) 60%, transparent);
-  border-bottom: 1.5px solid color-mix(in srgb, var(--lynx-cyan) 60%, transparent);
+  border-left: 1.5px solid color-mix(in srgb, var(--lynx-coral) 60%, transparent);
+  border-bottom: 1.5px solid color-mix(in srgb, var(--lynx-coral) 60%, transparent);
   border-bottom-left-radius: 8px;
 }
-.lynx-branch-list button[aria-current="true"] { background: color-mix(in srgb, var(--lynx-cyan) 12%, transparent); }
+.lynx-branch-list button[aria-current="true"] { background: color-mix(in srgb, var(--lynx-coral) 12%, transparent); }
 
 /* ---------- Replay ---------- */
 .lynx-replay {
@@ -144,7 +144,7 @@
   place-items: center;
   border: 0;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--lynx-cyan), var(--lynx-indigo));
+  background: linear-gradient(135deg, var(--lynx-coral), var(--lynx-deep));
   color: #fff;
   font-size: 10px;
   cursor: pointer;
@@ -159,12 +159,12 @@
   padding: 0;
   border: 0;
   border-radius: 2px;
-  background: color-mix(in srgb, var(--lynx-indigo) 55%, transparent);
+  background: color-mix(in srgb, var(--lynx-deep) 55%, transparent);
   cursor: pointer;
 }
-.lynx-replay-mark[data-kind="user"] { background: var(--lynx-indigo); height: 18px; top: -6px; }
+.lynx-replay-mark[data-kind="user"] { background: var(--lynx-deep); height: 18px; top: -6px; }
 .lynx-replay-mark[data-kind="error"] { background: #f87171; }
-.lynx-replay-mark[data-done] { background: var(--lynx-cyan); }
+.lynx-replay-mark[data-done] { background: var(--lynx-coral); }
 .lynx-replay-mark[data-done][data-kind="error"] { background: #f87171; }
 .lynx-replay-head {
   position: absolute;
@@ -174,7 +174,7 @@
   margin-left: -8px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--lynx-cyan) 40%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--lynx-coral) 40%, transparent);
   pointer-events: none;
   transition: left var(--motion-move) var(--motion-ease-out);
 }
@@ -216,7 +216,7 @@ html[data-chat-thread] [data-component="tool-part-wrapper"]::before {
   top: -6px;
   bottom: -6px;
   width: 2px;
-  background: linear-gradient(color-mix(in srgb, var(--lynx-cyan) 55%, transparent), color-mix(in srgb, var(--lynx-indigo) 40%, transparent));
+  background: linear-gradient(color-mix(in srgb, var(--lynx-coral) 55%, transparent), color-mix(in srgb, var(--lynx-deep) 40%, transparent));
 }
 html[data-chat-thread] [data-component="tool-part-wrapper"]::after {
   content: "";
@@ -226,12 +226,12 @@ html[data-chat-thread] [data-component="tool-part-wrapper"]::after {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--lynx-cyan);
+  background: var(--lynx-coral);
   box-shadow: 0 0 0 3px var(--v2-background-bg-base);
 }
 html[data-chat-thread] [data-component="tool-part-wrapper"][data-activity-state="active"]::after {
   background: var(--v2-background-bg-base);
-  box-shadow: 0 0 0 2px var(--lynx-cyan), 0 0 0 3px var(--v2-background-bg-base);
+  box-shadow: 0 0 0 2px var(--lynx-coral), 0 0 0 3px var(--v2-background-bg-base);
   animation: lynx-node 1.6s infinite;
 }
 html[data-chat-thread] [data-component="tool-part-wrapper"][data-activity-state="error"]::after { background: #f87171; }
@@ -246,8 +246,8 @@ html[data-chat-pill] [data-component="session-prompt-dock"]:focus-within { max-w
 html[data-chat-pill] [data-component="session-prompt-dock"] [data-component="prompt-input-v2"] {
   border-radius: 26px;
   box-shadow:
-    0 16px 44px -14px color-mix(in srgb, var(--lynx-cyan) 45%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--lynx-cyan) 45%, transparent);
+    0 16px 44px -14px color-mix(in srgb, var(--lynx-coral) 45%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--lynx-coral) 45%, transparent);
 }
 
 /* ---------- Writing that settles ---------- */
@@ -262,8 +262,8 @@ html[data-chat-settle] [data-component="text-part"][data-streaming] [data-compon
   margin-left: 5px;
   border-radius: 50%;
   vertical-align: 1px;
-  background: var(--lynx-cyan);
-  box-shadow: 0 0 10px 3px color-mix(in srgb, var(--lynx-cyan) 55%, transparent);
+  background: var(--lynx-coral);
+  box-shadow: 0 0 10px 3px color-mix(in srgb, var(--lynx-coral) 55%, transparent);
   animation: lynx-node 1.2s infinite;
 }
 
@@ -272,16 +272,16 @@ html[data-chat-settle] [data-component="text-part"][data-streaming] [data-compon
   position: relative;
   padding: 8px 12px 8px 14px;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--lynx-indigo) 7%, transparent);
-  box-shadow: inset 2px 0 color-mix(in srgb, var(--lynx-indigo) 60%, transparent);
+  background: color-mix(in srgb, var(--lynx-deep) 7%, transparent);
+  box-shadow: inset 2px 0 color-mix(in srgb, var(--lynx-deep) 60%, transparent);
   color: var(--v2-text-text-muted);
   font-style: italic;
 }
 [data-component="reasoning-part"][data-streaming] {
-  box-shadow: inset 2px 0 var(--lynx-cyan);
+  box-shadow: inset 2px 0 var(--lynx-coral);
   background:
-    linear-gradient(90deg, transparent, color-mix(in srgb, var(--lynx-cyan) 10%, transparent), transparent) 0 0 / 40% 100% no-repeat,
-    color-mix(in srgb, var(--lynx-indigo) 7%, transparent);
+    linear-gradient(90deg, transparent, color-mix(in srgb, var(--lynx-coral) 10%, transparent), transparent) 0 0 / 40% 100% no-repeat,
+    color-mix(in srgb, var(--lynx-deep) 7%, transparent);
   animation: lynx-thinking 1.8s linear infinite;
 }
 
@@ -294,7 +294,7 @@ html[data-chat-settle] [data-component="text-part"][data-streaming] [data-compon
 /* ---------- Attachments as cards ---------- */
 [data-slot="user-message-attachment"] {
   border-radius: 10px !important;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lynx-cyan) 30%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lynx-coral) 30%, transparent);
   transition: transform var(--motion-quick) var(--motion-ease-spring);
 }
 [data-slot="user-message-attachment"]:hover { transform: translateY(-2px); }
@@ -302,7 +302,7 @@ html[data-chat-settle] [data-component="text-part"][data-streaming] [data-compon
 /* ---------- Team of agents: each helper is a lane ---------- */
 [data-component="task-tool-card"] {
   border-radius: 12px;
-  box-shadow: inset 3px 0 var(--lynx-cyan), inset 0 0 0 1px var(--v2-border-border-muted);
+  box-shadow: inset 3px 0 var(--lynx-coral), inset 0 0 0 1px var(--v2-border-border-muted);
 }
 
 /* ---------- Style: coluna (clean column) ---------- */
@@ -314,12 +314,12 @@ html[data-chat-style="coluna"] [data-component="user-message"] [data-slot="user-
 html[data-chat-style="coluna"] [data-component="user-message"] [data-slot="user-message-text"] {
   display: block;
   border-radius: 10px;
-  box-shadow: inset 2px 0 var(--lynx-indigo);
+  box-shadow: inset 2px 0 var(--lynx-deep);
 }
 
 /* ---------- Style: baloes (chat bubbles) ---------- */
 html[data-chat-style="baloes"] [data-component="user-message"] [data-slot="user-message-text"] {
-  background: linear-gradient(135deg, #4f46e5, #6366f1) !important;
+  background: linear-gradient(135deg, #d13a3f, #e5484d) !important;
   color: #fff;
   border-radius: 18px 18px 4px 18px;
   padding: 9px 14px;
@@ -345,7 +345,7 @@ html[data-chat-style="baloes"] [data-component="text-part"]::before {
   border-radius: 50%;
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M22 24 L30 31 L22 38' fill='none' stroke='%23fff' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M33 40 H43' stroke='%23fff' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E") center / 100% no-repeat,
-    radial-gradient(circle at 50% 38%, #22d3ee, #6366f1);
+    radial-gradient(circle at 50% 38%, #ff6b5b, #e5484d);
 }
 html[data-chat-style="baloes"] [data-component="tool-part-wrapper"] { margin-left: 34px; max-width: min(88%, 72ch); }
 
@@ -361,12 +361,12 @@ html[data-chat-style="log"] [data-component="user-message"] [data-slot="user-mes
   display: block;
   background: transparent !important;
   padding: 2px 0;
-  color: #a5b4fc;
+  color: #f6a9ab;
 }
 html[data-chat-style="log"] [data-component="user-message"] [data-slot="user-message-text"]::before { content: "você › "; color: var(--v2-text-text-faint); }
 html[data-chat-style="log"] [data-component="text-part"] [data-component="markdown"]::before {
   content: "lynx › ";
-  color: var(--lynx-cyan);
+  color: var(--lynx-coral);
 }
 html[data-chat-style="log"] [data-component="tool-part-wrapper"] { opacity: 0.8; }
 
@@ -391,8 +391,8 @@ html[data-chat-style="documento"] [data-component="user-message"] [data-slot="us
   background: transparent !important;
   padding: 2px 10px;
   border-radius: 0;
-  box-shadow: inset 2px 0 var(--lynx-indigo);
-  color: #a5b4fc;
+  box-shadow: inset 2px 0 var(--lynx-deep);
+  color: #f6a9ab;
   font-size: 13px;
   font-style: italic;
 }
@@ -408,25 +408,25 @@ html[data-chat-style="cartoes"] [data-component="tool-part-wrapper"] {
 }
 html[data-chat-style="cartoes"][data-chat-thread] [data-component="tool-part-wrapper"] { padding-left: 28px; }
 html[data-chat-style="cartoes"] [data-component="tool-part-wrapper"][data-activity-state="active"] {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lynx-cyan) 60%, transparent), 0 10px 24px -16px var(--lynx-cyan);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lynx-coral) 60%, transparent), 0 10px 24px -16px var(--lynx-coral);
 }
 html[data-chat-style="cartoes"] [data-component="tool-part-wrapper"][data-activity-state="complete"] { opacity: 0.86; }
 
 @keyframes lynx-pop-in { from { opacity: 0; transform: scale(0.94) translateY(-4px); } }
 @keyframes lynx-rise-up { from { opacity: 0; transform: translate(-50%, 16px); } }
 @keyframes lynx-flash {
-  0%, 30% { background: color-mix(in srgb, var(--lynx-cyan) 16%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--lynx-cyan) 60%, transparent); }
+  0%, 30% { background: color-mix(in srgb, var(--lynx-coral) 16%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--lynx-coral) 60%, transparent); }
   100% { background: transparent; box-shadow: none; }
 }
 @keyframes lynx-node {
-  0% { box-shadow: 0 0 0 2px var(--lynx-cyan), 0 0 0 3px var(--v2-background-bg-base), 0 0 0 3px color-mix(in srgb, var(--lynx-cyan) 50%, transparent); }
-  100% { box-shadow: 0 0 0 2px var(--lynx-cyan), 0 0 0 3px var(--v2-background-bg-base), 0 0 0 10px transparent; }
+  0% { box-shadow: 0 0 0 2px var(--lynx-coral), 0 0 0 3px var(--v2-background-bg-base), 0 0 0 3px color-mix(in srgb, var(--lynx-coral) 50%, transparent); }
+  100% { box-shadow: 0 0 0 2px var(--lynx-coral), 0 0 0 3px var(--v2-background-bg-base), 0 0 0 10px transparent; }
 }
 @keyframes lynx-settle { from { filter: blur(3px); opacity: 0.4; } }
 @keyframes lynx-thinking { from { background-position: -40% 0, 0 0; } to { background-position: 140% 0, 0 0; } }
 @keyframes lynx-ask {
-  0%, 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--lynx-cyan) 70%, transparent), 0 0 0 0 color-mix(in srgb, var(--lynx-cyan) 35%, transparent); }
-  50% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--lynx-cyan) 70%, transparent), 0 0 0 6px transparent; }
+  0%, 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--lynx-coral) 70%, transparent), 0 0 0 0 color-mix(in srgb, var(--lynx-coral) 35%, transparent); }
+  50% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--lynx-coral) 70%, transparent), 0 0 0 6px transparent; }
 }
 @keyframes lynx-bubble { from { opacity: 0; transform: scale(0.85) translateY(6px); transform-origin: bottom right; } }
 @keyframes lynx-card-in { from { opacity: 0; transform: translateY(6px); } }
@@ -450,7 +450,7 @@ html[data-chat-style="cartoes"] [data-component="tool-part-wrapper"][data-activi
   padding: 14px 16px;
   border-radius: 18px;
   background: var(--v2-background-bg-layer-01);
-  box-shadow: var(--v2-elevation-floating), 0 0 0 1px color-mix(in srgb, var(--lynx-cyan) 55%, transparent);
+  box-shadow: var(--v2-elevation-floating), 0 0 0 1px color-mix(in srgb, var(--lynx-coral) 55%, transparent);
   transform: translateX(-50%);
   animation: lynx-rise-up var(--motion-move) var(--motion-ease-spring) both;
 }
@@ -463,18 +463,18 @@ html[data-chat-style="cartoes"] [data-component="tool-part-wrapper"][data-activi
   flex: none;
   place-items: center;
   border-radius: 50%;
-  background: var(--lynx-cyan);
-  color: #0b1226;
+  background: var(--lynx-coral);
+  color: #131313;
   font-size: 10px;
   animation: lynx-node 1.2s infinite;
 }
 .lynx-voice-wave { display: flex; flex: 1; height: 30px; align-items: center; gap: 3px; }
-.lynx-voice-wave i { flex: 1; min-height: 3px; border-radius: 2px; background: linear-gradient(var(--lynx-cyan), var(--lynx-indigo)); transition: height 80ms linear; }
+.lynx-voice-wave i { flex: 1; min-height: 3px; border-radius: 2px; background: linear-gradient(var(--lynx-coral), var(--lynx-deep)); transition: height 80ms linear; }
 .lynx-voice-time { font-family: var(--font-family-mono, monospace); font-size: 12px; color: var(--v2-text-text-muted); }
 .lynx-voice-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .lynx-voice-actions button { height: 30px; padding: 0 14px; border: 0; border-radius: 9px; font-size: 13px; cursor: pointer; }
 .lynx-voice-cancel { background: var(--v2-overlay-simple-overlay-hover); color: var(--v2-text-text-base); }
-.lynx-voice-send { background: linear-gradient(135deg, var(--lynx-cyan), var(--lynx-indigo)); color: #fff; font-weight: 600; }
+.lynx-voice-send { background: linear-gradient(135deg, var(--lynx-coral), var(--lynx-deep)); color: #fff; font-weight: 600; }
 .lynx-voice-send:disabled { opacity: 0.45; cursor: default; }
 
 /* While Lynx waits for a permission, the conversation steps back. */
@@ -484,7 +484,7 @@ html:has([data-component="dock-prompt"][data-kind="permission"]) [data-timeline-
 }
 
 /* ---------- Quick settings drawer ---------- */
-.lynx-drawer-scrim { position: fixed; inset: 0; z-index: 89; background: rgba(4, 7, 16, 0.18); }
+.lynx-drawer-scrim { position: fixed; inset: 0; z-index: 89; background: rgba(7, 7, 7, 0.18); }
 .lynx-drawer {
   position: fixed;
   top: 8px;
@@ -519,7 +519,7 @@ html:has([data-component="dock-prompt"][data-kind="permission"]) [data-timeline-
 .lynx-drawer-list button b { font-size: 13px; font-weight: 550; }
 .lynx-drawer-list button small { color: var(--v2-text-text-muted); font-size: 11.5px; }
 .lynx-drawer-list button:hover { background: var(--v2-overlay-simple-overlay-hover); }
-.lynx-drawer-list button[aria-pressed="true"] { background: color-mix(in srgb, var(--lynx-cyan) 13%, transparent); box-shadow: inset 2px 0 var(--lynx-cyan); }
+.lynx-drawer-list button[aria-pressed="true"] { background: color-mix(in srgb, var(--lynx-coral) 13%, transparent); box-shadow: inset 2px 0 var(--lynx-coral); }
 .lynx-drawer-toggle {
   display: flex;
   align-items: center;
@@ -535,15 +535,15 @@ html:has([data-component="dock-prompt"][data-kind="permission"]) [data-timeline-
 .lynx-drawer-toggle:hover { background: var(--v2-overlay-simple-overlay-hover); }
 .lynx-drawer-toggle i { position: relative; width: 32px; height: 18px; border-radius: 9px; background: var(--v2-border-border-muted); transition: background var(--motion-base); }
 .lynx-drawer-toggle i::after { content: ""; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform var(--motion-base) var(--motion-ease-spring); }
-.lynx-drawer-toggle[aria-pressed="true"] i { background: linear-gradient(90deg, var(--lynx-cyan), var(--lynx-indigo)); }
+.lynx-drawer-toggle[aria-pressed="true"] i { background: linear-gradient(90deg, var(--lynx-coral), var(--lynx-deep)); }
 .lynx-drawer-toggle[aria-pressed="true"] i::after { transform: translateX(14px); }
 .lynx-drawer-variants { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .lynx-drawer-variants button { height: 34px; border: 0; border-radius: 9px; font-size: 12.5px; cursor: pointer; box-shadow: inset 0 0 0 1px var(--v2-border-border-muted); }
-.lynx-drawer-variants [data-variant="noite"] { background: #0b1226; color: #e6ebf7; }
-.lynx-drawer-variants [data-variant="dia"] { background: #ffffff; color: #0b1226; }
+.lynx-drawer-variants [data-variant="noite"] { background: #131313; color: #ebebeb; }
+.lynx-drawer-variants [data-variant="dia"] { background: #ffffff; color: #131313; }
 .lynx-drawer-variants [data-variant="contraste"] { background: #000; color: #fff; }
-.lynx-drawer-variants [data-variant="ciano"] { background: #06202f; color: #e0fbff; }
-.lynx-drawer-variants button[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--lynx-cyan); }
+.lynx-drawer-variants [data-variant="ciano"] { background: #2a0f0c; color: #fff0ed; }
+.lynx-drawer-variants button[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--lynx-coral); }
 .lynx-drawer-all { margin-top: auto; padding: 10px; border: 0; border-radius: 10px; background: var(--v2-overlay-simple-overlay-hover); color: var(--v2-text-text-base); font-size: 13px; text-align: left; cursor: pointer; }
 @keyframes lynx-drawer-in { from { transform: translateX(110%); } }
 .lynx-next { font-size: 11px; color: var(--v2-text-text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -578,10 +578,10 @@ html:has([data-component="dock-prompt"][data-kind="permission"]) [data-timeline-
 
 /* The send button is a key: it has a side, and it goes down when pressed. */
 [data-action="prompt-submit"] {
-  box-shadow: 0 3px 0 color-mix(in srgb, var(--lynx-indigo) 70%, #000), 0 6px 14px -6px var(--lynx-cyan);
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--lynx-deep) 70%, #000), 0 6px 14px -6px var(--lynx-coral);
   transition: transform 120ms var(--motion-ease-out), box-shadow 120ms var(--motion-ease-out);
 }
-[data-action="prompt-submit"]:active { transform: translateY(3px); box-shadow: 0 0 0 color-mix(in srgb, var(--lynx-indigo) 70%, #000), 0 2px 6px -4px var(--lynx-cyan); }
+[data-action="prompt-submit"]:active { transform: translateY(3px); box-shadow: 0 0 0 color-mix(in srgb, var(--lynx-deep) 70%, #000), 0 2px 6px -4px var(--lynx-coral); }
 
 @keyframes lynx-mark-blink { 50% { opacity: 0; } }
 @keyframes lynx-mark-scroll { to { transform: translateY(-42px); } }
@@ -629,7 +629,7 @@ html:has([data-component="dock-prompt"][data-kind="permission"]) [data-timeline-
   gap: 10px;
   padding: 7px 9px;
   border-radius: 10px;
-  background: rgba(11, 18, 38, 0.5);
+  background: rgba(19, 19, 19, 0.5);
   box-shadow: inset 0 0 0 1px rgba(148, 163, 255, 0.14);
   animation: lynx-team-lane 0.35s cubic-bezier(0.16, 1, 0.3, 1) var(--d, 0ms) both;
 }
@@ -640,7 +640,7 @@ html:has([data-component="dock-prompt"][data-kind="permission"]) [data-timeline-
   flex-shrink: 0;
   place-items: center;
   border-radius: 8px;
-  background: linear-gradient(135deg, #22d3ee, #6366f1);
+  background: linear-gradient(135deg, #ff6b5b, #e5484d);
   color: #fff;
   font-weight: 700;
 }
@@ -660,15 +660,38 @@ html:has([data-component="dock-prompt"][data-kind="permission"]) [data-timeline-
   inset: 0 auto 0 0;
   width: 40%;
   border-radius: 2px;
-  background: linear-gradient(90deg, #22d3ee, #6366f1);
+  background: linear-gradient(90deg, #ff6b5b, #e5484d);
   animation: lynx-team-run var(--run, 2.4s) cubic-bezier(0.65, 0, 0.35, 1) infinite;
   animation-duration: inherit;
 }
 .lynx-team-lane[data-done] .lynx-team-bar::after { width: 100%; animation: none; }
-.lynx-team-lane[data-done] .lynx-team-avatar { background: #16213f; color: #22d3ee; }
-.lynx-team-merge { display: flex; align-items: center; gap: 8px; color: #a5b4fc; font-size: 11.5px; }
-.lynx-team-merge i { width: 7px; height: 7px; border-radius: 50%; background: #22d3ee; animation: lynx-team-pulse 1.4s ease-in-out infinite; }
+.lynx-team-lane[data-done] .lynx-team-avatar { background: #232323; color: #ff6b5b; }
+.lynx-team-merge { display: flex; align-items: center; gap: 8px; color: #f6a9ab; font-size: 11.5px; }
+.lynx-team-merge i { width: 7px; height: 7px; border-radius: 50%; background: #ff6b5b; animation: lynx-team-pulse 1.4s ease-in-out infinite; }
 @keyframes lynx-team-in { from { opacity: 0; transform: translate(-50%, -8px); } }
 @keyframes lynx-team-lane { from { opacity: 0; transform: translateY(6px); } }
 @keyframes lynx-team-run { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
 @keyframes lynx-team-pulse { 50% { opacity: 0.3; } }
+
+/* ---------- Minimap: keep the conversation clear of it ---------- */
+:root[data-chat-minimap] [data-timeline-virtual-content] {
+  width: calc(100% - 26px) !important;
+}
+
+/* ---------- Chat and stage: what the agent works on slides onto the stage ---------- */
+:root[data-chat-stage] .session-workspace-sidecar > * {
+  animation: lynx-stage-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes lynx-stage-in {
+  from {
+    transform: translateX(30px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-chat-stage] .session-workspace-sidecar > * {
+    animation: none;
+  }
+}

@@ -2,75 +2,111 @@
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
+    <link rel="stylesheet" href="lynx.css" />
     <style>
-      :root {
-        color-scheme: light dark;
-        font-family: system-ui, sans-serif;
-      }
       body {
-        width: 260px;
-        margin: 0;
+        width: 320px;
         padding: 14px;
-        font-size: 13px;
-      }
-      h1 {
-        font-size: 13px;
-        margin: 0 0 10px;
         display: flex;
-        align-items: center;
-        gap: 8px;
+        flex-direction: column;
+        gap: 12px;
       }
-      label {
-        display: block;
-        margin: 8px 0 2px;
-        opacity: 0.8;
+      dl {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 10px;
+        margin: 10px 0 0;
+        font-size: 12px;
       }
-      input {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 6px 8px;
-        border-radius: 6px;
-        border: 1px solid rgba(128, 128, 128, 0.4);
-        background: transparent;
-        color: inherit;
-        font: inherit;
+      dt {
+        color: var(--faint);
       }
-      button {
-        margin-top: 12px;
-        width: 100%;
-        padding: 7px;
-        border-radius: 6px;
-        border: 0;
-        background: #4f46e5;
-        color: white;
-        font: inherit;
-        cursor: pointer;
+      dd {
+        margin: 0;
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
-      .status {
-        margin-top: 12px;
+      .buttons {
         display: flex;
-        align-items: center;
         gap: 6px;
       }
-      .led {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #999;
+      .buttons button {
+        flex: 1;
       }
-      .led[data-on] {
-        background: #22d3ee;
+      details summary {
+        cursor: pointer;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      details[open] summary {
+        margin-bottom: 8px;
+      }
+      label.field {
+        display: block;
+        margin: 8px 0 4px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .hint {
+        margin-top: 4px;
+        font-size: 11px;
+        color: var(--faint);
+      }
+      #warn:empty {
+        display: none;
       }
     </style>
   </head>
   <body>
-    <h1><img src="icons/icon-32.png" alt="" width="18" height="18" /> Lynx Code</h1>
-    <label for="port">Porta do servidor do Lynx Code</label>
-    <input id="port" type="number" inputmode="numeric" placeholder="4919" />
-    <label for="token">Token de pareamento</label>
-    <input id="token" type="text" placeholder="cole o token do Lynx Code" />
-    <button id="save">Salvar e conectar</button>
-    <div class="status"><span class="led" id="led"></span><span id="state">desconectado</span></div>
+    <div class="row">
+      <h1 class="grow"><img src="icons/icon-32.png" alt="" width="20" height="20" /> Lynx Code</h1>
+      <span class="pill" id="phase" data-phase="off"><i></i><span id="state">desconectado</span></span>
+    </div>
+
+    <div class="card">
+      <div class="error" id="warn"></div>
+      <dl>
+        <dt>Porta</dt>
+        <dd id="port">—</dd>
+        <dt>Conectado</dt>
+        <dd id="since">—</dd>
+        <dt>Aba da Lynx</dt>
+        <dd id="tab">—</dd>
+        <dt>Versão</dt>
+        <dd id="version">—</dd>
+      </dl>
+    </div>
+
+    <div class="buttons">
+      <button class="primary" id="panel">Abrir painel (Alt+L)</button>
+      <button class="stop" id="stop">Parar</button>
+    </div>
+    <button id="pair">Parear de novo sozinho</button>
+
+    <details class="card">
+      <summary>Segurança</summary>
+      <label class="field" for="blocked">Sites proibidos (um por linha)</label>
+      <textarea id="blocked" rows="4" spellcheck="false"></textarea>
+      <div class="hint">A Lynx não vê nem mexe nesses sites, mesmo que o modelo peça.</div>
+      <label class="field" for="lookOnly">Só olhar (um por linha)</label>
+      <textarea id="lookOnly" rows="3" spellcheck="false" placeholder="ex.: mail.google.com"></textarea>
+      <div class="hint">Ela lê a página, mas não clica nem digita.</div>
+      <label class="check" style="margin-top: 10px"><input type="checkbox" id="notify" /> Avisos do Windows</label>
+      <label class="check" style="margin-top: 6px"><input type="checkbox" id="group" /> Abas da IA no grupo "Lynx"</label>
+      <button id="saveSafety" style="margin-top: 10px; width: 100%">Salvar</button>
+    </details>
+
+    <details class="card">
+      <summary>Configurar à mão</summary>
+      <label class="field" for="portInput">Porta do servidor do Lynx Code</label>
+      <input id="portInput" type="number" inputmode="numeric" placeholder="4919" />
+      <label class="field" for="token">Token de pareamento</label>
+      <input id="token" type="text" placeholder="cole o token do Lynx Code" />
+      <button class="primary" id="save" style="margin-top: 10px; width: 100%">Salvar e conectar</button>
+    </details>
+
     <script src="popup.js"></script>
   </body>
 </html>

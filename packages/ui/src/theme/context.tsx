@@ -17,6 +17,7 @@ const STORAGE_KEYS = {
   THEME_CSS_LIGHT: "opencode-theme-css-light",
   THEME_CSS_DARK: "opencode-theme-css-dark",
   LYNX: "lynx-code-theme",
+  LYNX_BLACK: "lynx-black",
 } as const
 
 const THEME_STYLE_ID = "oc-theme"
@@ -130,6 +131,14 @@ function adoptLynxTheme() {
   clear()
 }
 
+// Lynx Code is black and coral: everyone starts on Dark once (oc-theme-preload.js too).
+function adoptLynxBlack() {
+  if (read(STORAGE_KEYS.LYNX_BLACK) === "1") return
+  write(STORAGE_KEYS.LYNX_BLACK, "1")
+  write(STORAGE_KEYS.COLOR_SCHEME, "dark")
+  clear()
+}
+
 function ensureThemeStyleElement(): HTMLStyleElement {
   const existing = document.getElementById(THEME_STYLE_ID) as HTMLStyleElement | null
   if (existing) return existing
@@ -192,8 +201,9 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     onThemeApplied?: (theme: DesktopTheme, mode: "light" | "dark", scheme: ColorScheme) => void
   }) => {
     adoptLynxTheme()
+    adoptLynxBlack()
     const themeId = normalize(read(STORAGE_KEYS.THEME_ID) ?? props.defaultTheme) ?? "oc-2"
-    const colorScheme = (read(STORAGE_KEYS.COLOR_SCHEME) as ColorScheme | null) ?? "system"
+    const colorScheme = (read(STORAGE_KEYS.COLOR_SCHEME) as ColorScheme | null) ?? "dark"
     const mode = colorScheme === "system" ? getSystemMode() : colorScheme
     const [store, setStore] = createStore({
       themes: {
@@ -279,7 +289,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
 
       const rawTheme = read(STORAGE_KEYS.THEME_ID)
       const savedTheme = normalize(rawTheme ?? props.defaultTheme) ?? "oc-2"
-      const savedScheme = (read(STORAGE_KEYS.COLOR_SCHEME) as ColorScheme | null) ?? "system"
+      const savedScheme = (read(STORAGE_KEYS.COLOR_SCHEME) as ColorScheme | null) ?? "dark"
       if (rawTheme && rawTheme !== savedTheme) {
         write(STORAGE_KEYS.THEME_ID, savedTheme)
         clear()

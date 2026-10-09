@@ -232,6 +232,8 @@ type PromptSubmitInput = {
   model?: ModelSelection
   /** The permission mode picked before the session existed; saved on the new session. */
   permissionMode?: Accessor<string | undefined>
+  /** Browser look only, picked before the session existed; saved on the new session. */
+  browserLook?: Accessor<boolean>
 }
 
 export function createPromptSubmit(input: PromptSubmitInput) {
@@ -422,10 +424,14 @@ export function createPromptSubmit(input: PromptSubmitInput) {
         seed(sessionDirectory, created)
         session = created
         const permissionMode = input.permissionMode?.()
+        const metadata = {
+          ...(permissionMode && permissionMode !== "default" ? { permissionMode } : {}),
+          ...(input.browserLook?.() ? { browserLook: true } : {}),
+        }
         // Saved before the first message goes out, so its tool calls already follow the mode.
-        if (permissionMode && permissionMode !== "default") {
+        if (Object.keys(metadata).length > 0) {
           await client.session
-            .update({ sessionID: created.id, directory: sessionDirectory, metadata: { permissionMode } })
+            .update({ sessionID: created.id, directory: sessionDirectory, metadata })
             .catch((err) => {
               showToast({ title: language.t("ui.permissionMode.saveFailed"), description: errorMessage(err) })
             })

@@ -6,6 +6,8 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Config } from "@/config/config"
 import { CDPError, ReplacedError, type CDPTransport, type SlowCall } from "./cdp"
 import { TAB_EVENTS, TAB_FIELDS } from "./protocol"
+import { GlobalBus } from "@/bus/global"
+import { ExtensionStatus } from "./extension-status"
 
 /**
  * The OpenCode side of the browser extension.
@@ -64,6 +66,18 @@ const SURVIVE = 20_000
  * the relay being busy.
  */
 const REPLACED_GRACE = 2000
+
+/**
+ * The wire's version, sent on pairing. An extension older than this reloads
+ * itself from disk, where the app's update already put the new files; a newer
+ * one tells the person to update the app. Raise it with PROTOCOL_VERSION in
+ * browser-extension/background.js whenever either side starts relying on a new
+ * message.
+ */
+export const EXTENSION_PROTOCOL = 2
+
+/** The status line is sent at most this often; the answer streams in many small pieces. */
+const STATUS_EVERY = 300
 const MOVES_PAGE = new Set(["Page.navigate", "Page.reload", "Page.navigateToHistoryEntry"])
 
 /**
@@ -399,6 +413,10 @@ export class Bridge {
   private stateListeners = new Set<() => void>()
   /** Running while tabs are kept for an extension that dropped out; see SURVIVE. */
   private recovery?: ReturnType<typeof setTimeout>
+  /** What the Lynx is doing, for the extension's badge, notifications and side panel. */
+  readonly status = new ExtensionStatus.Tracker()
+  private statusTimer?: ReturnType<typeof setTimeout>
+  private statusSent = 0
 
   constructor(
     private token: string,
@@ -416,6 +434,27 @@ export class Bridge {
     return this.recovery !== undefined
   }
 
+  /** Starts telling the extension what the Lynx is doing; the process bridge does, tests need not. */
+  watch() {
+    this.status.start()
+    this.status.onChange(() => this.sendStatus())
+  }
+
+  /** Sends the status line now, or once STATUS_EVERY has passed since the last one. */
+  private sendStatus() {
+    if (this.statusTimer) return
+    const wait = this.statusSent + STATUS_EVERY - Date.now()
+    if (wait > 0) {
+      this.statusTimer = setTimeout(() => {
+        this.statusTimer = undefined
+        this.sendStatus()
+      }, wait)
+      return
+    }
+    this.statusSent = Date.now()
+    if (this.connected) this.write?.({ type: "status", ...this.status.current() })
+  }
+
   /** Sets the shared secret an extension must send. Takes effect on the next pairing. */
   configure(token: string) {
     this.token = token
@@ -423,6 +462,11 @@ export class Bridge {
 
   get connected() {
     return this.authed && this.write !== undefined
+  }
+
+  /** The shared secret, for the extension's own pairing request (see the pair route). */
+  get secret() {
+    return this.token
   }
 
   /** Whether a token has been set; without one the bridge refuses every extension. */
@@ -476,6 +520,13 @@ export class Bridge {
       target?: TargetEvent["target"]
       reason?: string
       previous?: unknown
+      protocol?: number
+      text?: string
+      selection?: string
+      follow?: boolean
+      tab?: { targetId?: string; url?: string; title?: string }
+      requestID?: string
+      reply?: "once" | "always" | "reject"
     }
     try {
       message = JSON.parse(raw)
@@ -489,10 +540,12 @@ export class Bridge {
         return
       }
       // The extension says why its previous socket ended, which this side cannot see.
-      log("auth", { previous: message.previous })
+      log("auth", { previous: message.previous, protocol: message.protocol })
       this.authed = true
       clearTimeout(this.recovery)
       this.recovery = undefined
+      this.write?.({ type: "welcome", protocol: EXTENSION_PROTOCOL })
+      this.write?.({ type: "status", ...this.status.current() })
       this.emitState()
       return
     }
@@ -521,6 +574,41 @@ export class Bridge {
       case "detached":
         log("detached", { target: message.targetId, reason: message.reason })
         if (message.targetId) this.connections.get(message.targetId)?.drop()
+        return
+      case "ask":
+        // A request typed in the side panel or picked from the page's menu. The
+        // app starts the conversation, with the model and project it would use.
+        if (!message.text?.trim()) return
+        log("ask", { follow: message.follow === true, tab: message.tab?.targetId })
+        return void GlobalBus.emit("event", {
+          directory: "global",
+          payload: {
+            type: "lynx.extension.ask",
+            properties: {
+              text: message.text.trim(),
+              selection: message.selection,
+              follow: message.follow === true,
+              tab: message.tab,
+            },
+          },
+        })
+      case "stop":
+        log("stop", { sessions: this.status.running().length })
+        return void GlobalBus.emit("event", {
+          directory: "global",
+          payload: { type: "lynx.extension.stop", properties: { sessions: this.status.running() } },
+        })
+      case "answer": {
+        const ask = message.requestID ? this.status.ask(message.requestID) : undefined
+        if (!ask || ask.kind !== "permission" || !message.reply) return
+        log("answer", { reply: message.reply })
+        return void GlobalBus.emit("event", {
+          directory: "global",
+          payload: { type: "lynx.extension.answer", properties: { ...ask, reply: message.reply } },
+        })
+      }
+      case "seen":
+        this.status.seen()
         return
       case "target":
         if (message.event && message.target) {
@@ -691,12 +779,15 @@ export class Bridge {
 let shared: Bridge | undefined
 
 export function instance(): Bridge {
-  if (!shared) shared = new Bridge(process.env["OPENCODE_BROWSER_EXTENSION_TOKEN"] ?? "")
+  if (shared) return shared
+  shared = new Bridge(process.env["OPENCODE_BROWSER_EXTENSION_TOKEN"] ?? "")
+  shared.watch()
   return shared
 }
 
 /** Test hook: forget the process bridge so a case starts from nothing. */
 export function reset() {
+  shared?.status.stop()
   shared = undefined
 }
 

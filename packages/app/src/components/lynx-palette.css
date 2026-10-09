@@ -13,23 +13,23 @@
   font-size: 11.5px;
   cursor: pointer;
 }
-.lynx-palette-scopes button b { color: var(--lynx-cyan); font-family: var(--font-family-mono, monospace); }
-.lynx-palette-scopes button[aria-selected="true"] { background: color-mix(in srgb, var(--lynx-cyan) 15%, transparent); color: var(--v2-text-text-base); }
+.lynx-palette-scopes button b { color: var(--lynx-coral); font-family: var(--font-family-mono, monospace); }
+.lynx-palette-scopes button[aria-selected="true"] { background: color-mix(in srgb, var(--lynx-coral) 15%, transparent); color: var(--v2-text-text-base); }
 .lynx-palette .command-palette-v2-search { display: flex; align-items: center; gap: 8px; }
 .lynx-palette .command-palette-v2-search > :last-child { flex: 1; }
 .lynx-palette-crumb {
   flex: none;
   padding: 4px 9px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--lynx-cyan) 16%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lynx-cyan) 55%, transparent);
+  background: color-mix(in srgb, var(--lynx-coral) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lynx-coral) 55%, transparent);
   color: var(--v2-text-text-base);
   font-size: 12px;
   animation: lynx-pal-pop var(--motion-base) var(--motion-ease-spring) both;
 }
 mark.lynx-lit {
   background: none;
-  color: var(--lynx-cyan);
+  color: var(--lynx-coral);
   font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -54,7 +54,7 @@ mark.lynx-lit {
 @media (min-width: 900px) { .lynx-palette-preview { display: flex; } }
 .lynx-palette-preview b { font-size: 14px; }
 .lynx-palette-preview p { margin: 0; color: var(--v2-text-text-muted); line-height: 1.5; overflow-wrap: anywhere; }
-.lynx-palette-preview p[data-role="user"] { align-self: flex-end; padding: 5px 9px; border-radius: 10px; background: color-mix(in srgb, var(--lynx-indigo) 15%, transparent); color: var(--v2-text-text-base); }
+.lynx-palette-preview p[data-role="user"] { align-self: flex-end; padding: 5px 9px; border-radius: 10px; background: color-mix(in srgb, var(--lynx-deep) 15%, transparent); color: var(--v2-text-text-base); }
 .lynx-palette-preview code { color: var(--v2-text-text-muted); font-size: 11px; word-break: break-all; }
 .lynx-palette-preview-kind { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--v2-text-text-faint); }
 
@@ -67,8 +67,8 @@ mark.lynx-lit {
   height: 18px;
   place-items: center;
   border-radius: 5px;
-  background: var(--lynx-cyan);
-  color: #0b1226;
+  background: var(--lynx-coral);
+  color: #131313;
   font-size: 11px;
   font-weight: 700;
   z-index: 2;
@@ -90,7 +90,7 @@ mark.lynx-lit {
   padding: 10px;
   border: 0;
   border-radius: 12px;
-  background: linear-gradient(160deg, color-mix(in srgb, var(--lynx-cyan) 14%, var(--v2-background-bg-layer-02, var(--v2-background-bg-layer-01))), var(--v2-background-bg-layer-01));
+  background: linear-gradient(160deg, color-mix(in srgb, var(--lynx-coral) 14%, var(--v2-background-bg-layer-02, var(--v2-background-bg-layer-01))), var(--v2-background-bg-layer-01));
   box-shadow: inset 0 0 0 1px var(--v2-border-border-muted), 0 8px 18px -12px rgba(0, 0, 0, 0.6);
   color: var(--v2-text-text-base);
   text-align: left;
@@ -142,24 +142,24 @@ mark.lynx-lit {
   opacity: 0.7;
   transition: transform var(--motion-move) var(--motion-ease-out), opacity var(--motion-move), box-shadow var(--motion-base);
 }
-.lynx-carousel-card[data-focus] { transform: none; opacity: 1; box-shadow: 0 0 0 2px var(--lynx-cyan), 0 16px 30px -18px var(--lynx-cyan); }
+.lynx-carousel-card[data-focus] { transform: none; opacity: 1; box-shadow: 0 0 0 2px var(--lynx-coral), 0 16px 30px -18px var(--lynx-coral); }
 .lynx-carousel-card[data-focus] ~ .lynx-carousel-card { transform: perspective(600px) rotateY(14deg) scale(0.92); }
 .lynx-carousel-card b { font-size: 13px; }
 .lynx-carousel-card small { color: var(--v2-text-text-muted); font-size: 11px; }
-.lynx-carousel-card[data-on] b::after { content: " ✓"; color: var(--lynx-cyan); }
-.lynx-carousel-art { height: 70px; margin-bottom: 6px; border-radius: 9px; background: linear-gradient(135deg, var(--lynx-cyan), var(--lynx-indigo)); }
-.lynx-carousel-art[data-id="dia"] { background: linear-gradient(135deg, #ffffff, #e0f2fe); }
+.lynx-carousel-card[data-on] b::after { content: " ✓"; color: var(--lynx-coral); }
+.lynx-carousel-art { height: 70px; margin-bottom: 6px; border-radius: 9px; background: linear-gradient(135deg, var(--lynx-coral), var(--lynx-deep)); }
+.lynx-carousel-art[data-id="dia"] { background: linear-gradient(135deg, #ffffff, #ffe9e3); }
 .lynx-carousel-art[data-id="contraste"] { background: linear-gradient(135deg, #000, #333); }
-.lynx-carousel-art[data-id="ciano"] { background: linear-gradient(135deg, #06202f, #22d3ee); }
-.lynx-carousel-art[data-id="noite"] { background: linear-gradient(135deg, #0b1226, #6366f1); }
-.lynx-carousel-art[data-id="baloes"] { background: radial-gradient(circle at 70% 35%, #6366f1 0 18%, transparent 19%), radial-gradient(circle at 30% 70%, #16213f 0 18%, transparent 19%), #0f1833; }
-.lynx-carousel-art[data-id="log"] { background: repeating-linear-gradient(#05080f 0 9px, #22d3ee33 9px 10px); }
-.lynx-carousel-art[data-id="documento"] { background: repeating-linear-gradient(#f8fafc 0 10px, #cbd5e1 10px 11px); }
+.lynx-carousel-art[data-id="ciano"] { background: linear-gradient(135deg, #2a0f0c, #ff6b5b); }
+.lynx-carousel-art[data-id="noite"] { background: linear-gradient(135deg, #131313, #e5484d); }
+.lynx-carousel-art[data-id="baloes"] { background: radial-gradient(circle at 70% 35%, #e5484d 0 18%, transparent 19%), radial-gradient(circle at 30% 70%, #232323 0 18%, transparent 19%), #1a1a1a; }
+.lynx-carousel-art[data-id="log"] { background: repeating-linear-gradient(#080808 0 9px, #ff6b5b33 9px 10px); }
+.lynx-carousel-art[data-id="documento"] { background: repeating-linear-gradient(#f8fafc 0 10px, #d4d4d4 10px 11px); }
 
 /* Quick answers */
 .lynx-palette-ask { display: grid; gap: 6px; justify-items: start; padding: 18px 20px 22px; animation: lynx-pal-fade var(--motion-base) both; }
 .lynx-palette-ask-label { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--v2-text-text-faint); }
-.lynx-palette-ask-value { font-size: 36px; color: var(--lynx-cyan); line-height: 1.1; animation: lynx-pal-pop var(--motion-move) var(--motion-ease-spring) both; }
+.lynx-palette-ask-value { font-size: 36px; color: var(--lynx-coral); line-height: 1.1; animation: lynx-pal-pop var(--motion-move) var(--motion-ease-spring) both; }
 .lynx-palette-ask small { color: var(--v2-text-text-muted); }
 .lynx-palette-ask-hint { margin: 0; color: var(--v2-text-text-muted); font-size: 13px; }
 .lynx-palette-ask-go {
@@ -171,7 +171,7 @@ mark.lynx-lit {
   padding: 0 12px;
   border: 0;
   border-radius: 9px;
-  background: linear-gradient(135deg, var(--lynx-cyan), var(--lynx-indigo));
+  background: linear-gradient(135deg, var(--lynx-coral), var(--lynx-deep));
   color: #fff;
   font-weight: 600;
   font-size: 12.5px;
@@ -181,7 +181,7 @@ mark.lynx-lit {
 /* Footer tools */
 .lynx-palette-tools { display: inline-flex; gap: 2px; margin-left: auto; }
 .lynx-palette-tools button { width: 24px; height: 22px; border: 0; border-radius: 6px; background: transparent; color: var(--v2-text-text-muted); cursor: pointer; }
-.lynx-palette-tools button[aria-pressed="true"] { background: color-mix(in srgb, var(--lynx-cyan) 18%, transparent); color: var(--v2-text-text-base); }
+.lynx-palette-tools button[aria-pressed="true"] { background: color-mix(in srgb, var(--lynx-coral) 18%, transparent); color: var(--v2-text-text-base); }
 
 /* Placements: from the left edge, or dropping from the top like a console.
  * The dialog's own container is pinned in place, whatever spacing it had. */
@@ -219,7 +219,7 @@ mark.lynx-lit {
   max-width: none !important;
   max-height: 52vh;
   border-radius: 0 0 16px 16px !important;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), inset 0 -2px var(--lynx-cyan);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), inset 0 -2px var(--lynx-coral);
   animation: lynx-pal-curtain var(--motion-move) var(--motion-ease-spring) both;
 }
 

@@ -6,10 +6,10 @@ import { useSettings } from "@/context/settings"
 import "./lynx-settings.css"
 
 const SWATCH: Record<Variant, { bg: string; panel: string; text: string }> = {
-  noite: { bg: "#0b1226", panel: "#16213f", text: "#e6ebf7" },
-  dia: { bg: "#ffffff", panel: "#eef1fb", text: "#0b1226" },
-  contraste: { bg: "#000000", panel: "#0b0b12", text: "#ffffff" },
-  ciano: { bg: "#06202f", panel: "#0e3a52", text: "#e0fbff" },
+  noite: { bg: "#131313", panel: "#232323", text: "#ebebeb" },
+  dia: { bg: "#ffffff", panel: "#f1f1f1", text: "#131313" },
+  contraste: { bg: "#000000", panel: "#0c0c0c", text: "#ffffff" },
+  ciano: { bg: "#2a0f0c", panel: "#4a1a14", text: "#fff0ed" },
 }
 
 /**
@@ -34,6 +34,8 @@ export function LynxLooks() {
     { key: "pill", label: t("lynx.chat.extra.pill") },
     { key: "focus", label: t("lynx.set.switch.focus") },
     { key: "replay", label: t("lynx.set.switch.replay") },
+    { key: "minimap", label: t("lynx.set.switch.minimap") },
+    { key: "stage", label: t("lynx.set.switch.stage") },
     { key: "diffs", label: t("lynx.chat.extra.diffs") },
     { key: "lite", label: t("lynx.set.switch.lite") },
     { key: "settingsWide", label: t("lynx.set.switch.wide") },
@@ -72,7 +74,7 @@ export function LynxLooks() {
                   <span class="lynx-variant-mini" style={{ background: SWATCH[variant].bg, color: SWATCH[variant].text }}>
                     <i style={{ background: SWATCH[variant].panel }} />
                     <em style={{ background: SWATCH[variant].text }} />
-                    <em style={{ background: "#22d3ee", width: "50%" }} />
+                    <em style={{ background: "#ff6b5b", width: "50%" }} />
                     <span class="lynx-variant-pill" />
                   </span>
                   <b>{t(`lynx.set.variant.${variant}`)}</b>

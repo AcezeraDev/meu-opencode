@@ -385,7 +385,7 @@ export function flyChip(text: string, from: DOMRect, to: DOMRect) {
   chip.textContent = text
   chip.style.cssText =
     "position:fixed;left:0;top:0;z-index:70;pointer-events:none;white-space:nowrap;padding:2px 7px;border-radius:99px;" +
-    "font:500 11px/1.4 var(--font-family-mono, monospace);color:var(--space-on, #0b0b10);background:var(--space);" +
+    "font:500 11px/1.4 var(--font-family-mono, monospace);color:var(--space-on, #0c0c0c);background:var(--space);" +
     "box-shadow:0 6px 16px -6px var(--space);"
   document.body.appendChild(chip)
   const width = chip.offsetWidth

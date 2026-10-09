@@ -1,0 +1,491 @@
+/* Terminal mode: transcript of compact lines beside the selected step. Lynx colours only. */
+.session-terminal {
+  --term-cyan: var(--lynx-coral, #ff6b5b);
+  --term-indigo: #e5484d;
+  --term-line: color-mix(in srgb, var(--v2-text-text-base) 12%, transparent);
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  color: var(--v2-text-text-base);
+}
+
+.session-terminal-transcript {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 18px 20px 24px;
+}
+
+.session-terminal-column {
+  max-width: 860px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.session-terminal-more {
+  align-self: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 9px;
+  font-size: 13px;
+  color: var(--v2-text-text-muted);
+  box-shadow: inset 0 0 0 1px var(--term-line);
+}
+
+.session-terminal-more:hover {
+  color: var(--v2-text-text-base);
+}
+
+.session-terminal-user {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--term-indigo) 14%, var(--v2-background-bg-base));
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+
+.session-terminal-caret {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  color: var(--term-cyan);
+  font-weight: 600;
+}
+
+.session-terminal-user-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.session-terminal-files {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--v2-text-text-muted);
+}
+
+.session-terminal-say {
+  display: flex;
+  gap: 10px;
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+
+.session-terminal-bullet {
+  flex: 0 0 auto;
+  font-size: 12px;
+  padding-top: 4px;
+}
+
+.session-terminal-markdown {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.session-terminal-think button,
+.session-terminal-tool-row,
+.session-terminal-more,
+.session-terminal-tabs button,
+.session-terminal-log button,
+.session-terminal-nav button,
+.session-terminal-permission button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.session-terminal-think {
+  font-size: 13px;
+  color: color-mix(in srgb, var(--term-indigo) 55%, var(--v2-text-text-base));
+}
+
+.session-terminal-think button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+}
+
+.session-terminal-think button:hover {
+  background: color-mix(in srgb, var(--term-indigo) 12%, transparent);
+}
+
+.session-terminal-hint {
+  color: var(--v2-text-text-faint);
+}
+
+.session-terminal-think p {
+  margin: 4px 0 4px 26px;
+  padding-left: 12px;
+  border-left: 2px solid color-mix(in srgb, var(--term-indigo) 55%, transparent);
+  font-style: italic;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.session-terminal-tool {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 13px;
+}
+
+.session-terminal-tool-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: 8px;
+}
+
+.session-terminal-tool-row:hover {
+  background: color-mix(in srgb, var(--v2-text-text-base) 5%, transparent);
+}
+
+.session-terminal-tool-row[data-selected] {
+  background: color-mix(in srgb, var(--term-cyan) 10%, transparent);
+}
+
+.session-terminal-call {
+  overflow-wrap: anywhere;
+}
+
+.session-terminal-dot {
+  color: #34d399;
+  margin-right: 6px;
+}
+
+.session-terminal-tool[data-status="running"] .session-terminal-dot,
+.session-terminal-tool[data-status="pending"] .session-terminal-dot {
+  color: var(--term-cyan);
+  animation: session-terminal-blink 1s steps(2) infinite;
+}
+
+.session-terminal-tool[data-status="error"] .session-terminal-dot,
+.session-terminal-tool[data-status="error"] .session-terminal-out {
+  color: #f87171;
+}
+
+@keyframes session-terminal-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.session-terminal-name {
+  font-weight: 600;
+  color: var(--v2-text-text-strong, var(--v2-text-text-base));
+}
+
+.session-terminal-arg {
+  color: var(--term-cyan);
+}
+
+.session-terminal-ms {
+  margin-left: 10px;
+  font-size: 11.5px;
+  color: var(--v2-text-text-faint);
+}
+
+.session-terminal-out {
+  padding-left: 20px;
+  color: var(--v2-text-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.session-terminal-io {
+  margin: 4px 0 6px 28px;
+  padding: 10px 12px;
+  max-height: 320px;
+  overflow: auto;
+  border-left: 2px solid color-mix(in srgb, var(--term-cyan) 45%, transparent);
+  background: color-mix(in srgb, var(--v2-text-text-base) 4%, transparent);
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.session-terminal-todo {
+  margin: 2px 0;
+  padding: 10px 14px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px var(--term-line);
+  font-size: 13px;
+}
+
+.session-terminal-todo span {
+  display: inline-block;
+  width: 20px;
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  color: var(--v2-text-text-faint);
+}
+
+.session-terminal-todo [data-status="completed"] {
+  color: var(--v2-text-text-muted);
+  text-decoration: line-through;
+}
+
+.session-terminal-todo [data-status="in_progress"] {
+  font-weight: 600;
+}
+
+.session-terminal-todo [data-status="in_progress"] span {
+  color: var(--term-cyan);
+}
+
+.session-terminal-error {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 13px;
+  color: #f87171;
+  padding-left: 8px;
+}
+
+.session-terminal-stopped {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 13px;
+  color: var(--v2-text-text-muted);
+  padding-left: 8px;
+}
+
+.session-terminal-permission {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.6);
+  background: color-mix(in srgb, #fbbf24 6%, var(--v2-background-bg-base));
+  outline: none;
+}
+
+.session-terminal-permission:focus-visible {
+  box-shadow: inset 0 0 0 2px #fbbf24;
+}
+
+.session-terminal-permission-title {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.session-terminal-permission code {
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+  color: color-mix(in srgb, #fbbf24 70%, var(--v2-text-text-base));
+  background: color-mix(in srgb, #fbbf24 9%, transparent);
+}
+
+.session-terminal-permission-reason {
+  font-size: 13px;
+  color: var(--v2-text-text-muted);
+}
+
+.session-terminal-permission button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 10px;
+  border-radius: 9px;
+  font-size: 14px;
+}
+
+.session-terminal-permission button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--v2-text-text-base) 6%, transparent);
+}
+
+.session-terminal-permission button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.session-terminal-key {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-weight: 600;
+  color: #fbbf24;
+}
+
+.session-terminal-detail {
+  flex: 0 1 380px;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--term-line);
+  overflow: hidden;
+}
+
+.session-terminal-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 10px;
+  border-bottom: 1px solid var(--term-line);
+}
+
+.session-terminal-tabs button {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--v2-text-text-muted);
+}
+
+.session-terminal-tabs button[aria-selected="true"] {
+  color: var(--v2-text-text-base);
+  background: color-mix(in srgb, var(--term-cyan) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--term-cyan) 45%, transparent);
+}
+
+.session-terminal-empty {
+  padding: 16px;
+  font-size: 13px;
+  color: var(--v2-text-text-muted);
+}
+
+.session-terminal-step {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.session-terminal-step-head {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.session-terminal-url {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  color: var(--v2-text-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.session-terminal-shot {
+  width: 100%;
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px var(--term-line);
+}
+
+.session-terminal-kv {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 6px 12px;
+  font-size: 13px;
+}
+
+.session-terminal-kv dt {
+  color: var(--v2-text-text-muted);
+}
+
+.session-terminal-kv dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.session-terminal-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--v2-text-text-faint);
+}
+
+.session-terminal-step > * {
+  flex-shrink: 0;
+}
+
+.session-terminal-step .session-terminal-io {
+  margin: 0;
+  max-height: 240px;
+}
+
+.session-terminal-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--v2-text-text-faint);
+}
+
+.session-terminal-nav button {
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--v2-text-text-base);
+  box-shadow: inset 0 0 0 1px var(--term-line);
+}
+
+.session-terminal-nav span {
+  margin-left: auto;
+}
+
+.session-terminal-log {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.session-terminal-log button {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 6px;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+
+.session-terminal-log button:hover,
+.session-terminal-log button[data-active] {
+  background: color-mix(in srgb, var(--term-cyan) 10%, transparent);
+}
+
+.session-terminal-log-time {
+  flex: 0 0 auto;
+  color: var(--v2-text-text-faint);
+}
+
+/* On a narrow panel the detail goes under the transcript. */
+@container (max-width: 760px) {
+  .session-terminal {
+    flex-direction: column;
+  }
+
+  .session-terminal-detail {
+    flex: 0 0 40%;
+    border-left: 0;
+    border-top: 1px solid var(--term-line);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-terminal-tool[data-status="running"] .session-terminal-dot {
+    animation: none;
+  }
+}

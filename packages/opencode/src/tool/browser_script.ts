@@ -9,6 +9,7 @@ import { BrowserPage } from "@/browser/page"
 import { BrowserSite } from "@/browser/site"
 import type { Tab } from "@/browser/tab"
 import { Step } from "./browser_act"
+import { BrowserLook } from "@/browser/look"
 import * as Tool from "./tool"
 import DESCRIPTION from "./browser_script.txt"
 
@@ -176,6 +177,8 @@ export const BrowserScriptTool = Tool.define(
                 run: (step) =>
                   guard(
                     Effect.gen(function* () {
+                      if (BrowserLook.blocks("browser", step.action) && (yield* ctx.browserLook ?? Effect.succeed(false)))
+                        throw new Error(BrowserLook.MESSAGE)
                       const tab = yield* active()
                       const started = Date.now()
                       const verdict = yield* Effect.promise(() =>

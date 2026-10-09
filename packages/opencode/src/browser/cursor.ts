@@ -43,7 +43,7 @@ export const SCRIPT = String.raw`(function (startX, startY, accent, sound, thoug
   }
 
   /** The project's space as "r, g, b", so every part mixes its own alpha of it. */
-  var rgb = accent || "63, 208, 224"
+  var rgb = accent || "255, 107, 91"
   function tone(alpha) {
     return "rgba(" + rgb + ", " + alpha + ")"
   }
@@ -139,7 +139,7 @@ export const SCRIPT = String.raw`(function (startX, startY, accent, sound, thoug
     var spot = document.createElement("div")
     spot.style.cssText =
       "position:fixed;left:0;top:0;width:0;height:0;pointer-events:none;border-radius:10px;opacity:0;" +
-      "box-shadow:0 0 0 200vmax rgba(5, 8, 18, 0.34);will-change:opacity;"
+      "box-shadow:0 0 0 200vmax rgba(0, 0, 0, 0.34);will-change:opacity;"
 
     var box = document.createElement("div")
     box.style.cssText =

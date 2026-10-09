@@ -70,6 +70,9 @@ import { NewHome } from "@/pages/home"
 import { SessionBoard } from "@/pages/board"
 import { AgentsPage } from "@/pages/agents"
 import { NotebookPage } from "@/pages/notebook"
+import { SocialPage } from "@/pages/social"
+import { SocialClock } from "@/components/social-clock"
+import { ExtensionAsks } from "@/components/extension-asks"
 import { LessonsPage } from "@/pages/lessons"
 import { WeekPage } from "@/pages/week"
 import { useLocal } from "@/context/local"
@@ -383,6 +386,8 @@ function ServerScopedProviders(props: ServerScopedShellProps) {
   return (
     <LayoutProvider>
       {props.serverScoped}
+      <SocialClock />
+      <ExtensionAsks />
       <ModelsProvider directory={props.directory}>{props.children}</ModelsProvider>
     </LayoutProvider>
   )
@@ -670,6 +675,7 @@ function Routes(props: { serverScoped?: JSX.Element }) {
         <Route path="/notebook" component={NotebookPage} />
         <Route path="/week" component={WeekPage} />
         <Route path="/lessons" component={LessonsPage} />
+        <Route path="/social" component={SocialPage} />
         <Route path="/:dir/session/:id" component={NewLayoutLegacySessionRedirect} />
         <Route path="/server/:serverKey/session/:id" component={TargetSessionRoute} />
       </Show>

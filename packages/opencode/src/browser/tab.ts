@@ -3,6 +3,7 @@ import path from "path"
 import { CDPConnection, ReplacedError, type CDPTransport, type SlowCall } from "./cdp"
 import { BrowserCursor } from "./cursor"
 import { BrowserSnapshot, type RefIdentity, type SnapshotOptions, type SnapshotResult } from "./snapshot"
+import { BrowserTelemetry } from "./telemetry"
 import { BrowserTrace } from "./trace"
 import {
   asRecord,
@@ -585,22 +586,13 @@ function mask(modifiers: readonly Modifier[]) {
 const DRAG_STEPS = 8
 
 /** Larger files are not handed to a page this way; the direct way has no such limit. */
-const MAX_UPLOAD = 25 * 1024 * 1024
+const MAX_UPLOAD = 512 * 1024 * 1024
 
-/** The files to hand to a page from inside it: name, type and contents. */
-async function readUploads(files: string[]) {
-  return Promise.all(
-    files.map(async (file) => {
-      const bytes = await fs.readFile(file)
-      if (bytes.byteLength > MAX_UPLOAD) throw new Error(`${file} is larger than ${MAX_UPLOAD / 1024 / 1024} MB.`)
-      return {
-        name: path.basename(file),
-        type: MIME[path.extname(file).toLowerCase()] ?? "",
-        data: bytes.toString("base64"),
-      }
-    }),
-  )
-}
+/**
+ * Files handed to a page from inside it go in pieces this big, so a video
+ * fits through the extension's messages and none of them gets huge.
+ */
+const UPLOAD_PIECE = 4 * 1024 * 1024
 
 const MIME: Record<string, string> = {
   ".pdf": "application/pdf",
@@ -623,10 +615,7 @@ const MIME: Record<string, string> = {
 const GIVE_FILES = `(input, files) => {
   if (!input) throw new Error("no such element")
   const transfer = new DataTransfer()
-  for (const file of files) {
-    const bytes = Uint8Array.from(atob(file.data), (char) => char.charCodeAt(0))
-    transfer.items.add(new File([bytes], file.name, { type: file.type }))
-  }
+  for (const file of files) transfer.items.add(new File(file.parts, file.name, { type: file.type }))
   input.files = transfer.files
   input.dispatchEvent(new Event("input", { bubbles: true }))
   input.dispatchEvent(new Event("change", { bubbles: true }))
@@ -2193,9 +2182,25 @@ export class Tab {
     // Through the person's own browser the extension is not allowed to name a
     // file on disk (unless they gave it access to file URLs), so the files are
     // read here and handed to the input from inside the page instead, the way
-    // a page's own drag and drop would.
-    if (!direct)
-      await this.evaluate(`(${GIVE_FILES})(${this.locate(selector)}, ${JSON.stringify(await readUploads(files))})`)
+    // a page's own drag and drop would. They go in pieces, kept on the page
+    // until the last one is in, since one message with a whole video is too big.
+    if (!direct) {
+      const store = `window[${JSON.stringify(`__oc_upload_${Date.now()}`)}]`
+      await this.evaluate(`${store} = [], 0`)
+      for (const file of files) {
+        const bytes = await fs.readFile(file)
+        if (bytes.byteLength > MAX_UPLOAD) throw new Error(`${file} is larger than ${MAX_UPLOAD / 1024 / 1024} MB.`)
+        const head = { name: path.basename(file), type: MIME[path.extname(file).toLowerCase()] ?? "", parts: [] }
+        await this.evaluate(`${store}.push(${JSON.stringify(head)}), 0`)
+        for (let at = 0; at < bytes.byteLength; at += UPLOAD_PIECE) {
+          const piece = JSON.stringify(bytes.subarray(at, at + UPLOAD_PIECE).toString("base64"))
+          await this.evaluate(`${store}.at(-1).parts.push(Uint8Array.from(atob(${piece}), (char) => char.charCodeAt(0))), 0`)
+        }
+      }
+      await this.evaluate(
+        `(() => { const files = ${store}; delete ${store}; return (${GIVE_FILES})(${this.locate(selector)}, files) })()`,
+      )
+    }
     this.touched()
   }
 
@@ -2987,6 +2992,37 @@ export class Tab {
 }
 
 /** What the cursor says for each kind of action: with no target, and before one. */
+// Lynx Browser Interact timings, a no-op unless turned on. Only what the agent
+// does is measured: the person's own input, the live view's frames and the
+// trail's thumbnails are not the agent's time.
+BrowserTelemetry.measure(Tab.prototype, {
+  screenshot: "screenshot",
+  snapshot: "observation",
+  text: "observation",
+  visibleText: "observation",
+  html: "observation",
+  navigate: "action",
+  reload: "action",
+  history: "action",
+  click: "action",
+  mouseDown: "action",
+  mouseUp: "action",
+  drag: "action",
+  upload: "action",
+  hover: "action",
+  focus: "action",
+  fill: "action",
+  type: "action",
+  press: "action",
+  select: "action",
+  setChecked: "action",
+  scroll: "action",
+  waitForLoad: "wait",
+  quiet: "wait",
+  settle: "wait",
+  waitFor: "wait",
+})
+
 const SAYINGS: Record<ActivityKind, readonly [string, string]> = {
   navigate: ["Abrindo a página", "Abrindo "],
   reload: ["Recarregando a página", ""],

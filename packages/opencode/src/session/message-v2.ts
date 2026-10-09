@@ -31,6 +31,7 @@ import { MessageTable, PartTable, SessionTable } from "@opencode-ai/core/session
 import { ProviderError } from "@/provider/error"
 import { iife } from "@/util/iife"
 import { errorMessage } from "@/util/error"
+import { isContextOverflow } from "@opencode-ai/llm"
 import { isMedia } from "@/util/media"
 import { BrowserPdf } from "@/browser/pdf"
 import { createHash } from "crypto"
@@ -853,6 +854,8 @@ export function fromError(
         },
         { cause: e },
       ).toObject()
+    case e instanceof Error && isContextOverflow(errorMessage(e)):
+      return new ContextOverflowError({ message: errorMessage(e) }, { cause: e }).toObject()
     case e instanceof Error:
       return new NamedError.Unknown({ message: errorMessage(e) }, { cause: e }).toObject()
     default:
@@ -880,6 +883,10 @@ export function fromError(
           ).toObject()
         }
       } catch {}
+      // Some openai-compatible providers stream a bare {code, message} object for a too-long prompt.
+      // Treat it as overflow so the session compacts instead of stopping with an unknown error.
+      if (isContextOverflow(JSON.stringify(e)))
+        return new ContextOverflowError({ message: JSON.stringify(e) }, { cause: e }).toObject()
       return new NamedError.Unknown({ message: JSON.stringify(e) }, { cause: e }).toObject()
   }
 }

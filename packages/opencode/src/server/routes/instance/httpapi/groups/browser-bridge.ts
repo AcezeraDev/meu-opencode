@@ -12,6 +12,7 @@ import { described } from "./metadata"
  */
 export const BrowserBridgePaths = {
   connect: "/experimental/browser/extension",
+  pair: "/experimental/browser/extension/pair",
   pdf: "/experimental/browser/pdf/:id",
   pdfFile: "/experimental/browser/pdf/:id/file",
 } as const
@@ -28,6 +29,21 @@ export const BrowserBridgeApi = HttpApi.make("browser-bridge").add(
           summary: "Connect the browser extension",
           description:
             "WebSocket the OpenCode Browser Bridge extension connects to so the agent can drive the user's own browser. Gated by the browser.extensionToken secret, which the extension sends as its first message.",
+        }),
+      ),
+    )
+    // The extension pairs itself: it finds the app on its port and asks for the
+    // token, which is only handed to the Lynx Code extension's own origin.
+    .add(
+      HttpApiEndpoint.post("pair", BrowserBridgePaths.pair, {
+        success: described(Schema.String, "Pairing token"),
+        error: HttpApiError.Forbidden,
+      }).annotateMerge(
+        OpenApi.annotations({
+          identifier: "browser.extension.pair",
+          summary: "Pair the browser extension",
+          description:
+            "Gives the Lynx Code browser extension the browser.extensionToken so it pairs without the person pasting it. Answers only requests from the extension's own chrome-extension:// origin.",
         }),
       ),
     )

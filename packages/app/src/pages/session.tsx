@@ -107,6 +107,7 @@ import { SessionRail } from "./session/session-rail"
 import "./session/session-workspace.css"
 import "./session/session-chat.css"
 import { SessionTrail } from "./session/session-trail"
+import { SessionTerminal } from "./session/terminal/session-terminal"
 import { ContextRing } from "./session/scope/context-ring"
 import { MeasurementStrip } from "./session/scope/measurement-strip"
 import { SessionResume } from "./session/session-resume"
@@ -114,6 +115,7 @@ import { BrowserPanel } from "./session/browser/browser-panel"
 import { BrowserPane } from "./session/browser/browser-pane"
 import { BrowserFloat } from "./session/browser/browser-float"
 import { browserPane } from "./session/browser/pane-state"
+import { useLynxPrefs } from "@/context/lynx-prefs"
 import { ScopeTrace } from "./session/scope/scope-trace"
 import { COMPOSER_FILL_EVENT, type ComposerFillDetail } from "@opencode-ai/session-ui/web-video-tool"
 import { extractPromptFromParts } from "@/utils/prompt"
@@ -126,6 +128,8 @@ import { createSessionLineage } from "./session/session-lineage"
 type FollowupItem = FollowupDraft & { id: string }
 type FollowupEdit = Pick<FollowupItem, "id" | "prompt" | "context">
 const emptyFollowups: FollowupItem[] = []
+/** How much of the row the conversation keeps in chat-and-stage, leaving the rest to the stage. */
+const STAGE_CHAT_SHARE = 0.36
 
 type ChangeMode = "git" | "branch" | "turn"
 type VcsMode = "git" | "branch"
@@ -498,8 +502,14 @@ export default function Page() {
   // closing review from anywhere brings the conversation straight back.
   const reviewFocus = createMemo(() => sessionMode.mode() === "review" && desktopV2ReviewOpen())
   const cockpitRail = createMemo(
-    () => newSessionDesign() && isDesktop() && sessionMode.mode() === "cockpit" && !!params.id,
+    () =>
+      newSessionDesign() &&
+      isDesktop() &&
+      (sessionMode.mode() === "cockpit" || sessionMode.mode() === "terminal") &&
+      !!params.id,
   )
+  // Terminal mode asks for permission inside the transcript instead of above the composer.
+  const terminalMode = createMemo(() => newSessionDesign() && sessionMode.mode() === "terminal")
   const terminalOpen = createMemo(() => view().terminal.opened())
   const desktopTerminalOpen = createMemo(() => isDesktop() && terminalOpen())
   const desktopInlineTerminalOnlyOpen = createMemo(
@@ -583,7 +593,7 @@ export default function Page() {
 
   const applySessionMode = (mode: SessionMode) => {
     sessionMode.set(mode)
-    if (mode === "conversation" || mode === "trail") {
+    if (mode === "conversation" || mode === "trail" || mode === "terminal") {
       view().reviewPanel.close()
       view().terminal.close()
       return
@@ -1802,6 +1812,43 @@ export default function Page() {
 
   const busy = (sessionID: string) => sync().data.session_working(sessionID)
 
+  // Chat and stage: the conversation narrows to the left and what the agent is
+  // working on fills the right, the browser while it browses and the changes
+  // while it edits, swapping as the tool changes.
+  const lynx = useLynxPrefs()
+  const stageTool = createMemo(() => {
+    const id = params.id
+    if (!lynx.get("stage") || !id || !busy(id) || !isDesktop() || !newSessionDesign()) return undefined
+    const last = (sync().data.message[id] ?? []).findLast((message) => message.role === "assistant")
+    const tool = last ? (sync().data.part[last.id] ?? []).findLast((part) => part.type === "tool") : undefined
+    if (tool?.type !== "tool") return undefined
+    if (tool.tool.startsWith("browser_")) return "browser"
+    if (["edit", "write", "apply_patch"].includes(tool.tool)) return "code"
+    return undefined
+  })
+  createEffect(
+    on(stageTool, (stage) => {
+      if (stage === "browser") {
+        browserPane.reveal()
+        if (view().reviewPanel.opened()) view().reviewPanel.close()
+      }
+      if (stage === "code") {
+        browserPane.hide()
+        view().reviewPanel.open()
+      }
+    }),
+  )
+  createEffect(
+    on(
+      () => lynx.get("stage") && desktopSessionResizeOpen(),
+      (staged) => {
+        const available = sessionPanelAvailable()
+        if (staged && available) layout.session.resize(Math.round(available * STAGE_CHAT_SHARE))
+      },
+      { defer: true },
+    ),
+  )
+
   const queuedFollowups = createMemo(() => {
     const id = params.id
     if (!id) return emptyFollowups
@@ -2192,6 +2239,31 @@ export default function Page() {
             <Show when={messagesReady() ? params.id : undefined} keyed>
               {(id) => (
                 <Show
+                  when={!terminalMode()}
+                  fallback={
+                    <SessionTerminal
+                      sessionID={id}
+                      history={{
+                        more: historyMore,
+                        loading: historyLoading,
+                        load: () => void timeline.history.loadOlder(),
+                      }}
+                      permission={{
+                        get request() {
+                          return composer.permissionRequest()
+                        },
+                        get responding() {
+                          return composer.permissionResponding()
+                        },
+                        decide: (response) => {
+                          resumeScroll()
+                          composer.decide(response)
+                        },
+                      }}
+                    />
+                  }
+                >
+                <Show
                   when={!newSessionDesign() || sessionMode.mode() !== "trail"}
                   fallback={<SessionTrail sessionID={id} />}
                 >
@@ -2231,6 +2303,7 @@ export default function Page() {
                       scrollToEnd = fn
                     }}
                   />
+                </Show>
                 </Show>
               )}
             </Show>
@@ -2292,6 +2365,7 @@ export default function Page() {
           return (
             <SessionComposerRegion
               controller={controller}
+              inlinePermission={terminalMode()}
               measurement={
                 <Show when={newSessionDesign()}>
                   <BrowserPanel directory={() => sdk().directory} docked={browserShown} canDock={isDesktop} />

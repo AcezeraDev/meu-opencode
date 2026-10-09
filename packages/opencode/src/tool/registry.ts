@@ -25,6 +25,7 @@ import { BrowserInspectTool } from "./browser_inspect"
 import { BrowserScriptTool } from "./browser_script"
 import { BrowserNotesTool } from "./browser_notes"
 import { LessonsTool } from "./lessons"
+import { SocialReportTool } from "./social_report"
 import { SiteCheckTool } from "./site_check"
 import { VisualReviewTool } from "./visual_review"
 import { WriteTextTool } from "./write_text"
@@ -158,6 +159,7 @@ const layer = Layer.effect(
     const browserScript = yield* BrowserScriptTool
     const browserNotes = yield* BrowserNotesTool
     const lessons = yield* LessonsTool
+    const socialReport = yield* SocialReportTool
     const siteCheck = yield* SiteCheckTool
     const visualReview = yield* VisualReviewTool
     const writeText = yield* WriteTextTool
@@ -286,6 +288,7 @@ const layer = Layer.effect(
           browserScript: Tool.init(browserScript),
           browserNotes: Tool.init(browserNotes),
           lessons: Tool.init(lessons),
+          socialReport: Tool.init(socialReport),
           siteCheck: Tool.init(siteCheck),
           visualReview: Tool.init(visualReview),
           writeText: Tool.init(writeText),
@@ -330,6 +333,7 @@ const layer = Layer.effect(
             tool.video,
             tool.todo,
             tool.lessons,
+            tool.socialReport,
             tool.search,
             tool.skill,
             tool.patch,
@@ -394,6 +398,8 @@ const layer = Layer.effect(
       const filtered = (yield* all()).filter((tool) => {
         if (lean && !Ollama.LEAN_TOOLS.has(tool.id)) return false
         if (tool.id === LessonsTool.id) return cfg.memory?.enabled !== false
+        // Only the agents that prepare and post the person's queue report to it.
+        if (tool.id === SocialReportTool.id) return input.agent.name === "social" || input.agent.name === "social-prep"
         if (tool.id === WebVideoTool.id) return webVideoEnabled
         if (BROWSER_TOOL_IDS.has(tool.id)) return browserEnabled
         // Only offered once a writing model is chosen.

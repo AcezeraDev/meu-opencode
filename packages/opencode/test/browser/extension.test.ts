@@ -323,7 +323,11 @@ describe("browser service in extension mode", () => {
  * a token it never opens one.
  */
 function loadRelay(stored: { token?: string; port?: number } = {}) {
-  const source = fs.readFileSync(path.join(import.meta.dir, "../../../../browser-extension/background.js"), "utf8")
+  const folder = path.join(import.meta.dir, "../../../../browser-extension")
+  // The worker pulls lynx.js in with importScripts, into the same scope.
+  const source = fs
+    .readFileSync(path.join(folder, "background.js"), "utf8")
+    .replace('importScripts("lynx.js")', () => fs.readFileSync(path.join(folder, "lynx.js"), "utf8"))
   const hub = () => {
     const listeners: ((...args: unknown[]) => void)[] = []
     return {
@@ -391,12 +395,34 @@ function loadRelay(stored: { token?: string; port?: number } = {}) {
       onChanged,
     },
     alarms: { create: () => {}, onAlarm: hub() },
-    debugger: { onEvent: hub(), onDetach: hub() },
+    action: {
+      setTitle: async () => {},
+      setBadgeText: async () => {},
+      setBadgeBackgroundColor: async () => {},
+      setBadgeTextColor: async () => {},
+    },
+    notifications: { create: () => {}, clear: () => {}, onButtonClicked: hub(), onClicked: hub() },
+    contextMenus: { removeAll: (done: () => void) => done(), create: () => {}, onClicked: hub() },
+    commands: { onCommand: hub() },
+    sidePanel: { setPanelBehavior: async () => {}, open: async () => {} },
+    tabGroups: { get: async () => undefined, update: async () => {} },
+    debugger: {
+      onEvent: hub(),
+      onDetach: hub(),
+      attach: async () => {},
+      detach: async () => {},
+      sendCommand: async (_target: unknown, method: string) => {
+        calls.push({ call: "sendCommand", method })
+        return {}
+      },
+    },
     tabs: {
       onCreated: hub(),
       onUpdated: hub(),
       onActivated: hub(),
       onRemoved: hub(),
+      query: async () => [],
+      group: async () => 1,
       create: async (options: { windowId?: number; url: string }) => {
         calls.push({ call: "tabs.create", ...options })
         return { id: 100 + calls.length, windowId: options.windowId }
@@ -414,12 +440,22 @@ function loadRelay(stored: { token?: string; port?: number } = {}) {
         return { id, tabs: [{ id: 90 + windows.size, windowId: id }] }
       },
     },
-    runtime: { onMessage: hub(), onStartup, onInstalled: hub() },
+    runtime: {
+      onMessage: hub(),
+      onStartup,
+      onInstalled: hub(),
+      getManifest: () => ({ version: "test" }),
+      sendMessage: async () => {},
+      reload: () => {},
+    },
   }
-  const load = new Function("chrome", "WebSocket", `${source}\nreturn { prune }`) as (
+  const load = new Function("chrome", "WebSocket", `${source}\nreturn { prune, lynx }`) as (
     chrome: unknown,
     socket: unknown,
-  ) => { prune: (params: unknown, paths: readonly string[]) => Record<string, any> }
+  ) => {
+    prune: (params: unknown, paths: readonly string[]) => Record<string, any>
+    lynx: { urls: Map<number, string>; settings: { blocked: string[]; lookOnly: string[] } }
+  }
   return {
     ...load(chrome, FakeSocket),
     sockets,
@@ -428,6 +464,8 @@ function loadRelay(stored: { token?: string; port?: number } = {}) {
     windows,
     startup: () => onStartup.fire(),
     created: (tab: Record<string, unknown>) => chrome.tabs.onCreated.fire(tab),
+    /** A message from the side panel or a page's content script. */
+    message: (message: unknown, sender: unknown = {}) => chrome.runtime.onMessage.fire(message, sender, () => {}),
     save: (values: Record<string, unknown>) => chrome.storage.local.set(values),
   }
 }
@@ -599,5 +637,72 @@ describe("the extension relay's pruning", () => {
   test("every pruned event is one the extension is asked to relay", () => {
     const relayed: readonly string[] = TAB_EVENTS
     for (const method of Object.keys(TAB_FIELDS)) expect(relayed).toContain(method)
+  })
+})
+
+describe("the extension's safety for the person", () => {
+  async function paired() {
+    const relay = loadRelay({ token: "t", port: 4919 })
+    await pause()
+    const socket = relay.sockets[0]!
+    socket.open()
+    socket.deliver({ type: "welcome", protocol: 2 })
+    const errors = () => socket.sent.filter((message: any) => message.type === "error") as any[]
+    return { relay, socket, errors }
+  }
+
+  test("a blocked site is refused, also by address, and a page that goes there is let go", async () => {
+    const { relay, socket, errors } = await paired()
+    relay.lynx.urls.set(7, "https://www.nubank.com.br/conta")
+    socket.deliver({ id: 1, type: "command", targetId: "7", method: "Runtime.evaluate", params: {} })
+    socket.deliver({ id: 2, type: "createTarget", url: "https://paypal.com/" })
+    relay.lynx.urls.set(8, "https://example.com/")
+    socket.deliver({ id: 3, type: "command", targetId: "8", method: "Page.navigate", params: { url: "https://app.itau.com.br/" } })
+    await pause()
+    expect(errors().map((message) => message.id)).toEqual([1, 2, 3])
+    expect(errors()[0].error).toContain("nubank.com.br")
+    expect(relay.calls.some((call) => call.call === "tabs.create")).toBe(false)
+  })
+
+  test("a look-only site may be read but not clicked or typed into", async () => {
+    const { relay, socket, errors } = await paired()
+    relay.lynx.settings.lookOnly = ["mail.google.com"]
+    relay.lynx.urls.set(5, "https://mail.google.com/mail/u/0")
+    socket.deliver({ id: 1, type: "command", targetId: "5", method: "Runtime.evaluate", params: {} })
+    socket.deliver({ id: 2, type: "command", targetId: "5", method: "Input.dispatchMouseEvent", params: {} })
+    await pause()
+    expect(errors().map((message) => message.id)).toEqual([2])
+    expect(errors()[0].error).toContain("só olhar")
+  })
+
+  test("Stop tells the app and refuses the Lynx for a moment", async () => {
+    const { relay, socket, errors } = await paired()
+    relay.lynx.urls.set(4, "https://example.com/")
+    relay.message({ type: "lynx-stop" })
+    socket.deliver({ id: 1, type: "command", targetId: "4", method: "Input.dispatchMouseEvent", params: {} })
+    await pause()
+    expect(socket.sent.some((message: any) => message.type === "stop")).toBe(true)
+    expect(errors()[0].error).toContain("parou a Lynx")
+  })
+
+  test("Esc stops her only in a tab she drives while she works, and not the Esc she sent herself", async () => {
+    const { relay, socket } = await paired()
+    relay.lynx.urls.set(3, "https://example.com/")
+    socket.deliver({ id: 1, type: "attach", targetId: "3" })
+    socket.deliver({ type: "status", phase: "working" })
+    await pause()
+    const stops = () => socket.sent.filter((message: any) => message.type === "stop").length
+
+    relay.message({ type: "esc" }, { tab: { id: 99 } })
+    expect(stops()).toBe(0)
+
+    socket.deliver({ id: 2, type: "command", targetId: "3", method: "Input.dispatchKeyEvent", params: { key: "Escape" } })
+    await pause()
+    relay.message({ type: "esc" }, { tab: { id: 3 } })
+    expect(stops()).toBe(0)
+
+    await pause(1600)
+    relay.message({ type: "esc" }, { tab: { id: 3 } })
+    expect(stops()).toBe(1)
   })
 })

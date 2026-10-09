@@ -35,7 +35,15 @@
  *   server → ext   { id, type: "closeTarget", targetId }
  *   server → ext   { id, type: "goBack", targetId }         history back, without the debugger
  *
+ *   ext  → server  { type: "ask", text, follow?, selection?, tab? }  a request from the side panel or menu
+ *   ext  → server  { type: "stop" } / { type: "answer", requestID, reply } / { type: "seen" }
+ *   server → ext   { type: "welcome", protocol }          after a good auth
+ *   server → ext   { type: "status", phase, session?, step?, text?, ask? }  what the Lynx is doing
+ *
  * A `targetId` is the Chrome tab id as a string. The engine treats it as opaque.
+ *
+ * What the person sees and decides (side panel, badge, notifications, Stop,
+ * blocked and look-only sites, pairing by itself) lives in lynx.js.
  */
 
 const DEFAULT_PORT = 4919
@@ -210,8 +218,9 @@ async function openInAgentWindow(url) {
 
 async function listTargets() {
   const tabs = await chrome.tabs.query({})
+  // Blocked sites are left out: the Lynx does not get to see them at all.
   return tabs
-    .filter((tab) => typeof tab.id === "number" && /^https?:|^file:|^about:/.test(tab.url || ""))
+    .filter((tab) => typeof tab.id === "number" && /^https?:|^file:|^about:/.test(tab.url || "") && !isBlocked(tab.url || ""))
     .map((tab) => ({
       targetId: String(tab.id),
       url: tab.url || "",
@@ -223,6 +232,7 @@ async function listTargets() {
 async function handle(message) {
   const { id, type } = message
   try {
+    guard(type, message)
     switch (type) {
       case "listTargets":
         return reply(id, { targets: await listTargets() })
@@ -248,6 +258,8 @@ async function handle(message) {
       case "createTarget": {
         const url = message.url || "about:blank"
         const tab = message.ownWindow ? await openInAgentWindow(url) : await chrome.tabs.create({ url, active: true })
+        lynx.urls.set(tab.id, url)
+        if (!message.ownWindow) void groupAgentTab(tab)
         return reply(id, { targetId: String(tab.id) })
       }
       case "activateTarget": {
@@ -285,8 +297,12 @@ function connect() {
   // both call this, and a second socket made the server drop the first and,
   // when that one closed, the pairing with it.
   if (socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) return
-  void config().then(({ port: saved, token }) => {
-    if (!token) return // Not paired yet; the popup sets port + token.
+  void config().then(async ({ port: saved, token }) => {
+    // Not paired yet, or the app refused the saved token: find the app and pair.
+    if (!token || lynx.stale) {
+      if (!(await pair())) return scheduleReconnect()
+      return connect()
+    }
     if (socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) return
     // The app used to take a new port every time it opened, leaving this
     // pointed at a dead one; it now prefers the default, so that is tried too.
@@ -305,13 +321,14 @@ function connect() {
     let answers = false
     let opened = 0
     let closing
+    let welcomed = false
 
     ws.addEventListener("open", () => {
       retry = RETRY_MIN
       attempt = 0
       opened = Date.now()
       if (port !== saved) void chrome.storage.local.set({ port })
-      ws.send(JSON.stringify({ type: "auth", token, previous }))
+      ws.send(JSON.stringify({ type: "auth", token, previous, protocol: PROTOCOL_VERSION }))
       clearInterval(pingTimer)
       pingTimer = setInterval(() => {
         if (socket !== ws) return
@@ -336,6 +353,13 @@ function connect() {
         answers = true
         return
       }
+      if (message.type === "welcome") {
+        welcomed = true
+        onWelcome(message)
+        broadcast()
+        return
+      }
+      if (message.type === "status") return onStatus(message)
       void handle(message)
     })
     ws.addEventListener("close", (event) => {
@@ -353,6 +377,7 @@ function connect() {
       clearInterval(pingTimer)
       socket = undefined
       socketPort = undefined
+      onSocketEnd(welcomed || !opened)
       scheduleReconnect()
     })
     ws.addEventListener("error", () => {
@@ -450,6 +475,8 @@ chrome.alarms.create(ALARM, { periodInMinutes: 0.5 })
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM) connect()
 })
+
+importScripts("lynx.js")
 
 chrome.runtime.onStartup.addListener(connect)
 chrome.runtime.onInstalled.addListener(connect)

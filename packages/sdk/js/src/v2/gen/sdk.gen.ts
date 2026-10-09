@@ -31,7 +31,13 @@ import type {
   BrowserCommand,
   BrowserExtensionConnectErrors,
   BrowserExtensionConnectResponses,
+  BrowserExtensionPairErrors,
+  BrowserExtensionPairResponses,
   BrowserInput,
+  BrowserPdfFileErrors,
+  BrowserPdfFileResponses,
+  BrowserPdfViewerErrors,
+  BrowserPdfViewerResponses,
   CommandListErrors,
   CommandListResponses,
   Config as Config3,
@@ -52,10 +58,18 @@ import type {
   ExperimentalBrowserFrameResponses,
   ExperimentalBrowserInputErrors,
   ExperimentalBrowserInputResponses,
+  ExperimentalBrowserLessonsErrors,
+  ExperimentalBrowserLessonsResponses,
+  ExperimentalBrowserSiteErrors,
+  ExperimentalBrowserSiteForgetErrors,
+  ExperimentalBrowserSiteForgetResponses,
+  ExperimentalBrowserSiteResponses,
   ExperimentalBrowserStatusErrors,
   ExperimentalBrowserStatusResponses,
   ExperimentalBrowserStreamErrors,
   ExperimentalBrowserStreamResponses,
+  ExperimentalBrowserTrailErrors,
+  ExperimentalBrowserTrailResponses,
   ExperimentalCapabilitiesGetErrors,
   ExperimentalCapabilitiesGetResponses,
   ExperimentalConsoleGetErrors,
@@ -65,6 +79,14 @@ import type {
   ExperimentalConsoleSwitchOrgResponses,
   ExperimentalControlPlaneMoveSessionErrors,
   ExperimentalControlPlaneMoveSessionResponses,
+  ExperimentalDatasetExportErrors,
+  ExperimentalDatasetExportResponses,
+  ExperimentalNotebookGetErrors,
+  ExperimentalNotebookGetResponses,
+  ExperimentalNotebookListErrors,
+  ExperimentalNotebookListResponses,
+  ExperimentalOllamaStatusErrors,
+  ExperimentalOllamaStatusResponses,
   ExperimentalProjectCopyGenerateNameErrors,
   ExperimentalProjectCopyGenerateNameResponses,
   ExperimentalResourceListErrors,
@@ -75,10 +97,28 @@ import type {
   ExperimentalSessionBackgroundResponses,
   ExperimentalSessionListErrors,
   ExperimentalSessionListResponses,
+  ExperimentalSocialAddErrors,
+  ExperimentalSocialAddResponses,
+  ExperimentalSocialClaimErrors,
+  ExperimentalSocialClaimResponses,
+  ExperimentalSocialEditErrors,
+  ExperimentalSocialEditResponses,
+  ExperimentalSocialListErrors,
+  ExperimentalSocialListResponses,
+  ExperimentalSocialPrepareErrors,
+  ExperimentalSocialPrepareResponses,
+  ExperimentalSocialRemoveErrors,
+  ExperimentalSocialRemoveResponses,
+  ExperimentalSocialReportErrors,
+  ExperimentalSocialReportResponses,
   ExperimentalUsageEtaErrors,
   ExperimentalUsageEtaResponses,
+  ExperimentalUsageSkillsErrors,
+  ExperimentalUsageSkillsResponses,
   ExperimentalUsageSpendErrors,
   ExperimentalUsageSpendResponses,
+  ExperimentalUsageWeekErrors,
+  ExperimentalUsageWeekResponses,
   ExperimentalWebVideoModelsErrors,
   ExperimentalWebVideoModelsResponses,
   ExperimentalWebVideoSettingsErrors,
@@ -1181,6 +1221,42 @@ export class Usage extends HeyApiClient {
   }
 
   /**
+   * Get the weekly summary
+   *
+   * Sessions, time, spend, tool errors and the most reliable model since `since` (ms), across all sessions.
+   */
+  public week<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      since?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "since" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalUsageWeekResponses,
+      ExperimentalUsageWeekErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/usage/week",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * Estimate time left
    *
    * Estimate how long the session's request in progress will still take, from past requests and the agent's todo list.
@@ -1215,96 +1291,13 @@ export class Usage extends HeyApiClient {
       ...params,
     })
   }
-}
 
-export class Roteia extends HeyApiClient {
   /**
-   * Get Roteia status
+   * Get the most used skills
    *
-   * Whether a Roteia API key is configured, where it comes from and how many models it loaded; with `test`, whether Roteia accepts the key.
+   * Skills run by the agent or attached to a message in the last 60 days, across all sessions, most used first.
    */
-  public status<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      workspace?: string
-      test?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-            { in: "query", key: "test" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<
-      ExperimentalRoteiaStatusResponses,
-      ExperimentalRoteiaStatusErrors,
-      ThrowOnError
-    >({
-      url: "/experimental/roteia/status",
-      ...options,
-      ...params,
-    })
-  }
-}
-
-export class Settings extends HeyApiClient {
-  /**
-   * Update web video defaults
-   *
-   * Update the defaults the generate_web_video tool uses when options are omitted.
-   */
-  public update<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      workspace?: string
-      webVideoDefaults?: WebVideoDefaults
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "workspace" },
-            { key: "webVideoDefaults", map: "body" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).put<
-      ExperimentalWebVideoSettingsUpdateResponses,
-      ExperimentalWebVideoSettingsUpdateErrors,
-      ThrowOnError
-    >({
-      url: "/experimental/web-video/settings",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-}
-
-export class WebVideo extends HeyApiClient {
-  /**
-   * List web video models
-   *
-   * List NanoGPT video models with parsed capabilities, and whether a NanoGPT API key is configured on the server.
-   */
-  public models<ThrowOnError extends boolean = false>(
+  public skills<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
       workspace?: string
@@ -1323,25 +1316,29 @@ export class WebVideo extends HeyApiClient {
       ],
     )
     return (options?.client ?? this.client).get<
-      ExperimentalWebVideoModelsResponses,
-      ExperimentalWebVideoModelsErrors,
+      ExperimentalUsageSkillsResponses,
+      ExperimentalUsageSkillsErrors,
       ThrowOnError
     >({
-      url: "/experimental/web-video/models",
+      url: "/experimental/usage/skills",
       ...options,
       ...params,
     })
   }
+}
 
+export class Site extends HeyApiClient {
   /**
-   * Get web video defaults
+   * Forget one note about a site
    *
-   * Get the defaults the generate_web_video tool uses when options are omitted.
+   * Removes note number `note` (1-based) from the site of `url`.
    */
-  public settings<ThrowOnError extends boolean = false>(
-    parameters?: {
+  public forget<ThrowOnError extends boolean = false>(
+    parameters: {
       directory?: string
       workspace?: string
+      url: string
+      note: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1352,28 +1349,95 @@ export class WebVideo extends HeyApiClient {
           args: [
             { in: "query", key: "directory" },
             { in: "query", key: "workspace" },
+            { in: "query", key: "url" },
+            { in: "query", key: "note" },
           ],
         },
       ],
     )
-    return (options?.client ?? this.client).get<
-      ExperimentalWebVideoSettingsResponses,
-      ExperimentalWebVideoSettingsErrors,
+    return (options?.client ?? this.client).delete<
+      ExperimentalBrowserSiteForgetResponses,
+      ExperimentalBrowserSiteForgetErrors,
       ThrowOnError
     >({
-      url: "/experimental/web-video/settings",
+      url: "/experimental/browser/site",
       ...options,
       ...params,
     })
-  }
-
-  private _settings?: Settings
-  get settings2(): Settings {
-    return (this._settings ??= new Settings({ client: this.client }))
   }
 }
 
 export class Browser extends HeyApiClient {
+  /**
+   * Get what the agent learned about a site
+   *
+   * Notes and saved programs kept for the site of `url`; nothing for pages off the web.
+   */
+  public site<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      workspace?: string
+      url: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "url" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalBrowserSiteResponses,
+      ExperimentalBrowserSiteErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/browser/site",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List the course's activities
+   *
+   * Reads the course index of the page open in the browser (Moodle) and says which activities are done. Only reads; `error` says why nothing was read.
+   */
+  public lessons<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalBrowserLessonsResponses,
+      ExperimentalBrowserLessonsErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/browser/lessons",
+      ...options,
+      ...params,
+    })
+  }
+
   /**
    * Get browser status
    *
@@ -1403,6 +1467,44 @@ export class Browser extends HeyApiClient {
       ThrowOnError
     >({
       url: "/experimental/browser/status",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get the picture after a browser step
+   *
+   * A small picture of the page as it was after the given browser tool call, for looking back over what the agent did. Empty when none was kept.
+   */
+  public trail<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      callID: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "callID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalBrowserTrailResponses,
+      ExperimentalBrowserTrailErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/browser/trail/{sessionID}/{callID}",
       ...options,
       ...params,
     })
@@ -1556,6 +1658,631 @@ export class Browser extends HeyApiClient {
         ...params.headers,
       },
     })
+  }
+
+  private _site?: Site
+  get site2(): Site {
+    return (this._site ??= new Site({ client: this.client }))
+  }
+}
+
+export class Notebook extends HeyApiClient {
+  /**
+   * List the study notebook's subjects
+   *
+   * Subjects with explained answers the agent kept, most recent first.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalNotebookListResponses,
+      ExperimentalNotebookListErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/notebook",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get one subject of the study notebook
+   *
+   * The explained answers kept for one subject, oldest first.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      subject: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "subject" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalNotebookGetResponses,
+      ExperimentalNotebookGetErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/notebook/{subject}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Social extends HeyApiClient {
+  /**
+   * List the posting queue
+   *
+   * Videos waiting to be posted, being posted, posted or failed, by time; and the folder their sessions run in.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalSocialListResponses,
+      ExperimentalSocialListErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/social",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Queue a video to post
+   *
+   * Copies the video at `source` and queues one post per network for the time `at`.
+   */
+  public add<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      source?: string
+      networks?: Array<"instagram" | "tiktok">
+      at?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      notes?: string
+      caption?: string
+      model?: {
+        providerID: string
+        modelID: string
+      }
+      frames?: Array<string>
+      duration?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      width?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      height?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "source" },
+            { in: "body", key: "networks" },
+            { in: "body", key: "at" },
+            { in: "body", key: "notes" },
+            { in: "body", key: "caption" },
+            { in: "body", key: "model" },
+            { in: "body", key: "frames" },
+            { in: "body", key: "duration" },
+            { in: "body", key: "width" },
+            { in: "body", key: "height" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperimentalSocialAddResponses,
+      ExperimentalSocialAddErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/social",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Remove a post from the queue
+   *
+   * Removes the post and its copy of the video.
+   */
+  public remove<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      ExperimentalSocialRemoveResponses,
+      ExperimentalSocialRemoveErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/social/{id}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Change a queued post
+   *
+   * Changes its time, notes, caption or network; `status: scheduled` retries a failed post and `prepare` asks for a new caption now. A post being made is left alone.
+   */
+  public edit<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+      at?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      notes?: string
+      caption?: string
+      network?: "instagram" | "tiktok"
+      status?: "scheduled"
+      prepare?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "at" },
+            { in: "body", key: "notes" },
+            { in: "body", key: "caption" },
+            { in: "body", key: "network" },
+            { in: "body", key: "status" },
+            { in: "body", key: "prepare" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<
+      ExperimentalSocialEditResponses,
+      ExperimentalSocialEditErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/social/{id}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Start making a due post
+   *
+   * Marks a due post as being made by the session, once; nothing comes back if it was not due or already taken.
+   */
+  public claim<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+      sessionID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "sessionID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperimentalSocialClaimResponses,
+      ExperimentalSocialClaimErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/social/{id}/claim",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Start preparing a post's caption
+   *
+   * Marks a post's caption as being written by the session, once, when it is ten minutes from its time or the person asked for it.
+   */
+  public prepare<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+      sessionID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "sessionID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperimentalSocialPrepareResponses,
+      ExperimentalSocialPrepareErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/social/{id}/prepare",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Say how a post went
+   *
+   * For a session that ended without the agent reporting: marks the post posted or failed, or its caption as not prepared.
+   */
+  public report<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      workspace?: string
+      status?: "posted" | "failed" | "unprepared"
+      reason?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "body", key: "status" },
+            { in: "body", key: "reason" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperimentalSocialReportResponses,
+      ExperimentalSocialReportErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/social/{id}/report",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Roteia extends HeyApiClient {
+  /**
+   * Get Roteia status
+   *
+   * Whether a Roteia API key is configured, where it comes from and how many models it loaded; with `test`, whether Roteia accepts the key.
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      test?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "test" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalRoteiaStatusResponses,
+      ExperimentalRoteiaStatusErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/roteia/status",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Dataset extends HeyApiClient {
+  /**
+   * Export the training dataset
+   *
+   * Writes the turns rated Approved or Excellent (or only Excellent, with min=excellent) as chat JSONL to the Downloads folder.
+   */
+  public export<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      min?: "approved" | "excellent"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { in: "query", key: "min" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperimentalDatasetExportResponses,
+      ExperimentalDatasetExportErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/dataset/export",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Ollama extends HeyApiClient {
+  /**
+   * Get Ollama status
+   *
+   * Whether Ollama runs on this machine, its installed models, the CPU/RAM/GPU found, and which models fit them.
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalOllamaStatusResponses,
+      ExperimentalOllamaStatusErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/ollama/status",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Settings extends HeyApiClient {
+  /**
+   * Update web video defaults
+   *
+   * Update the defaults the generate_web_video tool uses when options are omitted.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+      webVideoDefaults?: WebVideoDefaults
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+            { key: "webVideoDefaults", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<
+      ExperimentalWebVideoSettingsUpdateResponses,
+      ExperimentalWebVideoSettingsUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/web-video/settings",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class WebVideo extends HeyApiClient {
+  /**
+   * List web video models
+   *
+   * List NanoGPT video models with parsed capabilities, and whether a NanoGPT API key is configured on the server.
+   */
+  public models<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalWebVideoModelsResponses,
+      ExperimentalWebVideoModelsErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/web-video/models",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get web video defaults
+   *
+   * Get the defaults the generate_web_video tool uses when options are omitted.
+   */
+  public settings<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalWebVideoSettingsResponses,
+      ExperimentalWebVideoSettingsErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/web-video/settings",
+      ...options,
+      ...params,
+    })
+  }
+
+  private _settings?: Settings
+  get settings2(): Settings {
+    return (this._settings ??= new Settings({ client: this.client }))
   }
 }
 
@@ -1908,19 +2635,39 @@ export class Experimental extends HeyApiClient {
     return (this._usage ??= new Usage({ client: this.client }))
   }
 
+  private _browser?: Browser
+  get browser(): Browser {
+    return (this._browser ??= new Browser({ client: this.client }))
+  }
+
+  private _notebook?: Notebook
+  get notebook(): Notebook {
+    return (this._notebook ??= new Notebook({ client: this.client }))
+  }
+
+  private _social?: Social
+  get social(): Social {
+    return (this._social ??= new Social({ client: this.client }))
+  }
+
   private _roteia?: Roteia
   get roteia(): Roteia {
     return (this._roteia ??= new Roteia({ client: this.client }))
   }
 
+  private _dataset?: Dataset
+  get dataset(): Dataset {
+    return (this._dataset ??= new Dataset({ client: this.client }))
+  }
+
+  private _ollama?: Ollama
+  get ollama(): Ollama {
+    return (this._ollama ??= new Ollama({ client: this.client }))
+  }
+
   private _webVideo?: WebVideo
   get webVideo(): WebVideo {
     return (this._webVideo ??= new WebVideo({ client: this.client }))
-  }
-
-  private _browser?: Browser
-  get browser(): Browser {
-    return (this._browser ??= new Browser({ client: this.client }))
   }
 
   private _projectCopy?: ProjectCopy
@@ -7744,12 +8491,70 @@ export class Extension extends HeyApiClient {
       ThrowOnError
     >({ url: "/experimental/browser/extension", ...options })
   }
+
+  /**
+   * Pair the browser extension
+   *
+   * Gives the Lynx Code browser extension the browser.extensionToken so it pairs without the person pasting it. Answers only requests from the extension's own chrome-extension:// origin.
+   */
+  public pair<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<
+      BrowserExtensionPairResponses,
+      BrowserExtensionPairErrors,
+      ThrowOnError
+    >({ url: "/experimental/browser/extension/pair", ...options })
+  }
+}
+
+export class Pdf extends HeyApiClient {
+  /**
+   * Show a PDF the agent downloaded
+   *
+   * HTML page that draws a PDF the browsing agent downloaded, so the browser can show it.
+   */
+  public viewer<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "id" }] }])
+    return (options?.client ?? this.client).get<BrowserPdfViewerResponses, BrowserPdfViewerErrors, ThrowOnError>({
+      url: "/experimental/browser/pdf/{id}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get a PDF the agent downloaded
+   *
+   * The bytes of a PDF the browsing agent downloaded.
+   */
+  public file<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "id" }] }])
+    return (options?.client ?? this.client).get<BrowserPdfFileResponses, BrowserPdfFileErrors, ThrowOnError>({
+      url: "/experimental/browser/pdf/{id}/file",
+      ...options,
+      ...params,
+    })
+  }
 }
 
 export class Browser2 extends HeyApiClient {
   private _extension?: Extension
   get extension(): Extension {
     return (this._extension ??= new Extension({ client: this.client }))
+  }
+
+  private _pdf?: Pdf
+  get pdf(): Pdf {
+    return (this._pdf ??= new Pdf({ client: this.client }))
   }
 }
 

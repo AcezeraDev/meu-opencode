@@ -461,6 +461,19 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                     aria-pressed={location.pathname === "/week"}
                   />
                 </TooltipV2>
+                <TooltipV2 placement="bottom" value={language.t("social.open")} class="shrink-0">
+                  <IconButtonV2
+                    type="button"
+                    variant="ghost-muted"
+                    size="large"
+                    class="!w-9 shrink-0"
+                    icon={<Icon name="cloud-upload" size="small" />}
+                    state={location.pathname === "/social" ? "pressed" : undefined}
+                    onClick={() => navigate("/social")}
+                    aria-label={language.t("social.open")}
+                    aria-pressed={location.pathname === "/social"}
+                  />
+                </TooltipV2>
 
                 <TitlebarTabStrip
                   tabs={tabsStore}

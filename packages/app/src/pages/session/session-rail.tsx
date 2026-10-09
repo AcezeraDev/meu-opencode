@@ -1,4 +1,5 @@
 import { createMemo, For, Match, Switch } from "solid-js"
+import { useCommand } from "@/context/command"
 import { useLanguage } from "@/context/language"
 import { usePermission } from "@/context/permission"
 import { useSDK } from "@/context/sdk"
@@ -19,6 +20,7 @@ export function SessionRail(props: { current?: string }) {
   const server = useServer()
   const tabs = useTabs()
   const language = useLanguage()
+  const command = useCommand()
 
   const sessions = createMemo(() =>
     [...sync().data.session]
@@ -48,6 +50,10 @@ export function SessionRail(props: { current?: string }) {
 
   return (
     <nav class="session-rail" aria-label={language.t("session.rail.title")}>
+      <button type="button" class="session-rail-new" onClick={() => command.trigger("session.new")}>
+        <span aria-hidden="true">+</span>
+        {language.t("session.rail.new")}
+      </button>
       <div class="session-rail-title">{language.t("session.rail.title")}</div>
       <div class="session-rail-list">
         <For each={sessions()}>

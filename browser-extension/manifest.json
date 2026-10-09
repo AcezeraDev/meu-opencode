@@ -1,12 +1,33 @@
 {
   "manifest_version": 3,
   "name": "Lynx Code",
-  "version": "0.8.0",
-  "description": "Deixa a Lynx, a IA do Lynx Code, dirigir este navegador (seu perfil real) pelo protocolo DevTools.",
-  "permissions": ["debugger", "tabs", "storage", "alarms"],
+  "version": "0.9.0",
+  "description": "Deixa a Lynx, a IA do Lynx Code, dirigir este navegador (seu perfil real) pelo protocolo DevTools, e pedir coisas a ela sem sair da página.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3fOQG1udxTg/rZs8aWTDuWXGeTs6G9Kgpm3ipZ8QqVrmauNTvIORY5KbtAgDVsJJw5LM9Qpq+DyaDmcskDWz+YKXfGYWABllomq7BmA8igPq52SUXtHvKn/Fl36wNYJ2+p3Fq5cj47RuGe1RQ1e+G17qkGo/ZuHR+2cEZxSuVahcxpalhfSSFgXAJ2tqJHlcs5yvfypbBRrzt7V31CXGQFMuHXO9EI594hUAKBxV9Jd9LQHrVeYWQgprKcPfjxs4z94EyqWYwrVDYJoOTM+cJnQsYzEqi4+UwEhcvD+TiuMuDO7ER3MN9WXGdWnNcBkkeZFBV+CmxE+dTNOS7IrkDQIDAQAB",
+  "permissions": ["debugger", "tabs", "storage", "alarms", "sidePanel", "contextMenus", "notifications", "tabGroups"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["page.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "commands": {
+    "open-panel": {
+      "suggested_key": { "default": "Alt+L" },
+      "description": "Abrir o painel da Lynx nesta aba"
+    },
+    "stop-lynx": {
+      "suggested_key": { "default": "Alt+Shift+L" },
+      "description": "Parar a Lynx agora"
+    }
   },
   "action": {
     "default_popup": "popup.html",

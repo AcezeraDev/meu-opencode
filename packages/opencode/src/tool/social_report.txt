@@ -1,0 +1,6 @@
+Records in the posting queue how a scheduled post went, or the caption prepared for it.
+
+Call it exactly once per task, at the end:
+- status "prepared" when the task was only to prepare the caption: include the caption, a one or two sentence analysis of what the video shows and, if you read the profile, a short profile summary.
+- status "posted" only after the site itself confirmed the post went out (a "shared" / "published" message, or the post showing on the profile). Include the caption that was posted and the post's link when you can see it.
+- status "failed" when it cannot be posted, with a short reason the person can act on: not signed in, the video was rejected, the site asked for a verification, the page never finished uploading.

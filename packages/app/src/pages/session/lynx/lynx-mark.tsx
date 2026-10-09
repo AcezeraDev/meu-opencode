@@ -65,8 +65,8 @@ export function LynxMark(props: { sessionID?: string }) {
       <svg viewBox="0 0 64 64" width="22" height="22" aria-hidden="true">
         <defs>
           <radialGradient id={`${id}-g`} cx="0.5" cy="0.38" r="0.65">
-            <stop offset="0" stop-color="#22D3EE" />
-            <stop offset="1" stop-color="#6366F1" />
+            <stop offset="0" stop-color="#FF6B5B" />
+            <stop offset="1" stop-color="#E5484D" />
           </radialGradient>
           <clipPath id={`${id}-c`}>
             <circle cx="32" cy="32" r="21" />

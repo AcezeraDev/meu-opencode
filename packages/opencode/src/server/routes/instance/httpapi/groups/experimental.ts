@@ -165,6 +165,80 @@ const NotebookPage = Schema.Struct({
   entries: Schema.Array(NotebookEntry),
 }).annotate({ identifier: "NotebookPage" })
 
+// The posting queue: videos the social agent posts at the time the person chose.
+const SocialNetwork = Schema.Literals(["instagram", "tiktok"])
+const SocialModel = Schema.Struct({ providerID: Schema.String, modelID: Schema.String })
+const SocialPost = Schema.Struct({
+  id: Schema.String,
+  video: Schema.String,
+  name: Schema.String,
+  network: SocialNetwork,
+  at: Schema.Number,
+  notes: Schema.String,
+  caption: Schema.optional(Schema.String),
+  model: Schema.optional(SocialModel),
+  status: Schema.Literals(["scheduled", "producing", "posted", "failed"]),
+  sessionID: Schema.optional(Schema.String),
+  started: Schema.optional(Schema.Number),
+  frames: Schema.optional(Schema.Array(Schema.String)),
+  duration: Schema.optional(Schema.Number),
+  width: Schema.optional(Schema.Number),
+  height: Schema.optional(Schema.Number),
+  draft: Schema.optional(Schema.String),
+  analysis: Schema.optional(Schema.String),
+  prep: Schema.optional(
+    Schema.Struct({
+      sessionID: Schema.String,
+      started: Schema.Number,
+      status: Schema.Literals(["running", "done", "failed"]),
+      error: Schema.optional(Schema.String),
+    }),
+  ),
+  prepNow: Schema.optional(Schema.Boolean),
+  /** On a claim: the caption to post, saved as a write_text reference so it is typed exactly. */
+  captionRef: Schema.optional(Schema.String),
+  posted: Schema.optional(Schema.String),
+  url: Schema.optional(Schema.String),
+  error: Schema.optional(Schema.String),
+  created: Schema.Number,
+  updated: Schema.Number,
+}).annotate({ identifier: "SocialPost" })
+const SocialQueueResponse = Schema.Struct({
+  directory: Schema.String,
+  posts: Schema.Array(SocialPost),
+  /** What the social-prep agent learned of each account, to reuse instead of reading the profile again. */
+  profiles: Schema.Struct({
+    instagram: Schema.optional(Schema.Struct({ summary: Schema.String, updated: Schema.Number })),
+    tiktok: Schema.optional(Schema.Struct({ summary: Schema.String, updated: Schema.Number })),
+  }),
+}).annotate({ identifier: "SocialQueue" })
+export const SocialAddPayload = Schema.Struct({
+  source: Schema.String,
+  networks: Schema.Array(SocialNetwork),
+  at: Schema.Number,
+  notes: Schema.optional(Schema.String),
+  caption: Schema.optional(Schema.String),
+  model: Schema.optional(SocialModel),
+  /** JPEG data URLs of stills the app took from the video. */
+  frames: Schema.optional(Schema.Array(Schema.String)),
+  duration: Schema.optional(Schema.Number),
+  width: Schema.optional(Schema.Number),
+  height: Schema.optional(Schema.Number),
+})
+export const SocialEditPayload = Schema.Struct({
+  at: Schema.optional(Schema.Number),
+  notes: Schema.optional(Schema.String),
+  caption: Schema.optional(Schema.String),
+  network: Schema.optional(SocialNetwork),
+  status: Schema.optional(Schema.Literal("scheduled")),
+  prepare: Schema.optional(Schema.Boolean),
+})
+export const SocialClaimPayload = Schema.Struct({ sessionID: Schema.String })
+export const SocialReportPayload = Schema.Struct({
+  status: Schema.Literals(["posted", "failed", "unprepared"]),
+  reason: Schema.optional(Schema.String),
+})
+
 // The Roteia provider's card in settings. Only whether a key is set and where it
 // comes from, never the key; `test` also asks Roteia whether it accepts it.
 export const RoteiaStatusQuery = Schema.Struct({
@@ -252,6 +326,11 @@ const UsageEta = Schema.Struct({
   runs: Schema.Number,
   todos: Schema.optional(Schema.Struct({ total: Schema.Number, done: Schema.Number })),
 }).annotate({ identifier: "UsageEta" })
+
+// The skills the person reaches for most, newest use first among equals, for one-click shortcuts.
+const UsageSkills = Schema.Struct({
+  skills: Schema.Array(Schema.Struct({ name: Schema.String, count: Schema.Number, last: Schema.Number })),
+}).annotate({ identifier: "UsageSkills" })
 
 // Capability data comes from NanoGPT's catalog and is shaped by
 // @opencode-ai/core/web-video; the API key itself is never part of any response.
@@ -373,9 +452,15 @@ export const ExperimentalPaths = {
   webVideoModels: "/experimental/web-video/models",
   usageSpend: "/experimental/usage/spend",
   usageEta: "/experimental/usage/eta",
+  usageSkills: "/experimental/usage/skills",
   usageWeek: "/experimental/usage/week",
   notebook: "/experimental/notebook",
   notebookSubject: "/experimental/notebook/:subject",
+  social: "/experimental/social",
+  socialPost: "/experimental/social/:id",
+  socialClaim: "/experimental/social/:id/claim",
+  socialReport: "/experimental/social/:id/report",
+  socialPrepare: "/experimental/social/:id/prepare",
   roteiaStatus: "/experimental/roteia/status",
   ollamaStatus: "/experimental/ollama/status",
   datasetExport: "/experimental/dataset/export",
@@ -617,6 +702,92 @@ export const ExperimentalApi = HttpApi.make("experimental")
             description: "The explained answers kept for one subject, oldest first.",
           }),
         ),
+        HttpApiEndpoint.get("social", ExperimentalPaths.social, {
+          query: WorkspaceRoutingQuery,
+          success: described(SocialQueueResponse, "The posting queue"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.social.list",
+            summary: "List the posting queue",
+            description:
+              "Videos waiting to be posted, being posted, posted or failed, by time; and the folder their sessions run in.",
+          }),
+        ),
+        HttpApiEndpoint.post("socialAdd", ExperimentalPaths.social, {
+          query: WorkspaceRoutingQuery,
+          payload: SocialAddPayload,
+          success: described(Schema.Array(SocialPost), "The posts queued, one per network"),
+          error: HttpApiError.BadRequest,
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.social.add",
+            summary: "Queue a video to post",
+            description: "Copies the video at `source` and queues one post per network for the time `at`.",
+          }),
+        ),
+        HttpApiEndpoint.patch("socialEdit", ExperimentalPaths.socialPost, {
+          params: { id: Schema.String },
+          query: WorkspaceRoutingQuery,
+          payload: SocialEditPayload,
+          success: described(Schema.optional(SocialPost), "The post after the change"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.social.edit",
+            summary: "Change a queued post",
+            description:
+              "Changes its time, notes, caption or network; `status: scheduled` retries a failed post and `prepare` asks for a new caption now. A post being made is left alone.",
+          }),
+        ),
+        HttpApiEndpoint.delete("socialRemove", ExperimentalPaths.socialPost, {
+          params: { id: Schema.String },
+          query: WorkspaceRoutingQuery,
+          success: described(Schema.optional(SocialPost), "The post removed"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.social.remove",
+            summary: "Remove a post from the queue",
+            description: "Removes the post and its copy of the video.",
+          }),
+        ),
+        HttpApiEndpoint.post("socialClaim", ExperimentalPaths.socialClaim, {
+          params: { id: Schema.String },
+          query: WorkspaceRoutingQuery,
+          payload: SocialClaimPayload,
+          success: described(Schema.optional(SocialPost), "The post, if it was due and free"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.social.claim",
+            summary: "Start making a due post",
+            description:
+              "Marks a due post as being made by the session, once; nothing comes back if it was not due or already taken.",
+          }),
+        ),
+        HttpApiEndpoint.post("socialPrepare", ExperimentalPaths.socialPrepare, {
+          params: { id: Schema.String },
+          query: WorkspaceRoutingQuery,
+          payload: SocialClaimPayload,
+          success: described(Schema.optional(SocialPost), "The post, if its caption was due to be prepared"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.social.prepare",
+            summary: "Start preparing a post's caption",
+            description:
+              "Marks a post's caption as being written by the session, once, when it is ten minutes from its time or the person asked for it.",
+          }),
+        ),
+        HttpApiEndpoint.post("socialReport", ExperimentalPaths.socialReport, {
+          params: { id: Schema.String },
+          query: WorkspaceRoutingQuery,
+          payload: SocialReportPayload,
+          success: described(Schema.optional(SocialPost), "The post after the report"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.social.report",
+            summary: "Say how a post went",
+            description:
+              "For a session that ended without the agent reporting: marks the post posted or failed, or its caption as not prepared.",
+          }),
+        ),
         HttpApiEndpoint.get("roteiaStatus", ExperimentalPaths.roteiaStatus, {
           query: RoteiaStatusQuery,
           success: described(RoteiaStatus, "Whether Roteia is connected"),
@@ -659,6 +830,17 @@ export const ExperimentalApi = HttpApi.make("experimental")
             summary: "Estimate time left",
             description:
               "Estimate how long the session's request in progress will still take, from past requests and the agent's todo list.",
+          }),
+        ),
+        HttpApiEndpoint.get("usageSkills", ExperimentalPaths.usageSkills, {
+          query: WorkspaceRoutingQuery,
+          success: described(UsageSkills, "The skills used most"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "experimental.usage.skills",
+            summary: "Get the most used skills",
+            description:
+              "Skills run by the agent or attached to a message in the last 60 days, across all sessions, most used first.",
           }),
         ),
         HttpApiEndpoint.get("webVideoModels", ExperimentalPaths.webVideoModels, {

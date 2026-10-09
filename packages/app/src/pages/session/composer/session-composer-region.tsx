@@ -14,6 +14,8 @@ export function SessionComposerRegion(props: {
   promptInput: JSX.Element
   /** Live readouts shown above the composer while the agent works. */
   measurement?: JSX.Element
+  /** The transcript asks for permission itself (terminal mode), so the dock stays out of the way. */
+  inlinePermission?: boolean
 }) {
   const language = useLanguage()
   const controller = props.controller
@@ -47,7 +49,7 @@ export function SessionComposerRegion(props: {
           )}
         </Show>
 
-        <Show when={controller.state.permissionRequest()} keyed>
+        <Show when={!props.inlinePermission && controller.state.permissionRequest()} keyed>
           {(request) => (
             <div ref={riseIn}>
               <SessionPermissionDock

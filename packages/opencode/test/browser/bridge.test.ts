@@ -32,6 +32,9 @@ function harness(token = "secret") {
   }
 }
 
+/** The welcome and status a pairing gets, which tests about the relay leave out. */
+const greeting = (message: object) => ["welcome", "status"].includes((message as { type?: string }).type ?? "")
+
 describe("browser bridge", () => {
   test("relays every CDP event a tab listens to", async () => {
     const source = await Bun.file(path.join(import.meta.dir, "../../src/browser/tab.ts")).text()
@@ -218,7 +221,7 @@ describe("browser bridge", () => {
     // A restarted extension worker opens a second socket before the first is gone.
     const sent: any[] = []
     const fresh = bridge.accept(
-      (message) => sent.push(message),
+      (message) => !greeting(message) && sent.push(message),
       () => {},
     )
     expect(oldClosed).toBe(true)
@@ -288,7 +291,7 @@ describe("browser bridge", () => {
     // It is back a moment later, on a new socket.
     const sent: any[] = []
     const link = bridge.accept(
-      (message) => sent.push(message),
+      (message) => !greeting(message) && sent.push(message),
       () => {},
     )
     link.receive(JSON.stringify({ type: "auth", token: "secret" }))

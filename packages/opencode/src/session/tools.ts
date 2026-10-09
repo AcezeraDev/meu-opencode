@@ -24,6 +24,7 @@ import { ModelV2 } from "@opencode-ai/core/model"
 import { isRecord } from "@/util/record"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { SessionPause } from "./pause"
+import { BrowserLook } from "@/browser/look"
 
 const MCP_RESOURCE_TOOLS = {
   list: "list_mcp_resources",
@@ -51,7 +52,10 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   permissionMode: Effect.Effect<Permission.Mode | undefined>
   /** Whether the person paused the session; a tool call waits before starting while it is. */
   paused?: Effect.Effect<boolean>
+  /** Whether the browser is in look only; see BrowserLook. */
+  browserLook?: Effect.Effect<boolean>
 }) {
+  const look = input.browserLook ?? Effect.succeed(false)
   const hold = (signal?: AbortSignal) => (input.paused ? SessionPause.hold(input.paused, signal) : Effect.void)
   const tools: Record<string, AITool> = {}
   const run = yield* EffectBridge.make()
@@ -84,8 +88,14 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
           },
         }
       }),
+    browserLook: look,
     ask: (req) =>
-      input.permissionMode.pipe(
+      look.pipe(
+        Effect.flatMap((on) =>
+          on && BrowserLook.blocks(req.permission, req.metadata?.["action"])
+            ? Effect.die(new Error(BrowserLook.MESSAGE))
+            : input.permissionMode,
+        ),
         Effect.flatMap((mode) =>
           permission.ask({
             ...req,

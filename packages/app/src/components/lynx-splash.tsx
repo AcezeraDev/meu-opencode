@@ -53,11 +53,11 @@ export function LynxSplash() {
             <svg viewBox="0 0 64 64" width="72" height="72">
               <defs>
                 <radialGradient id="lynx-splash-grad" cx="0.5" cy="0.38" r="0.65">
-                  <stop offset="0" stop-color="#22D3EE" />
-                  <stop offset="1" stop-color="#6366F1" />
+                  <stop offset="0" stop-color="#FF6B5B" />
+                  <stop offset="1" stop-color="#E5484D" />
                 </radialGradient>
               </defs>
-              <rect width="64" height="64" rx="15" fill="#0B1226" />
+              <rect width="64" height="64" rx="15" fill="#131313" />
               <circle data-motion="l" class="lynx-sign-orb" cx="32" cy="32" r="21" fill="url(#lynx-splash-grad)" />
               <path data-motion="l" class="lynx-sign-gt" d="M22 24 L30 31 L22 38" />
             </svg>

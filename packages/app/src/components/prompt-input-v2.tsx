@@ -18,6 +18,7 @@ import { createPromptSubmit } from "@/components/prompt-input/submit"
 import { createPermissionModeState, PermissionModeControl } from "@/components/prompt-input/permission-mode"
 import { createPauseState, PauseControl } from "@/components/prompt-input/pause-control"
 import { createSkillAttachments, SkillPickerControl } from "@/components/prompt-input/skill-picker"
+import { BrowserLookControl, createBrowserLookState } from "@/components/prompt-input/browser-look"
 import { selectionFromLines, type SelectedLineRange, useFile } from "@/context/file"
 import { useComments } from "@/context/comments"
 import { useCommand } from "@/context/command"
@@ -52,6 +53,7 @@ export type PromptInputV2ComposerController = PromptInputV2Interaction & {
   readonly permissionMode: ReturnType<typeof createPermissionModeState>
   readonly pause: ReturnType<typeof createPauseState>
   readonly skills: ReturnType<typeof createSkillAttachments>
+  readonly browserLook: ReturnType<typeof createBrowserLookState>
 }
 
 export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
@@ -72,6 +74,7 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
           <>
             <PauseControl state={props.controller.pause} />
             <SkillPickerControl skills={props.controller.skills} onClose={props.controller.restoreFocus} />
+            <BrowserLookControl state={props.controller.browserLook} />
             <PermissionModeControl
               current={props.controller.permissionMode.current()}
               onSelect={props.controller.permissionMode.set}
@@ -220,6 +223,11 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     metadata: () => info()?.metadata,
     save: (sessionID, metadata) => sdk().client.session.update({ sessionID, directory: sdk().directory, metadata }),
   })
+  const browserLook = createBrowserLookState({
+    sessionID: () => props.controls.session.id,
+    metadata: () => info()?.metadata,
+    save: (sessionID, metadata) => sdk().client.session.update({ sessionID, directory: sdk().directory, metadata }),
+  })
   const submission = createPromptSubmit({
     prompt,
     info,
@@ -245,6 +253,7 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     onSubmit: props.onSubmit,
     model: props.controls.model.selection,
     permissionMode: permissionMode.current,
+    browserLook: browserLook.on,
   })
 
   const referenceDescription = (reference: ReferenceInfo) =>
@@ -440,6 +449,7 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
   })
   Object.defineProperty(controller, "model", { get: () => props.controls.model })
   Object.defineProperty(controller, "permissionMode", { value: permissionMode })
+  Object.defineProperty(controller, "browserLook", { value: browserLook })
   Object.defineProperty(controller, "pause", {
     value: createPauseState({
       sessionID: () => props.controls.session.id,

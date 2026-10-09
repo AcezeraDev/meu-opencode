@@ -1476,6 +1476,27 @@ describe("session.message-v2.fromError", () => {
     })
   })
 
+  test("detects context overflow from a bare streamed provider error object", () => {
+    // Real error from Roteia (Ling 3.0 Flash VL) that used to stop the session as UnknownError.
+    const result = MessageV2.fromError(
+      {
+        code: 400,
+        message:
+          "{code=400, message=The input (276856 tokens) is longer than the model's context length (262144 tokens)., param=null, type=BadRequestError, integerCode=400}",
+        metadata: { error_type: "invalid_request" },
+      },
+      { providerID },
+    )
+
+    expect(result.name).toBe("ContextOverflowError")
+  })
+
+  test("keeps unrelated bare provider errors unknown", () => {
+    const result = MessageV2.fromError({ code: 500, message: "boom" }, { providerID })
+
+    expect(result.name).toBe("UnknownError")
+  })
+
   test("detects context overflow from APICallError provider messages", () => {
     const cases = [
       "prompt is too long: 213462 tokens > 200000 maximum",

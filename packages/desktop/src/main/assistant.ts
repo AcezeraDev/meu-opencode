@@ -20,8 +20,8 @@ const root = dirname(fileURLToPath(import.meta.url))
 
 const DOT: Record<AgentTrayState["status"], [number, number, number] | undefined> = {
   idle: undefined,
-  working: [34, 211, 238],
-  done: [99, 102, 241],
+  working: [255, 107, 91],
+  done: [229, 72, 77],
   attention: [245, 158, 11],
 }
 
@@ -293,20 +293,20 @@ function iconFor(status: AgentTrayState["status"]) {
   return image
 }
 
-const LOGO = `<svg viewBox="0 0 64 64" width="28" height="28"><defs><radialGradient id="g" cx=".5" cy=".38" r=".65"><stop offset="0" stop-color="#22D3EE"/><stop offset="1" stop-color="#6366F1"/></radialGradient></defs><circle cx="32" cy="32" r="21" fill="url(#g)"/><path d="M22 24 L30 31 L22 38" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><path class="u" d="M33 40 H43" stroke="#fff" stroke-width="5" stroke-linecap="round"/></svg>`
+const LOGO = `<svg viewBox="0 0 64 64" width="28" height="28"><defs><radialGradient id="g" cx=".5" cy=".38" r=".65"><stop offset="0" stop-color="#FF6B5B"/><stop offset="1" stop-color="#E5484D"/></radialGradient></defs><circle cx="32" cy="32" r="21" fill="url(#g)"/><path d="M22 24 L30 31 L22 38" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><path class="u" d="M33 40 H43" stroke="#fff" stroke-width="5" stroke-linecap="round"/></svg>`
 
 const BASE_STYLE = `
-  html, body { margin: 0; height: 100%; background: transparent; color: #e6ebf7; font: 14px "Segoe UI", system-ui, sans-serif; overflow: hidden; }
-  .card { box-sizing: border-box; height: calc(100% - 12px); margin: 6px; padding: 14px 16px; border-radius: 16px; background: rgba(15, 24, 51, 0.97);
-    box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.45), 0 14px 34px rgba(0, 0, 0, 0.45); animation: in 220ms cubic-bezier(.34,1.32,.64,1) both; }
+  html, body { margin: 0; height: 100%; background: transparent; color: #ebebeb; font: 14px "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+  .card { box-sizing: border-box; height: calc(100% - 12px); margin: 6px; padding: 14px 16px; border-radius: 16px; background: rgba(26, 26, 26, 0.97);
+    box-shadow: 0 0 0 1px rgba(255, 107, 91, 0.45), 0 14px 34px rgba(0, 0, 0, 0.45); animation: in 220ms cubic-bezier(.34,1.32,.64,1) both; }
   @keyframes in { from { opacity: 0; transform: translateY(8px) scale(.96); } }
   .u { animation: blink 1.05s steps(1) infinite; } @keyframes blink { 50% { opacity: 0; } }
   input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: #fff; font: inherit; font-size: 16px; }
-  input::placeholder { color: #8b97b8; }
-  small, .mut { color: #8b97b8; font-size: 12px; }
-  button { border: 0; border-radius: 9px; height: 30px; padding: 0 12px; font: inherit; font-size: 12.5px; cursor: pointer; background: rgba(148,163,255,.14); color: #e6ebf7; }
-  button.go { background: linear-gradient(135deg, #22d3ee, #6366f1); color: #fff; font-weight: 600; }
-  kbd { padding: 0 5px; border-radius: 4px; border: 1px solid rgba(148,163,255,.3); border-bottom-width: 2px; font: 11px Consolas, monospace; color: #c7d0ea; }
+  input::placeholder { color: #989898; }
+  small, .mut { color: #989898; font-size: 12px; }
+  button { border: 0; border-radius: 9px; height: 30px; padding: 0 12px; font: inherit; font-size: 12.5px; cursor: pointer; background: rgba(148,163,255,.14); color: #ebebeb; }
+  button.go { background: linear-gradient(135deg, #ff6b5b, #e5484d); color: #fff; font-weight: 600; }
+  kbd { padding: 0 5px; border-radius: 4px; border: 1px solid rgba(148,163,255,.3); border-bottom-width: 2px; font: 11px Consolas, monospace; color: #d0d0d0; }
 `
 
 const QUICK_PAGE = `<!doctype html>
@@ -316,7 +316,7 @@ const QUICK_PAGE = `<!doctype html>
   .row { display: flex; align-items: center; gap: 12px; }
   input, button { -webkit-app-region: no-drag; }
   .mic { width: 34px; height: 34px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
-  .mic:hover { background: rgba(34,211,238,.2); }
+  .mic:hover { background: rgba(255,107,91,.2); }
   body.sent .card { animation: out 260ms cubic-bezier(.65,0,.35,1) forwards; }
   @keyframes out { to { opacity: 0; transform: translate(220px, 160px) scale(.1); } }
 </style></head>
@@ -360,7 +360,7 @@ function bubblePage(state: AgentTrayState) {
 <style>${BASE_STYLE}
   .card { display: flex; flex-direction: column; gap: 10px; }
   .head { display: flex; align-items: center; gap: 10px; }
-  .chip { margin-left: auto; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; background: rgba(34,211,238,.16); box-shadow: inset 0 0 0 1px rgba(34,211,238,.5); }
+  .chip { margin-left: auto; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; background: rgba(255,107,91,.16); box-shadow: inset 0 0 0 1px rgba(255,107,91,.5); }
   .now { padding: 8px 10px; border-radius: 10px; background: rgba(148,163,255,.08); font-size: 12.5px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .ask { display: flex; padding: 6px 10px; border-radius: 10px; box-shadow: inset 0 0 0 1px rgba(148,163,255,.25); }
   .ask input { font-size: 13.5px; }
@@ -392,8 +392,8 @@ function notePage(state: AgentTrayState) {
   .card { display: flex; flex-direction: column; gap: 8px; box-shadow: 0 0 0 1px rgba(245,158,11,.6), 0 14px 34px rgba(0,0,0,.45); }
   .head { display: flex; align-items: center; gap: 10px; }
   .head b { flex: 1; }
-  .x { width: 26px; height: 26px; padding: 0; background: transparent; color: #8b97b8; }
-  .now { font-size: 12.5px; color: #c7d0ea; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .x { width: 26px; height: 26px; padding: 0; background: transparent; color: #989898; }
+  .now { font-size: 12.5px; color: #d0d0d0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .ask { display: flex; gap: 6px; }
   .ask input { padding: 0 10px; border-radius: 9px; box-shadow: inset 0 0 0 1px rgba(148,163,255,.25); font-size: 13px; }
 </style></head>

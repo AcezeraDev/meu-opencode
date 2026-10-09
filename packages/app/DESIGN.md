@@ -2,18 +2,18 @@
 name: Lynx Code
 description: A personal AI coding agent that always wears its logo's colors — white, cyan, indigo and a dark blue.
 colors:
-  lynx-cyan: "#22d3ee"
-  lynx-indigo: "#6366f1"
+  lynx-cyan: "#ff6b5b"
+  lynx-indigo: "#e5484d"
   lynx-navy: "#0b1226"
-  lynx-fill: "#4f46e5 light / #6366f1 dark"
-  space-cyan: "#22d3ee"
+  lynx-fill: "#d13a3f light / #e5484d dark"
+  space-cyan: "#ff6b5b"
   space-green: "#2dd4bf"
-  space-yellow: "#67e8f9"
-  space-blue: "#38bdf8"
-  space-orange: "#60a5fa"
-  space-purple: "#818cf8"
-  space-red: "#6366f1"
-  space-pink: "#a5b4fc"
+  space-yellow: "#ffa79b"
+  space-blue: "#ff8a72"
+  space-orange: "#ff9a8a"
+  space-purple: "#ef7a7e"
+  space-red: "#e5484d"
+  space-pink: "#f6a9ab"
   space-gray: "#94a3b8"
   space-on: "#0b1226"
   ground-deep: "#070b19"
@@ -134,7 +134,7 @@ The world is still built on the colored spaces structure: tokens in `packages/ui
 ## Colors
 
 ### Primary
-- **Lynx Cyan** (`--space`, `--lynx-cyan`): the accent everywhere — focus ring, the active tab tint, the selected project row and settings page, text selection, caret, scrollbars, native controls, the send button and the agent's cursor in the browser. Derived tones: **Space Ink** (`--space-ink`, cyan mixed 82% toward white in dark; the indigo `#4f46e5` in light, where cyan would not read on white) for accent text and icons; **Space Soft** (16%), **Space Line** (42%) and **Space Wash** (28% dark, 10% light); **On Space** (`space-on`, the dark blue) for text on a cyan fill.
+- **Lynx Cyan** (`--space`, `--lynx-coral`): the accent everywhere — focus ring, the active tab tint, the selected project row and settings page, text selection, caret, scrollbars, native controls, the send button and the agent's cursor in the browser. Derived tones: **Space Ink** (`--space-ink`, cyan mixed 82% toward white in dark; the indigo `#d13a3f` in light, where cyan would not read on white) for accent text and icons; **Space Soft** (16%), **Space Line** (42%) and **Space Wash** (28% dark, 10% light); **On Space** (`space-on`, the dark blue) for text on a cyan fill.
 - **Lynx Indigo** (`--lynx-fill`, `--v2-background-bg-accent`): checkboxes, switches, radios, badges and other filled controls with white on them.
 - **Project shades** (`space-cyan` … `space-gray`): a project's own color for its tab and avatar (`--own-space`). The names are the colors a project can pick, kept so saved choices still resolve; each now maps to a shade from cyan to indigo.
 

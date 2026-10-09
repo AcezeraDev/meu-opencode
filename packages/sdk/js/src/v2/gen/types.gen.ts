@@ -1934,6 +1934,14 @@ export type Config = {
   enabled_providers?: Array<string>
   model?: string
   small_model?: string
+  models?: {
+    coding?: string
+    fast?: string
+    reasoning?: string
+    vision?: string
+    evaluation?: string
+    writing?: string
+  }
   default_agent?: string
   subagent_depth?: number
   username?: string
@@ -2017,9 +2025,20 @@ export type Config = {
   compaction?: {
     auto?: boolean
     prune?: boolean
+    max_context?: number
     tail_turns?: number
     preserve_recent_tokens?: number
     reserved?: number
+  }
+  memory?: {
+    enabled?: boolean
+  }
+  limits?: {
+    max_steps?: number
+    max_minutes?: number
+    max_consecutive_errors?: number
+    max_fix_rounds?: number
+    max_calls_per_tool?: number
   }
   websearch?: {
     enabled?: boolean
@@ -2033,6 +2052,12 @@ export type Config = {
     external?: string
     mode?: "process" | "extension"
     extensionToken?: string
+    block?: boolean
+    explain?: boolean
+    sounds?: boolean
+    thoughts?: "cursor" | "card" | "off"
+    ownWindow?: boolean
+    rejectCookies?: boolean
     profile?: string
     viewport?: {
       width?: number
@@ -2281,6 +2306,136 @@ export type UsageSpend = {
   messages: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
 }
 
+export type UsageWeek = {
+  since: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  sessions: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  steps: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  cost: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  modelMs: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  toolMs: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  browserMs: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  tools: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  errors: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  browserActions: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  notebook: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  reliable?: {
+    model: string
+    tools: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    errors: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  }
+  models: Array<{
+    model: string
+    steps: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    cost: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    tools: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    errors: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  }>
+  topErrors: Array<{
+    message: string
+    count: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  }>
+  topSessions: Array<{
+    id: string
+    title: string
+    steps: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    cost: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  }>
+}
+
+export type BrowserSiteInfo = {
+  host: string
+  notes: Array<{
+    text: string
+    at: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  }>
+  programs: Array<{
+    name: string
+    description: string
+    runs: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    failures: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  }>
+}
+
+export type BrowserLessons = {
+  course: string
+  url: string
+  sections: Array<{
+    name: string
+    lessons: Array<{
+      name: string
+      url: string
+      done: boolean
+      tracked: boolean
+      kind: string
+    }>
+  }>
+  error?: string
+}
+
+export type NotebookPage = {
+  subject: string
+  entries: Array<{
+    time: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    sessionID: string
+    place: string
+    activity: string
+    answer: string
+    why: string
+    url: string
+  }>
+}
+
+export type SocialPost = {
+  id: string
+  video: string
+  name: string
+  network: "instagram" | "tiktok"
+  at: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  notes: string
+  caption?: string
+  model?: {
+    providerID: string
+    modelID: string
+  }
+  status: "scheduled" | "producing" | "posted" | "failed"
+  sessionID?: string
+  started?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  frames?: Array<string>
+  duration?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  width?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  height?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  draft?: string
+  analysis?: string
+  prep?: {
+    sessionID: string
+    started: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    status: "running" | "done" | "failed"
+    error?: string
+  }
+  prepNow?: boolean
+  captionRef?: string
+  posted?: string
+  url?: string
+  error?: string
+  created: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  updated: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+}
+
+export type SocialQueue = {
+  directory: string
+  posts: Array<SocialPost>
+  profiles: {
+    instagram?: {
+      summary: string
+      updated: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }
+    tiktok?: {
+      summary: string
+      updated: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }
+  }
+}
+
 export type RoteiaStatus = {
   configured: boolean
   source?: "api" | "env" | "config"
@@ -2289,6 +2444,54 @@ export type RoteiaStatus = {
     ok: boolean
     status?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
     message?: string
+  }
+}
+
+export type DatasetExport = {
+  file: string
+  examples: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  sessions: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  rated: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+}
+
+export type OllamaStatus = {
+  running: boolean
+  host: string
+  version?: string
+  connected: boolean
+  models: Array<{
+    id: string
+    context: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    tools: boolean
+    vision: boolean
+  }>
+  hardware: {
+    platform: string
+    cpu: string
+    threads: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    ramGB: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    freeDiskGB?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    gpus: Array<{
+      name: string
+      vramGB?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      dedicated: boolean
+    }>
+  }
+  recommendation: {
+    accelerator: string
+    budgetGB: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    contextWindow: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    coding?: string
+    fast?: string
+    vision?: string
+    fits: Array<{
+      tag: string
+      context: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      needGB: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+      installed: boolean
+      note: string
+    }>
+    notes: Array<string>
   }
 }
 
@@ -2302,6 +2505,14 @@ export type UsageEta = {
     total: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
     done: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
   }
+}
+
+export type UsageSkills = {
+  skills: Array<{
+    name: string
+    count: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    last: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  }>
 }
 
 export type WebVideoCatalog = {
@@ -2331,6 +2542,10 @@ export type BrowserStatus = {
   title?: string
   tabs: Array<BrowserTab>
   external?: string
+}
+
+export type BrowserTrailShot = {
+  image?: string
 }
 
 export type BrowserFrame = {
@@ -2393,6 +2608,10 @@ export type BrowserCommand =
       action: "resize"
       width: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
       height: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    }
+  | {
+      action: "xray"
+      on: boolean
     }
 
 export type Symbol = {
@@ -8151,6 +8370,426 @@ export type ExperimentalUsageSpendResponses = {
 
 export type ExperimentalUsageSpendResponse = ExperimentalUsageSpendResponses[keyof ExperimentalUsageSpendResponses]
 
+export type ExperimentalUsageWeekData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+    since?: string
+  }
+  url: "/experimental/usage/week"
+}
+
+export type ExperimentalUsageWeekErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalUsageWeekError = ExperimentalUsageWeekErrors[keyof ExperimentalUsageWeekErrors]
+
+export type ExperimentalUsageWeekResponses = {
+  /**
+   * A week of using the agent
+   */
+  200: UsageWeek
+}
+
+export type ExperimentalUsageWeekResponse = ExperimentalUsageWeekResponses[keyof ExperimentalUsageWeekResponses]
+
+export type ExperimentalBrowserSiteForgetData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    workspace?: string
+    url: string
+    note: string
+  }
+  url: "/experimental/browser/site"
+}
+
+export type ExperimentalBrowserSiteForgetErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalBrowserSiteForgetError =
+  ExperimentalBrowserSiteForgetErrors[keyof ExperimentalBrowserSiteForgetErrors]
+
+export type ExperimentalBrowserSiteForgetResponses = {
+  /**
+   * The site after forgetting the note
+   */
+  200: BrowserSiteInfo
+}
+
+export type ExperimentalBrowserSiteForgetResponse =
+  ExperimentalBrowserSiteForgetResponses[keyof ExperimentalBrowserSiteForgetResponses]
+
+export type ExperimentalBrowserSiteData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    workspace?: string
+    url: string
+  }
+  url: "/experimental/browser/site"
+}
+
+export type ExperimentalBrowserSiteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalBrowserSiteError = ExperimentalBrowserSiteErrors[keyof ExperimentalBrowserSiteErrors]
+
+export type ExperimentalBrowserSiteResponses = {
+  /**
+   * What the agent learned about a site
+   */
+  200: BrowserSiteInfo
+}
+
+export type ExperimentalBrowserSiteResponse = ExperimentalBrowserSiteResponses[keyof ExperimentalBrowserSiteResponses]
+
+export type ExperimentalBrowserLessonsData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/browser/lessons"
+}
+
+export type ExperimentalBrowserLessonsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalBrowserLessonsError = ExperimentalBrowserLessonsErrors[keyof ExperimentalBrowserLessonsErrors]
+
+export type ExperimentalBrowserLessonsResponses = {
+  /**
+   * The activities of the course open in the browser
+   */
+  200: BrowserLessons
+}
+
+export type ExperimentalBrowserLessonsResponse =
+  ExperimentalBrowserLessonsResponses[keyof ExperimentalBrowserLessonsResponses]
+
+export type ExperimentalNotebookListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/notebook"
+}
+
+export type ExperimentalNotebookListErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalNotebookListError = ExperimentalNotebookListErrors[keyof ExperimentalNotebookListErrors]
+
+export type ExperimentalNotebookListResponses = {
+  /**
+   * Subjects in the study notebook
+   */
+  200: Array<{
+    slug: string
+    subject: string
+    count: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    updated: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  }>
+}
+
+export type ExperimentalNotebookListResponse =
+  ExperimentalNotebookListResponses[keyof ExperimentalNotebookListResponses]
+
+export type ExperimentalNotebookGetData = {
+  body?: never
+  path: {
+    subject: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/notebook/{subject}"
+}
+
+export type ExperimentalNotebookGetErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalNotebookGetError = ExperimentalNotebookGetErrors[keyof ExperimentalNotebookGetErrors]
+
+export type ExperimentalNotebookGetResponses = {
+  /**
+   * One subject's explained answers
+   */
+  200: NotebookPage
+}
+
+export type ExperimentalNotebookGetResponse = ExperimentalNotebookGetResponses[keyof ExperimentalNotebookGetResponses]
+
+export type ExperimentalSocialListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/social"
+}
+
+export type ExperimentalSocialListErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalSocialListError = ExperimentalSocialListErrors[keyof ExperimentalSocialListErrors]
+
+export type ExperimentalSocialListResponses = {
+  /**
+   * The posting queue
+   */
+  200: SocialQueue
+}
+
+export type ExperimentalSocialListResponse = ExperimentalSocialListResponses[keyof ExperimentalSocialListResponses]
+
+export type ExperimentalSocialAddData = {
+  body?: {
+    source: string
+    networks: Array<"instagram" | "tiktok">
+    at: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    notes?: string
+    caption?: string
+    model?: {
+      providerID: string
+      modelID: string
+    }
+    frames?: Array<string>
+    duration?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    width?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    height?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  }
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/social"
+}
+
+export type ExperimentalSocialAddErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+}
+
+export type ExperimentalSocialAddError = ExperimentalSocialAddErrors[keyof ExperimentalSocialAddErrors]
+
+export type ExperimentalSocialAddResponses = {
+  /**
+   * The posts queued, one per network
+   */
+  200: Array<SocialPost>
+}
+
+export type ExperimentalSocialAddResponse = ExperimentalSocialAddResponses[keyof ExperimentalSocialAddResponses]
+
+export type ExperimentalSocialRemoveData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/social/{id}"
+}
+
+export type ExperimentalSocialRemoveErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalSocialRemoveError = ExperimentalSocialRemoveErrors[keyof ExperimentalSocialRemoveErrors]
+
+export type ExperimentalSocialRemoveResponses = {
+  /**
+   * The post removed
+   */
+  200: SocialPost
+}
+
+export type ExperimentalSocialRemoveResponse =
+  ExperimentalSocialRemoveResponses[keyof ExperimentalSocialRemoveResponses]
+
+export type ExperimentalSocialEditData = {
+  body?: {
+    at?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    notes?: string
+    caption?: string
+    network?: "instagram" | "tiktok"
+    status?: "scheduled"
+    prepare?: boolean
+  }
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/social/{id}"
+}
+
+export type ExperimentalSocialEditErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalSocialEditError = ExperimentalSocialEditErrors[keyof ExperimentalSocialEditErrors]
+
+export type ExperimentalSocialEditResponses = {
+  /**
+   * The post after the change
+   */
+  200: SocialPost
+}
+
+export type ExperimentalSocialEditResponse = ExperimentalSocialEditResponses[keyof ExperimentalSocialEditResponses]
+
+export type ExperimentalSocialClaimData = {
+  body?: {
+    sessionID: string
+  }
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/social/{id}/claim"
+}
+
+export type ExperimentalSocialClaimErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalSocialClaimError = ExperimentalSocialClaimErrors[keyof ExperimentalSocialClaimErrors]
+
+export type ExperimentalSocialClaimResponses = {
+  /**
+   * The post, if it was due and free
+   */
+  200: SocialPost
+}
+
+export type ExperimentalSocialClaimResponse = ExperimentalSocialClaimResponses[keyof ExperimentalSocialClaimResponses]
+
+export type ExperimentalSocialPrepareData = {
+  body?: {
+    sessionID: string
+  }
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/social/{id}/prepare"
+}
+
+export type ExperimentalSocialPrepareErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalSocialPrepareError = ExperimentalSocialPrepareErrors[keyof ExperimentalSocialPrepareErrors]
+
+export type ExperimentalSocialPrepareResponses = {
+  /**
+   * The post, if its caption was due to be prepared
+   */
+  200: SocialPost
+}
+
+export type ExperimentalSocialPrepareResponse =
+  ExperimentalSocialPrepareResponses[keyof ExperimentalSocialPrepareResponses]
+
+export type ExperimentalSocialReportData = {
+  body?: {
+    status: "posted" | "failed" | "unprepared"
+    reason?: string
+  }
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/social/{id}/report"
+}
+
+export type ExperimentalSocialReportErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalSocialReportError = ExperimentalSocialReportErrors[keyof ExperimentalSocialReportErrors]
+
+export type ExperimentalSocialReportResponses = {
+  /**
+   * The post after the report
+   */
+  200: SocialPost
+}
+
+export type ExperimentalSocialReportResponse =
+  ExperimentalSocialReportResponses[keyof ExperimentalSocialReportResponses]
+
 export type ExperimentalRoteiaStatusData = {
   body?: never
   path?: never
@@ -8181,6 +8820,65 @@ export type ExperimentalRoteiaStatusResponses = {
 export type ExperimentalRoteiaStatusResponse =
   ExperimentalRoteiaStatusResponses[keyof ExperimentalRoteiaStatusResponses]
 
+export type ExperimentalDatasetExportData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+    min?: "approved" | "excellent"
+  }
+  url: "/experimental/dataset/export"
+}
+
+export type ExperimentalDatasetExportErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalDatasetExportError = ExperimentalDatasetExportErrors[keyof ExperimentalDatasetExportErrors]
+
+export type ExperimentalDatasetExportResponses = {
+  /**
+   * Where the dataset was written and how many examples it has
+   */
+  200: DatasetExport
+}
+
+export type ExperimentalDatasetExportResponse =
+  ExperimentalDatasetExportResponses[keyof ExperimentalDatasetExportResponses]
+
+export type ExperimentalOllamaStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/ollama/status"
+}
+
+export type ExperimentalOllamaStatusErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalOllamaStatusError = ExperimentalOllamaStatusErrors[keyof ExperimentalOllamaStatusErrors]
+
+export type ExperimentalOllamaStatusResponses = {
+  /**
+   * Local Ollama, its models and this machine
+   */
+  200: OllamaStatus
+}
+
+export type ExperimentalOllamaStatusResponse =
+  ExperimentalOllamaStatusResponses[keyof ExperimentalOllamaStatusResponses]
+
 export type ExperimentalUsageEtaData = {
   body?: never
   path?: never
@@ -8209,6 +8907,34 @@ export type ExperimentalUsageEtaResponses = {
 }
 
 export type ExperimentalUsageEtaResponse = ExperimentalUsageEtaResponses[keyof ExperimentalUsageEtaResponses]
+
+export type ExperimentalUsageSkillsData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/usage/skills"
+}
+
+export type ExperimentalUsageSkillsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalUsageSkillsError = ExperimentalUsageSkillsErrors[keyof ExperimentalUsageSkillsErrors]
+
+export type ExperimentalUsageSkillsResponses = {
+  /**
+   * The skills used most
+   */
+  200: UsageSkills
+}
+
+export type ExperimentalUsageSkillsResponse = ExperimentalUsageSkillsResponses[keyof ExperimentalUsageSkillsResponses]
 
 export type ExperimentalWebVideoModelsData = {
   body?: never
@@ -8327,6 +9053,38 @@ export type ExperimentalBrowserStatusResponses = {
 
 export type ExperimentalBrowserStatusResponse =
   ExperimentalBrowserStatusResponses[keyof ExperimentalBrowserStatusResponses]
+
+export type ExperimentalBrowserTrailData = {
+  body?: never
+  path: {
+    sessionID: string
+    callID: string
+  }
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/experimental/browser/trail/{sessionID}/{callID}"
+}
+
+export type ExperimentalBrowserTrailErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ExperimentalBrowserTrailError = ExperimentalBrowserTrailErrors[keyof ExperimentalBrowserTrailErrors]
+
+export type ExperimentalBrowserTrailResponses = {
+  /**
+   * The picture of the page after one of the agent's browser steps
+   */
+  200: BrowserTrailShot
+}
+
+export type ExperimentalBrowserTrailResponse =
+  ExperimentalBrowserTrailResponses[keyof ExperimentalBrowserTrailResponses]
 
 export type ExperimentalBrowserFrameData = {
   body?: never
@@ -14354,3 +15112,82 @@ export type BrowserExtensionConnectResponses = {
 }
 
 export type BrowserExtensionConnectResponse = BrowserExtensionConnectResponses[keyof BrowserExtensionConnectResponses]
+
+export type BrowserExtensionPairData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/experimental/browser/extension/pair"
+}
+
+export type BrowserExtensionPairErrors = {
+  /**
+   * Forbidden
+   */
+  403: EffectHttpApiErrorForbidden
+}
+
+export type BrowserExtensionPairError = BrowserExtensionPairErrors[keyof BrowserExtensionPairErrors]
+
+export type BrowserExtensionPairResponses = {
+  /**
+   * Pairing token
+   */
+  200: string
+}
+
+export type BrowserExtensionPairResponse = BrowserExtensionPairResponses[keyof BrowserExtensionPairResponses]
+
+export type BrowserPdfViewerData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: never
+  url: "/experimental/browser/pdf/{id}"
+}
+
+export type BrowserPdfViewerErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type BrowserPdfViewerError = BrowserPdfViewerErrors[keyof BrowserPdfViewerErrors]
+
+export type BrowserPdfViewerResponses = {
+  /**
+   * PDF viewer page
+   */
+  200: string
+}
+
+export type BrowserPdfViewerResponse = BrowserPdfViewerResponses[keyof BrowserPdfViewerResponses]
+
+export type BrowserPdfFileData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: never
+  url: "/experimental/browser/pdf/{id}/file"
+}
+
+export type BrowserPdfFileErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type BrowserPdfFileError = BrowserPdfFileErrors[keyof BrowserPdfFileErrors]
+
+export type BrowserPdfFileResponses = {
+  /**
+   * PDF file
+   */
+  200: string
+}
+
+export type BrowserPdfFileResponse = BrowserPdfFileResponses[keyof BrowserPdfFileResponses]

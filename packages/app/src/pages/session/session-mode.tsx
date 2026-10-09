@@ -13,6 +13,7 @@ import "./session-mode.css"
  * for those panels, so switching modes can't desync anything.
  */
 export const SESSION_MODES = [
+  { id: "terminal", icon: "monitor", key: "session.mode.terminal" },
   { id: "conversation", icon: "menu", key: "session.mode.conversation" },
   { id: "trail", icon: "status", key: "session.mode.trail" },
   { id: "cockpit", icon: "sidebar-right", key: "session.mode.cockpit" },
@@ -23,9 +24,10 @@ export const SESSION_MODES = [
 export type SessionMode = (typeof SESSION_MODES)[number]["id"]
 
 export function createSessionModeState() {
+  // A new key, so everyone starts on the terminal layout once; a pick after that sticks.
   const [store, setStore] = persisted(
-    Persist.global("session.mode"),
-    createStore({ mode: "conversation" as SessionMode }),
+    Persist.global("session.mode.v2"),
+    createStore({ mode: "terminal" as SessionMode }),
   )
   return {
     mode: () => store.mode,

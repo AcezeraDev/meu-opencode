@@ -181,8 +181,8 @@ function AskBox(props: { go: Go }) {
           <circle cx="32" cy="32" r="21" fill="url(#lynx-set-grad)" />
           <defs>
             <radialGradient id="lynx-set-grad" cx="0.5" cy="0.38" r="0.65">
-              <stop offset="0" stop-color="#22D3EE" />
-              <stop offset="1" stop-color="#6366F1" />
+              <stop offset="0" stop-color="#FF6B5B" />
+              <stop offset="1" stop-color="#E5484D" />
             </radialGradient>
           </defs>
           <path d="M22 24 L30 31 L22 38" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" />

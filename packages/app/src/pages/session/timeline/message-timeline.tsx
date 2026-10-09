@@ -76,7 +76,7 @@ import { observeElementOffsetReconnectAware } from "./observe-element-offset"
 import { createTimelineProjection } from "./projection"
 import { MessageComment, SummaryDiff, TimelineRow, TimelineRowMap } from "./rows"
 import { filterVirtualIndexes } from "./virtual-items"
-import { OverviewBar, type OverviewMarker } from "../scope/overview-bar"
+import { OverviewBar, type OverviewBlock, type OverviewMarker } from "../scope/overview-bar"
 import { toolTarget } from "../scope/turn-meter"
 import { TurnStats } from "../scope/turn-stats"
 import { TurnRating } from "../scope/turn-rating"
@@ -1002,6 +1002,18 @@ export function MessageTimeline(props: {
   )
 
   const lynx = useLynxPrefs()
+  // The whole conversation in miniature: prompts, answers, tools and errors at their real heights.
+  const minimapBlocks = createMemo<OverviewBlock[]>(() =>
+    timelineRows().flatMap((row, index): OverviewBlock[] => {
+      if (row._tag === "UserMessage") return [{ index, kind: "user" }]
+      if (row._tag === "Error") return [{ index, kind: "error" }]
+      if (row._tag !== "AssistantPart") return []
+      if (row.group.type !== "part") return [{ index, kind: "tool" }]
+      const part = getMsgPart(row.group.ref.messageID, row.group.ref.partID)
+      if (part?.type === "tool") return [{ index, kind: part.state.status === "error" ? "error" : "tool" }]
+      return [{ index, kind: "text" }]
+    }),
+  )
   // Every prompt, tool and error in order, for the replay track.
   const replaySteps = createMemo<ReplayStep[]>(() =>
     timelineRows().flatMap((row, index): ReplayStep[] => {
@@ -1495,8 +1507,10 @@ export function MessageTimeline(props: {
           label={language.t("scope.overview.label")}
           measure={() => ({
             start: (index) => virtualizer.measurementsCache[index]?.start,
+            size: (index) => virtualizer.measurementsCache[index]?.size,
             total: virtualizer.getTotalSize(),
           })}
+          blocks={lynx.get("minimap") ? minimapBlocks : undefined}
           onJump={(index) => {
             const root = listRoot()
             if (root) props.onMarkScrollGesture(root)

@@ -1,0 +1,164 @@
+/* Lynx Code's colors in the browser: black and coral, like the app. */
+:root {
+  color-scheme: dark;
+  --bg: #0c0c0c;
+  --panel: #161616;
+  --panel-2: #1f1f1f;
+  --line: #2a2a2a;
+  --text: #f2f2f2;
+  --muted: #a3a3a3;
+  --faint: #6b6b6b;
+  --coral: #ff6b5b;
+  --deep: #e5484d;
+  --fill: #d13a3f;
+  --amber: #f59e0b;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 13px;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+h2 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+button {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 7px 10px;
+}
+button:hover {
+  border-color: color-mix(in oklab, var(--coral) 45%, var(--line));
+}
+button:focus-visible,
+textarea:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--coral);
+  outline-offset: 1px;
+}
+button.primary {
+  background: var(--fill);
+  border-color: var(--fill);
+  color: #fff;
+  font-weight: 600;
+}
+button.primary:hover {
+  background: var(--deep);
+}
+button.stop {
+  background: transparent;
+  border-color: color-mix(in oklab, var(--deep) 60%, transparent);
+  color: var(--coral);
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+textarea,
+input[type="text"],
+input[type="number"] {
+  width: 100%;
+  font: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+textarea {
+  resize: vertical;
+}
+label.check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  cursor: pointer;
+}
+label.check input {
+  accent-color: var(--coral);
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+.pill i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+.pill[data-phase="idle"] i {
+  background: var(--coral);
+}
+.pill[data-phase="working"] i {
+  background: var(--coral);
+  animation: pulse 1.1s ease-in-out infinite;
+}
+.pill[data-phase="attention"] i {
+  background: var(--amber);
+}
+.pill[data-phase="done"] i {
+  background: var(--deep);
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pill[data-phase="working"] i {
+    animation: none;
+  }
+}
+.muted {
+  color: var(--muted);
+}
+.faint {
+  color: var(--faint);
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+.error {
+  color: var(--coral);
+}

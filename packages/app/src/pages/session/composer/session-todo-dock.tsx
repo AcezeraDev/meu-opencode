@@ -73,6 +73,10 @@ export function SessionTodoDock(props: {
   )
 
   const preview = createMemo(() => active()?.content ?? "")
+  // What is being done right now stays in the header even with the list open,
+  // so "which one is it on?" never needs asking.
+  const doing = createMemo(() => props.todos.find((todo) => todo.status === "in_progress")?.content)
+  const share = createMemo(() => (total() ? done() / total() : 0))
   const collapse = useSpring(() => (props.collapsed ? 1 : 0), { visualDuration: 0.3, bounce: 0 })
   const dock = createMemo(() => Math.max(0, Math.min(1, props.dockProgress)))
   const shut = createMemo(() => 1 - dock())
@@ -167,7 +171,7 @@ export function SessionTodoDock(props: {
                   ? "cursor-default text-[13px] font-[440] leading-5 tracking-[-0.04px] text-v2-text-text-faint"
                   : "text-14-regular text-text-base cursor-default"
               }
-              text={props.collapsed ? preview() : undefined}
+              text={props.collapsed ? preview() : doing() ? language.t("session.todo.now", { task: doing()! }) : undefined}
               duration={600}
               travel={25}
               edge={17}
@@ -196,6 +200,13 @@ export function SessionTodoDock(props: {
               aria-label={props.collapsed ? props.expandLabel : props.collapseLabel}
             />
           </div>
+        </div>
+
+        <div data-slot="session-todo-progress" class="relative mx-4 h-[2px] rounded-full" style={{ background: "color-mix(in oklab, currentColor 12%, transparent)" }}>
+          <div
+            class="absolute inset-y-0 left-0 rounded-full transition-[width] duration-500 ease-out motion-reduce:transition-none"
+            style={{ width: `${share() * 100}%`, background: "var(--space, #ff6b5b)" }}
+          />
         </div>
 
         <div

@@ -8,6 +8,8 @@ import { BrowserNotebook } from "@/browser/notebook"
 import { BrowserSite } from "@/browser/site"
 import { BrowserLessons } from "@/browser/lessons"
 import { SessionWeek } from "@/session/week"
+import { SocialQueue } from "@/social/queue"
+import { Writer } from "@/writer/writer"
 import { Config } from "@/config/config"
 import { InstanceState } from "@/effect/instance-state"
 import { RuntimeFlags } from "@/effect/runtime-flags"
@@ -50,7 +52,14 @@ import {
   DatasetExportQuery,
   WebVideoDefaults,
   WorktreeApiError,
+  SocialAddPayload,
+  SocialEditPayload,
+  SocialClaimPayload,
+  SocialReportPayload,
 } from "../groups/experimental"
+
+const SKILL_WINDOW_MS = 60 * 24 * 60 * 60 * 1000
+const SKILL_LIMIT = 6
 
 function mapWorktreeError<A, R>(self: Effect.Effect<A, Worktree.Error, R>) {
   return self.pipe(
@@ -323,6 +332,62 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       return yield* Effect.promise(() => BrowserNotebook.entries(ctx.params.subject))
     })
 
+    const social = Effect.fn("ExperimentalHttpApi.social")(function* () {
+      return {
+        directory: SocialQueue.directory(),
+        posts: yield* Effect.promise(() => SocialQueue.list()),
+        profiles: yield* Effect.promise(() => SocialQueue.profiles()),
+      }
+    })
+
+    const socialAdd = Effect.fn("ExperimentalHttpApi.socialAdd")(function* (ctx: {
+      payload: typeof SocialAddPayload.Type
+    }) {
+      const payload = ctx.payload
+      return yield* Effect.forEach(Array.from(new Set(payload.networks)), (network) =>
+        Effect.tryPromise({
+          try: () => SocialQueue.add({ ...payload, network }),
+          catch: () => new HttpApiError.BadRequest({}),
+        }),
+      )
+    })
+
+    const socialEdit = Effect.fn("ExperimentalHttpApi.socialEdit")(function* (ctx: {
+      params: { id: string }
+      payload: typeof SocialEditPayload.Type
+    }) {
+      return yield* Effect.promise(() => SocialQueue.edit(ctx.params.id, ctx.payload))
+    })
+
+    const socialRemove = Effect.fn("ExperimentalHttpApi.socialRemove")(function* (ctx: { params: { id: string } }) {
+      return yield* Effect.promise(() => SocialQueue.remove(ctx.params.id))
+    })
+
+    const socialClaim = Effect.fn("ExperimentalHttpApi.socialClaim")(function* (ctx: {
+      params: { id: string }
+      payload: typeof SocialClaimPayload.Type
+    }) {
+      const claimed = yield* Effect.promise(() => SocialQueue.claim(ctx.params.id, ctx.payload.sessionID))
+      const caption = claimed?.caption ?? claimed?.draft
+      if (!claimed || !caption) return claimed
+      // Typed as a write_text reference, so the caption the person read goes out exactly as it is.
+      return { ...claimed, captionRef: Writer.reference(yield* Effect.promise(() => Writer.save(caption))) }
+    })
+
+    const socialPrepare = Effect.fn("ExperimentalHttpApi.socialPrepare")(function* (ctx: {
+      params: { id: string }
+      payload: typeof SocialClaimPayload.Type
+    }) {
+      return yield* Effect.promise(() => SocialQueue.claimPrep(ctx.params.id, ctx.payload.sessionID))
+    })
+
+    const socialReport = Effect.fn("ExperimentalHttpApi.socialReport")(function* (ctx: {
+      params: { id: string }
+      payload: typeof SocialReportPayload.Type
+    }) {
+      return yield* Effect.promise(() => SocialQueue.report(ctx.params.id, ctx.payload))
+    })
+
     const roteiaStatus = Effect.fn("ExperimentalHttpApi.roteiaStatus")(function* (ctx: {
       query: typeof RoteiaStatusQuery.Type
     }) {
@@ -491,6 +556,34 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       }
       history = { at: Date.now(), runs: [...runs.values()], steps }
       return history
+    })
+
+    const usageSkills = Effect.fn("ExperimentalHttpApi.usageSkills")(function* () {
+      const part = (path: string) => sql`json_extract(${PartTable.data}, ${path})`
+      // A skill shows up as a call of the skill tool, or as a .skill file the person attached.
+      const name = sql<string | null>`case
+        when ${part("$.type")} = 'tool' then ${part("$.state.input.name")}
+        else substr(${part("$.filename")}, 1, length(${part("$.filename")}) - 6)
+      end`
+      const rows = yield* db
+        .select({ name, count: sql<number>`count(*)`, last: sql<number>`max(${PartTable.time_created})` })
+        .from(PartTable)
+        .where(
+          and(
+            gte(PartTable.time_created, Date.now() - SKILL_WINDOW_MS),
+            sql`((${part("$.type")} = 'tool' and ${part("$.tool")} = 'skill') or (${part("$.type")} = 'file' and ${part("$.filename")} like '%.skill'))`,
+          ),
+        )
+        .groupBy(name)
+        .orderBy(desc(sql`count(*)`), desc(sql`max(${PartTable.time_created})`))
+        .limit(SKILL_LIMIT)
+        .all()
+        .pipe(Effect.orDie)
+      return {
+        skills: rows.flatMap((row) =>
+          row.name ? [{ name: row.name, count: Number(row.count), last: Number(row.last) }] : [],
+        ),
+      }
     })
 
     const usageEta = Effect.fn("ExperimentalHttpApi.usageEta")(function* (ctx: { query: typeof UsageEtaQuery.Type }) {
@@ -702,12 +795,20 @@ export const experimentalHandlers = HttpApiBuilder.group(InstanceHttpApi, "exper
       .handle("ollamaStatus", ollamaStatus)
       .handle("datasetExport", datasetExport)
       .handle("usageEta", usageEta)
+      .handle("usageSkills", usageSkills)
       .handle("usageWeek", usageWeek)
       .handle("browserSite", browserSite)
       .handle("browserSiteForget", browserSiteForget)
       .handle("browserLessons", browserLessons)
       .handle("notebook", notebook)
       .handle("notebookSubject", notebookSubject)
+      .handle("social", social)
+      .handle("socialAdd", socialAdd)
+      .handle("socialEdit", socialEdit)
+      .handle("socialRemove", socialRemove)
+      .handle("socialClaim", socialClaim)
+      .handle("socialPrepare", socialPrepare)
+      .handle("socialReport", socialReport)
       .handle("webVideoModels", webVideoModels)
       .handle("webVideoSettings", webVideoSettings)
       .handle("webVideoSettingsUpdate", webVideoSettingsUpdate)

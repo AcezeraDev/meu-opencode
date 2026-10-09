@@ -49,13 +49,12 @@ async function secrets() {
     if (!existsSync(file)) continue
     for (const match of readFileSync(file, "utf8").matchAll(/"(?:\w*token|\w*key|password|secret)"\s*:\s*"([^"]+)"/gi)) add(match[1])
   }
-  const listed = await $`powershell -NoProfile -Command ${"[Environment]::GetEnvironmentVariables('User').GetEnumerator() | ForEach-Object { $_.Key + '=' + $_.Value }"}`
-    .nothrow()
-    .quiet()
-    .text()
+  // The user's variables straight from the registry: PowerShell can hang for
+  // minutes on a busy Windows, and the publish waited on it with it.
+  const listed = await $`reg query ${"HKCU\\Environment"}`.nothrow().quiet().text()
   for (const line of listed.split(/\r?\n/)) {
-    const at = line.indexOf("=")
-    if (at > 0 && ENV.test(line.slice(0, at).trim())) add(line.slice(at + 1))
+    const match = line.match(/^\s+(\S+)\s+REG_\w+\s+(.*)$/)
+    if (match && ENV.test(match[1]!)) add(match[2]!.trim())
   }
   return [...found]
 }

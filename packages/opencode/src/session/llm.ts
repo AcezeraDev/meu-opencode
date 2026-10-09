@@ -28,6 +28,7 @@ import * as Option from "effect/Option"
 import * as OtelTracer from "@effect/opentelemetry/Tracer"
 import { LLMAISDK } from "./llm/ai-sdk"
 import { LLMNativeRuntime } from "./llm/native-runtime"
+import { BrowserTelemetry } from "@/browser/telemetry"
 import { LLMRequestPrep } from "./llm/request"
 
 export const OUTPUT_TOKEN_MAX = ProviderTransform.OUTPUT_TOKEN_MAX
@@ -338,6 +339,7 @@ const live: Layer.Layer<
                   }
                   return args.params
                 },
+                wrapStream: (options) => BrowserTelemetry.model(options.doStream),
               },
             ],
           }),

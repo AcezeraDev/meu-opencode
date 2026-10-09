@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lynx</title>
+    <link rel="stylesheet" href="lynx.css" />
+    <style>
+      body {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        padding: 14px;
+        gap: 12px;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      main {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      #session {
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #step {
+        margin-top: 4px;
+        font-size: 12px;
+      }
+      #answer {
+        margin-top: 10px;
+        white-space: pre-wrap;
+        line-height: 1.5;
+        max-height: 40vh;
+        overflow: auto;
+        color: var(--text);
+      }
+      #answer:empty {
+        display: none;
+      }
+      #ask .title {
+        margin: 6px 0 10px;
+        word-break: break-word;
+      }
+      #ask .buttons {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .chips button {
+        border-radius: 999px;
+        padding: 5px 10px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      form {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 14px;
+        font-size: 12px;
+      }
+      #offline {
+        display: none;
+      }
+      body[data-offline] #offline {
+        display: block;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1><img src="icons/icon-32.png" alt="" width="20" height="20" /> Lynx</h1>
+      <span class="pill" id="phase" data-phase="off"><i></i><span id="phaseText">desconectada</span></span>
+    </header>
+
+    <main>
+      <div class="card" id="offline">
+        <div class="error" id="offlineText">O Lynx Code não está conectado.</div>
+        <button id="pair" style="margin-top: 10px">Procurar o Lynx Code</button>
+      </div>
+
+      <section class="card" id="now" hidden>
+        <div class="row">
+          <div class="grow">
+            <div id="session"></div>
+            <div id="step" class="muted"></div>
+          </div>
+          <button class="stop" id="stop" title="Parar (Alt+Shift+L ou Esc na aba)">Parar</button>
+        </div>
+        <div id="answer"></div>
+      </section>
+
+      <section class="card" id="ask" hidden>
+        <h2>A Lynx espera você</h2>
+        <div class="title" id="askTitle"></div>
+        <div class="buttons" id="askButtons">
+          <button class="primary" data-reply="once">Permitir uma vez</button>
+          <button data-reply="always">Sempre</button>
+          <button data-reply="reject">Recusar</button>
+        </div>
+        <div class="muted" id="askQuestion" hidden>Responda a pergunta no app do Lynx Code.</div>
+      </section>
+
+      <section>
+        <h2>Atalhos</h2>
+        <div class="chips">
+          <button data-quick="Resuma esta página.">Resumir a página</button>
+          <button data-quick="Responda esta lição nesta aba, conferindo antes de enviar.">Responder a lição</button>
+          <button data-quick="Explique o trecho selecionado de um jeito simples." data-selection="1">Explicar a seleção</button>
+          <button data-quick="Guarde o trecho selecionado no caderno, com a página de onde veio." data-selection="1">Seleção pro caderno</button>
+        </div>
+      </section>
+    </main>
+
+    <form id="composer">
+      <textarea id="text" rows="3" placeholder="Peça algo à Lynx… (Enter envia, Shift+Enter quebra linha)"></textarea>
+      <div class="options">
+        <label class="check"><input type="checkbox" id="page" checked /> Usar esta aba</label>
+        <label class="check"><input type="checkbox" id="withSelection" /> Junto com a seleção</label>
+        <label class="check"><input type="checkbox" id="follow" /> Na conversa aberta no app</label>
+      </div>
+      <div class="row">
+        <span class="faint grow" id="note"></span>
+        <button class="primary" type="submit" id="send">Enviar</button>
+      </div>
+    </form>
+
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

@@ -216,7 +216,7 @@ function Compare(props: {
 
 /* ---------- Where the money went ---------- */
 
-const SLICES = ["#22d3ee", "#6366f1", "#a5b4fc", "#0e7490", "#334155"]
+const SLICES = ["#ff6b5b", "#e5484d", "#f6a9ab", "#bb2d20", "#404040"]
 
 function Money(props: { week: WeekData; money: (dollars: number) => string }) {
   const language = useLanguage()

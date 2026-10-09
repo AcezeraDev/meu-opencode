@@ -62,6 +62,7 @@ import { Lessons } from "@/memory/lessons"
 
 const LESSONS_TAG = "<lessons>"
 import { SessionTools } from "./tools"
+import { BrowserLook } from "@/browser/look"
 import { LLMEvent } from "@opencode-ai/llm"
 
 // @ts-ignore
@@ -205,6 +206,20 @@ const layer = Layer.effect(
         next = info.parentID
       }
       return undefined
+    })
+
+    // Same lookup as the permission mode: a subagent follows the session that started it.
+    const browserLook = Effect.fn("SessionPrompt.browserLook")(function* (sessionID: SessionID) {
+      let next: SessionID | undefined = sessionID
+      for (let depth = 0; next && depth < 8; depth++) {
+        const info: Session.Info | undefined = yield* sessions
+          .get(next)
+          .pipe(Effect.catch(() => Effect.succeed(undefined)))
+        if (!info) return false
+        if (BrowserLook.active(info.metadata)) return true
+        next = info.parentID
+      }
+      return false
     })
 
     /**
@@ -1412,6 +1427,7 @@ const layer = Layer.effect(
               promptOps,
               permissionMode: permissionMode(sessionID),
               paused: paused(sessionID),
+              browserLook: browserLook(sessionID),
             }).pipe(
               Effect.provideService(Plugin.Service, plugin),
               Effect.provideService(Permission.Service, permission),

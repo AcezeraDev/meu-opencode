@@ -7,7 +7,7 @@ import { Persist, persisted } from "@/utils/persist"
 export const HOME_VIEWS = ["painel", "projetos", "lista", "tabela", "previa", "terminal", "ceu"] as const
 export type HomeView = (typeof HOME_VIEWS)[number]
 
-/** The logo's palette, four ways: night (dark), day (light), high contrast, and strong cyan. */
+/** The logo's palette, four ways: night (dark), day (light), high contrast, and strong coral. */
 export const VARIANTS = ["noite", "dia", "contraste", "ciano"] as const
 export type Variant = (typeof VARIANTS)[number]
 
@@ -28,6 +28,10 @@ const DEFAULTS = {
   thread: true,
   /** The step scrubber under the conversation. */
   replay: false,
+  /** The whole conversation in miniature on the right, like a code editor's minimap. */
+  minimap: true,
+  /** The conversation narrows to the left and the browser takes the stage on the right. */
+  stage: false,
   /** Palette variant on top of the Lynx Code theme. */
   variant: "noite" as Variant,
   /** Monthly model budget in the person's money (reais); 0 means none. */
@@ -67,6 +71,8 @@ function create(platform: Platform) {
     toggle(root, "chatFocus", get("focus"))
     toggle(root, "chatSettle", get("settle"))
     toggle(root, "chatThread", get("thread"))
+    toggle(root, "chatMinimap", get("minimap"))
+    toggle(root, "chatStage", get("stage"))
     root.dataset.lynxVariant = get("variant")
     toggle(root, "lynxSettingsWide", get("settingsWide"))
   })

@@ -48,6 +48,10 @@ export const browserPane = {
   reveal() {
     if (!dismissed) setOpened(true)
   },
+  /** Steps aside for something else on the stage, without counting as the user closing it. */
+  hide() {
+    setOpened(false)
+  },
   /** The browser shut down: the next time it starts, the pane may open again. */
   rearm() {
     dismissed = false

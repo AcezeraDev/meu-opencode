@@ -11,6 +11,7 @@ import "./lynx-global.css"
 import { LynxDrop } from "@/components/lynx-drop"
 import { LynxSplash } from "@/components/lynx-splash"
 import { setV2Toast, ToastRegion } from "@/utils/toast"
+import { sendToOpenComposer } from "@/utils/composer-send"
 
 export default function NewLayout(props: ParentProps) {
   const platform = usePlatform()
@@ -19,14 +20,7 @@ export default function NewLayout(props: ParentProps) {
   useSettingsHistory()
   // An answer typed in the desktop's corner note goes into the open session's composer and is sent.
   onCleanup(
-    platform.onLynxReply?.((text) => {
-      const form = document.querySelector<HTMLFormElement>('[data-component="prompt-input-v2"]')
-      const editor = form?.querySelector<HTMLElement>('[contenteditable="true"]')
-      if (!form || !editor) return
-      editor.focus()
-      document.execCommand("insertText", false, text)
-      requestAnimationFrame(() => form.requestSubmit())
-    }) ?? (() => undefined),
+    platform.onLynxReply?.((text) => void sendToOpenComposer(text)) ?? (() => undefined),
   )
   const [state, setState] = createStore({ debugTools: true })
 
