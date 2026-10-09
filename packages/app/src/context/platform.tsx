@@ -58,6 +58,8 @@ type PlatformBase = {
 
   /** An answer typed in the desktop's corner note, for the session that asked (desktop only) */
   onLynxReply?(cb: (text: string) => void): () => void
+  /** Brings the app's window forward, from the tray too (desktop only) */
+  showWindow?(): void
 
   /** Shows the agent's state on the tray icon next to the clock (desktop only) */
   setAgentTray?(state: { status: "idle" | "working" | "done" | "attention"; tooltip: string }): void

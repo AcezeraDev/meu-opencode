@@ -5,149 +5,135 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Lynx</title>
     <link rel="stylesheet" href="lynx.css" />
-    <style>
-      body {
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
-        padding: 14px;
-        gap: 12px;
-      }
-      header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-      }
-      main {
-        flex: 1;
-        min-height: 0;
-        overflow: auto;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-      }
-      #session {
-        font-weight: 600;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      #step {
-        margin-top: 4px;
-        font-size: 12px;
-      }
-      #answer {
-        margin-top: 10px;
-        white-space: pre-wrap;
-        line-height: 1.5;
-        max-height: 40vh;
-        overflow: auto;
-        color: var(--text);
-      }
-      #answer:empty {
-        display: none;
-      }
-      #ask .title {
-        margin: 6px 0 10px;
-        word-break: break-word;
-      }
-      #ask .buttons {
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
-      }
-      .chips {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-      }
-      .chips button {
-        border-radius: 999px;
-        padding: 5px 10px;
-        font-size: 12px;
-        color: var(--muted);
-      }
-      form {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-      .options {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px 14px;
-        font-size: 12px;
-      }
-      #offline {
-        display: none;
-      }
-      body[data-offline] #offline {
-        display: block;
-      }
-      [hidden] {
-        display: none !important;
-      }
-    </style>
+    <link rel="stylesheet" href="sidepanel.css" />
   </head>
   <body>
-    <header>
-      <h1><img src="icons/icon-32.png" alt="" width="20" height="20" /> Lynx</h1>
-      <span class="pill" id="phase" data-phase="off"><i></i><span id="phaseText">desconectada</span></span>
+    <header class="bar">
+      <button class="title" id="sessionButton" aria-haspopup="menu" aria-expanded="false">
+        <span id="sessionTitle">Nova conversa</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+      </button>
+      <span class="cost" id="cost" title="Gasto desta conversa" hidden></span>
+      <div class="tools">
+        <button class="icon" id="historyButton" title="Conversas" aria-label="Conversas">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" /></svg>
+        </button>
+        <button class="icon" id="newButton" title="Nova conversa" aria-label="Nova conversa">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" /><path d="M12 8v8M8 12h8" /></svg>
+        </button>
+        <button class="icon" id="menuButton" title="Mais" aria-label="Mais" aria-haspopup="menu">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" /></svg>
+        </button>
+      </div>
     </header>
 
-    <main>
-      <div class="card" id="offline">
-        <div class="error" id="offlineText">O Lynx Code não está conectado.</div>
-        <button id="pair" style="margin-top: 10px">Procurar o Lynx Code</button>
-      </div>
+    <div class="menu" id="sessionMenu" role="menu" hidden>
+      <label class="menu-label" for="projectSelect">Projeto</label>
+      <select id="projectSelect"></select>
+      <div class="menu-label">Conversas recentes</div>
+      <input type="text" id="sessionSearch" placeholder="Buscar conversa…" aria-label="Buscar conversa" />
+      <div id="sessionList" class="session-list"></div>
+    </div>
 
-      <section class="card" id="now" hidden>
-        <div class="row">
-          <div class="grow">
-            <div id="session"></div>
-            <div id="step" class="muted"></div>
-          </div>
-          <button class="stop" id="stop" title="Parar (Alt+Shift+L ou Esc na aba)">Parar</button>
-        </div>
-        <div id="answer"></div>
-      </section>
+    <div class="menu right" id="moreMenu" role="menu" hidden>
+      <button role="menuitem" data-action="open-session">Abrir esta conversa no app</button>
+      <button role="menuitem" data-action="open-app">Abrir o Lynx Code</button>
+      <button role="menuitem" data-action="stop">Parar a Lynx</button>
+      <button role="menuitem" data-action="pair">Parear de novo</button>
+      <button role="menuitem" data-action="settings">Segurança e conexão</button>
+    </div>
 
-      <section class="card" id="ask" hidden>
-        <h2>A Lynx espera você</h2>
-        <div class="title" id="askTitle"></div>
-        <div class="buttons" id="askButtons">
-          <button class="primary" data-reply="once">Permitir uma vez</button>
-          <button data-reply="always">Sempre</button>
-          <button data-reply="reject">Recusar</button>
-        </div>
-        <div class="muted" id="askQuestion" hidden>Responda a pergunta no app do Lynx Code.</div>
-      </section>
-
-      <section>
-        <h2>Atalhos</h2>
-        <div class="chips">
-          <button data-quick="Resuma esta página.">Resumir a página</button>
-          <button data-quick="Responda esta lição nesta aba, conferindo antes de enviar.">Responder a lição</button>
-          <button data-quick="Explique o trecho selecionado de um jeito simples." data-selection="1">Explicar a seleção</button>
-          <button data-quick="Guarde o trecho selecionado no caderno, com a página de onde veio." data-selection="1">Seleção pro caderno</button>
+    <main id="scroller">
+      <section class="offline" id="offline" hidden>
+        <img src="icons/icon-128.png" alt="" width="56" height="56" />
+        <h2 id="offlineTitle">O Lynx Code não está aberto</h2>
+        <p id="offlineText">A extensão conversa com a Lynx pelo app. Abra o Lynx Code e ela conecta sozinha.</p>
+        <div class="row center">
+          <button class="primary" id="takeOver" hidden>Usar este navegador</button>
+          <button class="primary" id="openApp">Abrir o Lynx Code</button>
+          <button id="pairAgain">Procurar de novo</button>
         </div>
       </section>
+
+      <section class="empty" id="empty" hidden>
+        <img src="icons/icon-128.png" alt="" width="44" height="44" />
+        <h2>Como a Lynx pode ajudar nesta página?</h2>
+        <div class="suggestions">
+          <button data-suggest="Resuma esta página.">Resumir esta página</button>
+          <button data-suggest="Responda esta lição nesta aba, conferindo antes de enviar.">Responder a lição desta aba</button>
+          <button data-suggest="Explique o trecho que selecionei de um jeito simples." data-selection="1">Explicar o trecho selecionado</button>
+        </div>
+      </section>
+
+      <div id="transcript" class="transcript" aria-live="polite"></div>
     </main>
 
-    <form id="composer">
-      <textarea id="text" rows="3" placeholder="Peça algo à Lynx… (Enter envia, Shift+Enter quebra linha)"></textarea>
-      <div class="options">
-        <label class="check"><input type="checkbox" id="page" checked /> Usar esta aba</label>
-        <label class="check"><input type="checkbox" id="withSelection" /> Junto com a seleção</label>
-        <label class="check"><input type="checkbox" id="follow" /> Na conversa aberta no app</label>
+    <footer class="composer-wrap">
+      <div class="site" id="siteChips"></div>
+      <div class="outbox" id="outbox" hidden></div>
+      <div class="composer" id="composer">
+        <div class="editing" id="editing" hidden>
+          <span>Editando a última mensagem</span>
+          <button id="cancelEdit">Cancelar</button>
+        </div>
+        <div class="chips" id="chips"></div>
+        <textarea id="text" rows="1" placeholder="Escreva uma mensagem…" aria-label="Mensagem para a Lynx"></textarea>
+        <div class="controls">
+          <div class="pop">
+            <button class="icon" id="addButton" title="Adicionar" aria-label="Adicionar" aria-haspopup="menu">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            </button>
+            <div class="menu up" id="addMenu" role="menu" hidden>
+              <button role="menuitem" data-add="shot">Print desta aba</button>
+              <button role="menuitem" data-add="area">Print de uma área…</button>
+              <button role="menuitem" data-add="file">Imagem ou arquivo…</button>
+              <button role="menuitem" data-add="selection">Texto selecionado</button>
+              <button role="menuitem" data-add="mention">Outra aba… <span class="faint">@</span></button>
+              <button role="menuitem" data-add="skills">Skills… <span class="faint">/</span></button>
+              <label class="menu-check"><input type="checkbox" id="useTab" checked /> Usar esta aba</label>
+            </div>
+          </div>
+          <div class="menu up skill-menu" id="tabMenu" role="menu" hidden>
+            <div class="menu-label">Mencionar uma aba</div>
+            <div id="tabList" class="skill-list"></div>
+          </div>
+          <div class="menu up skill-menu" id="skillMenu" role="menu" hidden>
+            <input type="text" id="skillSearch" placeholder="Buscar skill…" aria-label="Buscar skill" />
+            <div id="skillList" class="skill-list"></div>
+          </div>
+          <div class="pop">
+            <button class="icon mode" id="modeButton" title="Modo" aria-haspopup="menu">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 19 9-7-9-7v14Z" /><path d="m2 19 9-7-9-7v14Z" /></svg>
+            </button>
+            <div class="menu up" id="modeMenu" role="menu" hidden></div>
+          </div>
+          <span class="grow"></span>
+          <div class="pop wide">
+            <button class="model" id="modelButton" aria-haspopup="menu" title="Modelo">
+              <span id="modelName">Modelo</span> <span class="faint" id="variantName"></span>
+            </button>
+            <div class="menu up right model-menu" id="modelMenu" role="menu" hidden>
+              <input type="text" id="modelSearch" placeholder="Buscar modelo…" aria-label="Buscar modelo" />
+              <div id="modelList" class="model-list"></div>
+              <div class="menu-label" id="variantLabel" hidden>Esforço</div>
+              <div id="variantList" class="variant-list"></div>
+            </div>
+          </div>
+          <button class="icon" id="micButton" title="Ditar (grava e transcreve)" aria-label="Ditar">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4" /></svg>
+          </button>
+          <button class="send" id="sendButton" title="Enviar" aria-label="Enviar">
+            <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+            <svg class="square" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5" /></svg>
+          </button>
+        </div>
       </div>
-      <div class="row">
-        <span class="faint grow" id="note"></span>
-        <button class="primary" type="submit" id="send">Enviar</button>
-      </div>
-    </form>
+      <input type="file" id="fileInput" multiple hidden />
+      <p class="disclaimer">A Lynx é uma IA e pode cometer erros. Confira as respostas.</p>
+    </footer>
 
+    <div class="toast" id="toast" role="status" hidden></div>
+    <script src="markdown.js"></script>
     <script src="sidepanel.js"></script>
   </body>
 </html>

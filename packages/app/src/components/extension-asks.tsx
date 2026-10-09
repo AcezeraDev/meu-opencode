@@ -1,5 +1,6 @@
 import { onCleanup, onMount } from "solid-js"
 import { useLayout } from "@/context/layout"
+import { usePlatform } from "@/context/platform"
 import { useServer } from "@/context/server"
 import { useServerSDK } from "@/context/server-sdk"
 import { useServerSync } from "@/context/server-sync"
@@ -18,6 +19,7 @@ export function ExtensionAsks() {
   const server = useServer()
   const layout = useLayout()
   const tabs = useTabs()
+  const platform = usePlatform()
 
   // The project on screen in the sidebar's order; failing that, the latest the server knows.
   const directory = () =>
@@ -40,6 +42,10 @@ export function ExtensionAsks() {
       abort: (session) => serverSDK().client.session.abort(session),
       reply: (input) =>
         serverSDK().client.permission.reply({ requestID: input.requestID, directory: input.directory, reply: input.reply }),
+      open: (session) => {
+        tabs.select(tabs.addSessionTab({ server: server.key, sessionId: session.sessionID }))
+        platform.showWindow?.()
+      },
     })
     onCleanup(() => {
       stop()

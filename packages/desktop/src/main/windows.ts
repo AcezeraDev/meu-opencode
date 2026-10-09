@@ -73,6 +73,17 @@ export function setAppQuitting(quitting = true) {
   registry.setQuitting(quitting)
 }
 
+let onCloseToTray: (() => void) | undefined
+
+/**
+ * Closing the last window hides it instead of quitting, so the server keeps
+ * running for the browser extension; the tray icon brings it back or quits.
+ * Set by the tray, which is what makes a hidden app reachable.
+ */
+export function keepInTray(onHidden: () => void) {
+  onCloseToTray = onHidden
+}
+
 export function setBackgroundColor(color: string) {
   backgroundColor = color
   BrowserWindow.getAllWindows().forEach((win) => {
@@ -283,6 +294,13 @@ function registerWindow(win: BrowserWindow, id: string) {
   registry.register(id, win)
 
   win.on("focus", () => registry.focused(id))
+  win.on("close", (event) => {
+    // A real quit (the tray's Sair, an update, Windows shutting down) closes it.
+    if (!onCloseToTray || registry.quitting || registry.all().length > 1) return
+    event.preventDefault()
+    win.hide()
+    onCloseToTray()
+  })
   // Windows never emits before-quit on OS shutdown/logoff, but each window
   // gets session-end before it closes; flag the quit so ids stay persisted.
   win.on("session-end", () => registry.setQuitting())

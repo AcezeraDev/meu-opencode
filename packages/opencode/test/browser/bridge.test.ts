@@ -224,8 +224,10 @@ describe("browser bridge", () => {
       (message) => !greeting(message) && sent.push(message),
       () => {},
     )
-    expect(oldClosed).toBe(true)
+    // The old one is closed once the new one has paired, not before.
+    expect(oldClosed).toBe(false)
     fresh.receive(JSON.stringify({ type: "auth", token: "secret" }))
+    expect(oldClosed).toBe(true)
     expect(bridge.connected).toBe(true)
 
     // The first socket's messages and its close no longer reach the bridge.

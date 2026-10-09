@@ -8,6 +8,8 @@ import { CDPError, ReplacedError, type CDPTransport, type SlowCall } from "./cdp
 import { TAB_EVENTS, TAB_FIELDS } from "./protocol"
 import { GlobalBus } from "@/bus/global"
 import { ExtensionStatus } from "./extension-status"
+import { ServerAuth } from "@/server/auth"
+import { BrowserTranscribe } from "./transcribe"
 
 /**
  * The OpenCode side of the browser extension.
@@ -74,7 +76,28 @@ const REPLACED_GRACE = 2000
  * browser-extension/background.js whenever either side starts relying on a new
  * message.
  */
-export const EXTENSION_PROTOCOL = 2
+export const EXTENSION_PROTOCOL = 4
+
+/**
+ * What the extension's side panel may call on this server, through the bridge:
+ * enough to be a small chat (projects, models, sessions, messages, sending,
+ * stopping, answering), nothing that edits config, files or providers. The
+ * panel has no password of its own; the paired token is what lets it in, so
+ * the list is kept this short.
+ */
+const PANEL_API: [method: string, path: RegExp][] = [
+  ["GET", /^\/(config|config\/providers|agent|project|session|session\/status|permission|question|skill)$/],
+  ["GET", /^\/session\/[\w-]+(\/message)?$/],
+  ["POST", /^\/session$/],
+  ["POST", /^\/session\/[\w-]+\/(prompt_async|abort|revert|unrevert)$/],
+  ["DELETE", /^\/session\/[\w-]+$/],
+  ["PATCH", /^\/session\/[\w-]+$/],
+  ["POST", /^\/permission\/[\w-]+\/reply$/],
+  ["POST", /^\/question\/[\w-]+\/(reply|reject)$/],
+]
+
+/** Server events the panel follows for the project it shows. */
+const PANEL_EVENTS = /^(session|message|permission|question|todo)\./
 
 /** The status line is sent at most this often; the answer streams in many small pieces. */
 const STATUS_EVERY = 300
@@ -387,6 +410,13 @@ interface Pending {
   started: number
 }
 
+/** One extension socket as the server handed it over. */
+interface Socket {
+  write: (message: object) => void
+  close: () => void
+  origin?: string
+}
+
 /** One accepted extension socket's view of the bridge; it goes inert once a newer socket takes over. */
 export interface Link {
   receive: (raw: string) => void
@@ -417,6 +447,13 @@ export class Bridge {
   readonly status = new ExtensionStatus.Tracker()
   private statusTimer?: ReturnType<typeof setTimeout>
   private statusSent = 0
+  /** This server's own address, as the extension reached it, for the panel's API calls. */
+  private origin?: string
+  /** Which browser is connected, as the extension names itself; see `claim`. */
+  private instance?: string
+  /** The project the side panel shows; its events are relayed while it is open. */
+  private watching?: string
+  private stopWatching?: () => void
 
   constructor(
     private token: string,
@@ -479,30 +516,70 @@ export class Bridge {
    * message; `close` drops the socket. The socket is not trusted until it sends
    * the right token.
    */
-  accept(write: (message: object) => void, close: () => void): Link {
-    // Only one extension at a time; a new one replaces the old. The old socket
-    // is closed rather than left open: a restarted extension worker can open a
-    // second socket before the first is gone, and when that first one finally
-    // closed it used to tear down the new, healthy connection with it, leaving
-    // the extension believing it was connected while the bridge had dropped it.
-    const previous = this.disconnectSocket
-    if (previous) log("replaced", this.waiting())
-    else log("connect")
-    this.reset()
-    previous?.()
-    const link = {}
-    this.link = link
-    this.write = write
-    this.disconnectSocket = close
-    this.authed = false
+  accept(write: (message: object) => void, close: () => void, origin?: string): Link {
+    const link: Socket = { write, close, origin }
+    // Nobody is driving: this socket takes over right away.
+    if (!this.connected) this.adopt(link)
     return {
       receive: (raw) => {
-        if (this.link === link) this.receive(raw)
+        if (this.link === link) return this.receive(raw)
+        this.claim(link, raw)
       },
       disconnect: () => {
         if (this.link === link) this.disconnect()
       },
     }
+  }
+
+  /**
+   * A socket arrived while another browser is connected. Its pairing decides:
+   * the same browser coming back (a restarted worker, same `instance`), an
+   * extension too old to say which browser it is, or one the person told to
+   * take over (`take`) replaces the current one; any other browser is told the
+   * Lynx is busy elsewhere and closed, instead of the two knocking each other
+   * off every half second as they used to.
+   */
+  private claim(link: Socket, raw: string) {
+    const message = (() => {
+      try {
+        return JSON.parse(raw) as { type?: string; token?: string; instance?: string; take?: boolean }
+      } catch {
+        return undefined
+      }
+    })()
+    if (message?.type !== "auth") return
+    if (message.token !== this.token) {
+      log("auth-refused")
+      return link.close()
+    }
+    const same = !message.instance || !this.instance || message.instance === this.instance
+    if (!same && !message.take && this.connected) {
+      log("busy", { instance: message.instance })
+      link.write({ type: "busy" })
+      return link.close()
+    }
+    this.adopt(link)
+    this.receive(raw)
+  }
+
+  /**
+   * Makes `link` the one connection. The old socket is closed rather than left
+   * open: a restarted extension worker can open a second socket before the
+   * first is gone, and when that first one finally closed it used to tear down
+   * the new, healthy connection with it, leaving the extension believing it was
+   * connected while the bridge had dropped it.
+   */
+  private adopt(link: Socket) {
+    const previous = this.disconnectSocket
+    if (previous) log("replaced", this.waiting())
+    else log("connect")
+    this.reset()
+    previous?.()
+    this.link = link
+    this.origin = link.origin
+    this.write = link.write
+    this.disconnectSocket = link.close
+    this.authed = false
   }
 
   /** Feeds one raw message from the extension. */
@@ -521,12 +598,21 @@ export class Bridge {
       reason?: string
       previous?: unknown
       protocol?: number
+      instance?: string
+      take?: boolean
       text?: string
       selection?: string
       follow?: boolean
       tab?: { targetId?: string; url?: string; title?: string }
       requestID?: string
       reply?: "once" | "always" | "reject"
+      rid?: number
+      path?: string
+      body?: unknown
+      directory?: string
+      audio?: string
+      mime?: string
+      sessionID?: string
     }
     try {
       message = JSON.parse(raw)
@@ -541,6 +627,7 @@ export class Bridge {
       }
       // The extension says why its previous socket ended, which this side cannot see.
       log("auth", { previous: message.previous, protocol: message.protocol })
+      this.instance = message.instance
       this.authed = true
       clearTimeout(this.recovery)
       this.recovery = undefined
@@ -610,6 +697,19 @@ export class Bridge {
       case "seen":
         this.status.seen()
         return
+      case "open":
+        // "Abrir no app" in the side panel: the app opens that conversation and comes forward.
+        if (!message.sessionID) return
+        return void GlobalBus.emit("event", {
+          directory: "global",
+          payload: { type: "lynx.extension.open", properties: { sessionID: message.sessionID, directory: message.directory } },
+        })
+      case "api":
+        return void this.api(message.rid, message.method, message.path, message.body)
+      case "watch":
+        return this.follow(message.directory)
+      case "transcribe":
+        return void this.transcribe(message.rid, message.audio, message.mime)
       case "target":
         if (message.event && message.target) {
           const detail: TargetEvent = { event: message.event, target: message.target }
@@ -618,6 +718,54 @@ export class Bridge {
         }
         return
     }
+  }
+
+  /**
+   * One call of the side panel, made on this server as itself (with its own
+   * password) and only on PANEL_API. The answer goes back under the panel's id.
+   */
+  private async api(rid: unknown, method: unknown, path: unknown, body: unknown) {
+    const answer = (status: number, data: unknown) => this.write?.({ type: "api", rid, status, body: data })
+    if (typeof rid !== "number" || typeof method !== "string" || typeof path !== "string") return
+    const url = this.origin ? new URL(path, this.origin) : undefined
+    const allowed = url && url.origin === new URL(this.origin!).origin && PANEL_API.some(([verb, route]) => verb === method && route.test(url.pathname))
+    if (!url || !allowed) return answer(403, { error: `not allowed: ${method} ${path}` })
+    const response = await fetch(url, {
+      method,
+      headers: { ...ServerAuth.headers(), ...(body === undefined ? {} : { "content-type": "application/json" }) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }).catch((error: unknown) => error as Error)
+    if (response instanceof Error) return answer(502, { error: response.message })
+    const text = await response.text()
+    const parsed = (() => {
+      try {
+        return text ? JSON.parse(text) : null
+      } catch {
+        return text
+      }
+    })()
+    answer(response.status, parsed)
+  }
+
+  /** The side panel's dictation: base64 audio in, text out (see transcribe.ts). */
+  private async transcribe(rid: unknown, audio: unknown, mime: unknown) {
+    if (typeof rid !== "number" || typeof audio !== "string") return
+    const result = await BrowserTranscribe.transcribe(Buffer.from(audio, "base64"), typeof mime === "string" ? mime : "audio/webm")
+    this.write?.({ type: "transcribed", rid, ...result })
+  }
+
+  /** Relays the server's events about one project to the side panel; undefined stops. */
+  private follow(directory?: string) {
+    this.stopWatching?.()
+    this.stopWatching = undefined
+    this.watching = directory
+    if (!directory) return
+    const handler = (event: { directory?: string; payload?: { type?: string } }) => {
+      if (event.directory !== this.watching || !PANEL_EVENTS.test(event.payload?.type ?? "")) return
+      if (this.connected) this.write?.({ type: "bus", directory: event.directory, payload: event.payload })
+    }
+    GlobalBus.on("event", handler)
+    this.stopWatching = () => GlobalBus.off("event", handler)
   }
 
   /** The socket closed. Every in-flight call fails and tabs go stale. */
@@ -636,6 +784,7 @@ export class Bridge {
   }
 
   private reset() {
+    this.follow(undefined)
     this.write = undefined
     this.disconnectSocket = undefined
     this.link = undefined

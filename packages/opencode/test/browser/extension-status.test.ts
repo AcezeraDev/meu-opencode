@@ -152,3 +152,95 @@ describe("extension requests through the bridge", () => {
     })
   })
 })
+
+describe("the side panel's calls", () => {
+  async function call(message: object) {
+    const sent: any[] = []
+    const bridge = new Bridge("secret")
+    bridge.accept(
+      (item) => sent.push(item),
+      () => {},
+      "http://127.0.0.1:9",
+    )
+    bridge.receive(JSON.stringify({ type: "auth", token: "secret" }))
+    bridge.receive(JSON.stringify({ type: "api", rid: 1, ...message }))
+    for (let wait = 0; wait < 100 && !sent.some((item) => item.type === "api"); wait++) await Bun.sleep(20)
+    return sent.find((item) => item.type === "api")
+  }
+
+  test("only reach the routes a chat needs", async () => {
+    expect(await call({ method: "GET", path: "/auth/openai" })).toMatchObject({ rid: 1, status: 403 })
+    expect(await call({ method: "POST", path: "/config" })).toMatchObject({ status: 403 })
+    expect(await call({ method: "DELETE", path: "/project/p_1" })).toMatchObject({ status: 403 })
+    expect(await call({ method: "GET", path: "http://evil.example/session" })).toMatchObject({ status: 403 })
+    expect(await call({ method: "GET", path: "/session/../auth/x" })).toMatchObject({ status: 403 })
+  })
+
+  test("an allowed route is called on this server", async () => {
+    // Nothing listens on port 9, so the call is made and fails there.
+    expect(await call({ method: "GET", path: "/session?directory=x" })).toMatchObject({ rid: 1, status: 502 })
+  })
+})
+
+describe("one browser at a time", () => {
+  function pair(bridge: Bridge, instance?: string, take?: boolean) {
+    const sent: any[] = []
+    let closed = false
+    const link = bridge.accept(
+      (message) => sent.push(message),
+      () => {
+        closed = true
+      },
+    )
+    link.receive(JSON.stringify({ type: "auth", token: "secret", instance, take }))
+    return { link, sent, closed: () => closed }
+  }
+
+  test("another browser waits instead of knocking the first one off", () => {
+    const bridge = new Bridge("secret")
+    const brave = pair(bridge, "brave")
+    const edge = pair(bridge, "edge")
+    expect(edge.sent).toEqual([{ type: "busy" }])
+    expect(edge.closed()).toBe(true)
+    expect(brave.closed()).toBe(false)
+    expect(bridge.connected).toBe(true)
+  })
+
+  test("the same browser coming back, an old extension, or one told to take over replaces it", () => {
+    const bridge = new Bridge("secret")
+    const first = pair(bridge, "brave")
+    const again = pair(bridge, "brave")
+    expect(first.closed()).toBe(true)
+    expect(again.sent[0]).toMatchObject({ type: "welcome" })
+
+    const old = pair(bridge)
+    expect(again.closed()).toBe(true)
+    expect(old.sent[0]).toMatchObject({ type: "welcome" })
+
+    const taker = pair(bridge, "edge", true)
+    expect(taker.sent[0]).toMatchObject({ type: "welcome" })
+  })
+
+  test("a browser can pair once the other one left", () => {
+    const bridge = new Bridge("secret")
+    const brave = pair(bridge, "brave")
+    brave.link.disconnect()
+    const edge = pair(bridge, "edge")
+    expect(edge.sent[0]).toMatchObject({ type: "welcome" })
+  })
+
+  test("a wrong token from a second browser is refused without disturbing the first", () => {
+    const bridge = new Bridge("secret")
+    const brave = pair(bridge, "brave")
+    let closed = false
+    const intruder = bridge.accept(
+      () => {},
+      () => {
+        closed = true
+      },
+    )
+    intruder.receive(JSON.stringify({ type: "auth", token: "nope", instance: "x" }))
+    expect(closed).toBe(true)
+    expect(brave.closed()).toBe(false)
+  })
+})

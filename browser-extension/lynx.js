@@ -13,9 +13,11 @@
  */
 
 /** Must match EXTENSION_PROTOCOL in packages/opencode/src/browser/bridge.ts. */
-const PROTOCOL_VERSION = 2
+const PROTOCOL_VERSION = 4
 /** Where the app listens: the saved port first, then its usual one, then the dev servers. */
 const CANDIDATE_PORTS = [4919, 4096, 4097, 4920, 4921]
+/** How often a browser told the Lynx is busy elsewhere asks again. */
+const BUSY_RETRY = 30000
 /** After Stop, the Lynx may not touch the browser for this long, so a step already sent cannot carry on. */
 const HALT_MS = 8000
 /** An Esc the Lynx sent herself arrives in the page this soon after; it is not the person's. */
@@ -58,6 +60,10 @@ const lynx = {
   pairing: undefined,
   /** Set when a socket closed before the app welcomed it: the saved token is likely stale. */
   stale: false,
+  /** Another browser is connected to the app; this one waits (see bridge.ts `claim`). */
+  busyElsewhere: false,
+  /** The person chose "Usar este navegador": the next pairing takes over. */
+  takeOver: false,
 }
 
 void chrome.storage.local.get(["blocked", "lookOnly", "notify", "group"]).then((saved) => {
@@ -116,9 +122,13 @@ function pair() {
 
 function onWelcome(message) {
   lynx.serverProtocol = message.protocol
+  // The side panel's project, followed again on the new socket.
+  if (lynx.watching) send({ type: "watch", directory: lynx.watching })
   lynx.connectedSince = Date.now()
   lynx.lastError = ""
   lynx.stale = false
+  lynx.busyElsewhere = false
+  lynx.takeOver = false
   if (typeof message.protocol !== "number" || message.protocol <= PROTOCOL_VERSION) return badge()
   // The app is newer: its update already put the new files where this was
   // loaded from, so a reload picks them up. Once in ten minutes at most, in
@@ -132,7 +142,15 @@ function onWelcome(message) {
 /** Called by background.js when a socket ends; one that never got a welcome was most likely refused. */
 function onSocketEnd(welcomed) {
   lynx.connectedSince = 0
-  if (!welcomed) lynx.stale = true
+  if (!welcomed && !lynx.busyElsewhere) lynx.stale = true
+  badge()
+  broadcast()
+}
+
+/** The app answered that another browser is using the Lynx. */
+function onBusy() {
+  lynx.busyElsewhere = true
+  lynx.lastError = "Outro navegador está usando a Lynx agora."
   badge()
   broadcast()
 }
@@ -208,6 +226,7 @@ function badge() {
           ? `Lynx terminou${lynx.status.session ? ": " + lynx.status.session : ""}`
           : "Lynx Code — conectado"
   void chrome.action.setTitle({ title })
+  if (!online && lynx.busyElsewhere) return setBadge("…", BADGE.gray)
   if (!online) return setBadge("off", BADGE.gray)
   if (phase === "attention") return setBadge("!", BADGE.amber)
   if (phase === "done") return setBadge("✓", BADGE.deep)
@@ -237,6 +256,7 @@ function snapshot() {
     version: chrome.runtime.getManifest().version,
     status: lynx.status,
     agentTab: lynx.agentTab,
+    busyElsewhere: lynx.busyElsewhere,
   }
 }
 
@@ -392,23 +412,149 @@ function menus() {
     chrome.contextMenus.create({ id: "lynx-notebook", title: "Mandar pro caderno da Lynx", contexts: ["selection"] })
     chrome.contextMenus.create({ id: "lynx-summary", title: "Resumir esta página com a Lynx", contexts: ["page"] })
     chrome.contextMenus.create({ id: "lynx-here", title: "Lynx, faça isto aqui…", contexts: ["page", "selection"] })
+    chrome.contextMenus.create({ id: "lynx-image", title: "Perguntar à Lynx sobre esta imagem", contexts: ["image"] })
   })
 }
 chrome.runtime.onInstalled.addListener(menus)
 chrome.runtime.onStartup.addListener(menus)
 
+const MENU_TEXT = {
+  "lynx-explain": "Explique este trecho de um jeito simples.",
+  "lynx-notebook": "Guarde este trecho no caderno, com a página de onde veio.",
+  "lynx-summary": "Resuma esta página.",
+}
+
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   // Opening the panel needs the click itself, so it comes before anything awaited.
   void openPanel(tab?.windowId)
   const selection = info.selectionText || ""
-  if (info.menuItemId === "lynx-explain")
-    return void ask({ text: "Explique este trecho de um jeito simples.", selection, tab })
-  if (info.menuItemId === "lynx-notebook")
-    return void ask({ text: "Guarde este trecho no caderno, com a página de onde veio.", selection, tab })
-  if (info.menuItemId === "lynx-summary") return void ask({ text: "Resuma esta página.", tab })
-  if (info.menuItemId === "lynx-here")
-    chrome.runtime.sendMessage({ type: "lynx-compose", selection }).catch(() => {})
+  if (info.menuItemId === "lynx-image") return void imageToPanel(info.srcUrl, tab)
+  const text = MENU_TEXT[info.menuItemId]
+  // The panel sends it in its own conversation; if it never opens, the app starts one.
+  void handToPanel({ text, selection, tabId: tab?.id, send: !!text }).then((taken) => {
+    if (!taken && text) void ask({ text, selection, tab })
+  })
 })
+
+// ── The side panel's chat ───────────────────────────────────────────────────
+
+/** Calls the app's API for the panel, through the paired socket (see PANEL_API in bridge.ts). */
+const calls = new Map()
+let nextCall = 1
+
+function api(method, path, body) {
+  if (!socket || socket.readyState !== WebSocket.OPEN) return Promise.resolve({ status: 0, body: { error: "offline" } })
+  const rid = nextCall++
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      calls.delete(rid)
+      resolve({ status: 0, body: { error: "timeout" } })
+    }, 60000)
+    calls.set(rid, (answer) => {
+      clearTimeout(timer)
+      resolve(answer)
+    })
+    send({ type: "api", rid, method, path, body })
+  })
+}
+
+/** Called by background.js for the answer to one of the panel's calls. */
+function onApi(message) {
+  const done = calls.get(message.rid)
+  if (!done) return
+  calls.delete(message.rid)
+  done({ status: message.status, body: message.body })
+}
+
+/** Called by background.js for a server event about the panel's project. */
+function onBus(message) {
+  chrome.runtime.sendMessage({ type: "lynx-bus", payload: message.payload }).catch(() => {})
+}
+
+/** The answer to the panel's dictation (see transcribe.ts). */
+function onTranscribed(message) {
+  const done = calls.get(message.rid)
+  if (!done) return
+  calls.delete(message.rid)
+  done(message.error ? { error: message.error } : { text: message.text || "" })
+}
+
+function transcribe(audio, mime) {
+  if (!socket || socket.readyState !== WebSocket.OPEN) return Promise.resolve({ error: "O Lynx Code não está conectado." })
+  const rid = nextCall++
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      calls.delete(rid)
+      resolve({ error: "A transcrição demorou demais." })
+    }, 90000)
+    calls.set(rid, (answer) => {
+      clearTimeout(timer)
+      resolve(answer)
+    })
+    send({ type: "transcribe", rid, audio, mime })
+  })
+}
+
+/** Bytes as base64, in slices: a spread of a whole image overflows the call stack. */
+function base64(bytes) {
+  let binary = ""
+  for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000))
+  return btoa(binary)
+}
+
+/** "Perguntar à Lynx sobre esta imagem": the image goes to the panel as an attachment. */
+async function imageToPanel(src, tab) {
+  if (!src) return
+  const response = await fetch(src).catch(() => undefined)
+  if (!response?.ok) return void handToPanel({ send: false, note: "Não deu para pegar essa imagem." })
+  const bytes = new Uint8Array(await response.arrayBuffer())
+  if (bytes.length > 15 * 1024 * 1024) return void handToPanel({ send: false, note: "A imagem passa de 15 MB." })
+  const mime = response.headers.get("content-type")?.split(";")[0] || "image/png"
+  const name = decodeURIComponent(new URL(src).pathname.split("/").pop() || "imagem").slice(0, 60)
+  void handToPanel({
+    send: false,
+    tabId: tab?.id,
+    attachments: [{ name, mime, url: `data:${mime};base64,${base64(bytes)}` }],
+  })
+}
+
+/** Asks a tab's page script for its readable text (page.js). */
+async function pageOf(tabId) {
+  const tab = typeof tabId === "number" ? await chrome.tabs.get(tabId).catch(() => undefined) : await activeTab()
+  if (!tab?.id || !/^https?:|^file:/.test(tab.url || "")) return undefined
+  const read = await chrome.tabs.sendMessage(tab.id, { type: "page-text" }).catch(() => undefined)
+  return { id: tab.id, url: tab.url, title: tab.title, text: read?.text || "" }
+}
+
+/** Lets the person drag a box on the page, then shoots the visible tab; the panel crops it. */
+async function shootArea() {
+  const tab = await activeTab()
+  if (!tab?.id) return { error: "Abra uma página para tirar o print." }
+  const rect = await chrome.tabs.sendMessage(tab.id, { type: "crop" }).catch(() => undefined)
+  if (rect === undefined) return { error: "Recarregue a página para escolher uma área (a extensão ainda não está nela)." }
+  if (!rect) return { cancelled: true }
+  const url = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "png" }).catch(() => undefined)
+  if (!url) return { error: "Não deu para tirar o print desta aba." }
+  return { url, rect, title: tab.title || tab.url }
+}
+
+const PANEL_QUEUE = "panelQueue"
+
+/**
+ * Leaves a request for the side panel (from the page's menu); resolves whether
+ * an open panel took it within a few seconds.
+ */
+async function handToPanel(request) {
+  await chrome.storage.session.set({ [PANEL_QUEUE]: { ...request, at: Date.now() } })
+  chrome.runtime.sendMessage({ type: "lynx-queue" }).catch(() => {})
+  for (let waited = 0; waited < 4000; waited += 250) {
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    const left = (await chrome.storage.session.get(PANEL_QUEUE))[PANEL_QUEUE]
+    if (!left) return true
+  }
+  await chrome.storage.session.remove(PANEL_QUEUE)
+  return false
+}
 
 chrome.commands.onCommand.addListener((command, tab) => {
   if (command === "open-panel") return void openPanel(tab?.windowId)
@@ -420,6 +566,56 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   switch (message.type) {
     case "lynx-get":
       respond(snapshot())
+      return false
+    case "lynx-api":
+      void api(message.method, message.path, message.body).then(respond)
+      return true
+    case "lynx-watch":
+      lynx.watching = message.directory
+      sendIfOpen({ type: "watch", directory: message.directory })
+      return false
+    case "lynx-transcribe":
+      void transcribe(message.audio, message.mime).then(respond)
+      return true
+    case "lynx-page":
+      void pageOf(message.tabId).then(respond)
+      return true
+    case "lynx-shot-area":
+      void shootArea().then(respond)
+      return true
+    case "lynx-open-session":
+      respond(sendIfOpen({ type: "open", sessionID: message.sessionID, directory: message.directory }))
+      return false
+    case "lynx-take-over":
+      lynx.takeOver = true
+      lynx.busyElsewhere = false
+      reconnectNow()
+      respond(true)
+      return false
+    case "lynx-shot":
+      void (async () => {
+        const tab = await activeTab()
+        if (!tab) return respond(undefined)
+        const url = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 85 }).catch(() => undefined)
+        respond(url ? { url, title: tab.title || tab.url } : undefined)
+      })()
+      return true
+    case "lynx-tab":
+      void (async () => {
+        const tab = await activeTab()
+        respond(tab ? { id: tab.id, url: tab.url, title: tab.title, selection: await selectionOf(tab.id) } : undefined)
+      })()
+      return true
+    case "lynx-take":
+      void chrome.storage.session.get(PANEL_QUEUE).then(async (saved) => {
+        const request = saved[PANEL_QUEUE]
+        await chrome.storage.session.remove(PANEL_QUEUE)
+        respond(request && Date.now() - request.at < 10000 ? request : undefined)
+      })
+      return true
+    case "lynx-open-app":
+      // The app registers opencode:// with Windows; the browser asks before opening it.
+      void chrome.tabs.create({ url: "opencode://open" })
       return false
     case "lynx-defaults":
       respond(DEFAULT_BLOCKED)

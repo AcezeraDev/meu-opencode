@@ -81,6 +81,51 @@ de responder, a extensão tenta a 4919 e passa a lembrar dela.
   e envio de arquivo são recusados. Vem com uma lista de bancos já proibidos.
 - **Grupo "Lynx":** as abas que ela abre vão para um grupo de abas coral.
 
+### Painel lateral como chat (desde a 0.10.0)
+
+O painel virou um chat no jeito do painel do Claude: conversa escolhida no topo
+(com o projeto e as conversas recentes), histórico, nova conversa, menu ⋮, a
+conversa com a resposta formatada enquanto chega, copiar e ouvir, "Trabalhando
+nisso", cartão de permissão e pergunta, e embaixo a caixa com **+** (print da
+aba, imagem ou arquivo, texto selecionado, usar esta aba), **modo** (Padrão,
+Manual, Aceitar edições, Plano, Ignorar permissões), **modelo** com busca,
+recentes e esforço, **skills** (no + ou digitando / no começo da caixa, várias de uma vez, mandadas como `nome.skill` igual ao app), **ditado** (no Brave cai para o Win+H) e enviar/parar.
+
+As conversas são sessões normais do app (aparecem lá também). O painel não tem
+senha do app: chama a API pelo socket pareado (`{ type: "api" }`), e a ponte só
+deixa passar as rotas de `PANEL_API` em `bridge.ts`, chamando o próprio servidor
+com a senha dele. Os eventos do projeto aberto chegam por `{ type: "watch" }` /
+`{ type: "bus" }`. Fio na versão 3.
+
+**Com o app fechado:** a extensão precisa do servidor do app. Desde esta versão,
+fechar a janela do Lynx Code só esconde o app na bandeja (o servidor continua);
+para sair de vez, botão direito no ícone da bandeja → Sair. Com o app fora do ar,
+o painel mostra "Abrir o Lynx Code" (link `opencode://`).
+
+### 0.11.0
+
+- **Texto da página junto:** com "Usar esta aba" ligado, a primeira mensagem
+  sobre uma página leva o texto dela (até 24 mil letras, `page.js`), e a Lynx
+  responde sem abrir o navegador. A mesma página não vai de novo na mesma
+  conversa. `@` menciona outras abas abertas, que vão com o texto delas.
+- **Modelos revendidos** (NanoGPT, Roteia, OpenRouter…) têm o selo "via …" no
+  seletor e no botão do modelo.
+- **Conversa:** tentar de novo e editar a última mensagem (por `revert` na
+  sessão), raciocínio dobrado ("Pensando…"/"Pensou"), passos que abrem com
+  entrada e resultado, gasto da conversa em R$ no topo (cotação do dia, as
+  mesmas fontes do app) e histórico com busca, renomear, apagar (dois cliques)
+  e "Abrir esta conversa no app".
+- **Contexto:** print de uma área (arrastar na página), botão direito numa
+  imagem → "Perguntar à Lynx sobre esta imagem", atalhos prontos no Moodle,
+  Sala do Futuro e Google Sala de Aula.
+- **Confiabilidade:** um navegador por vez sem briga (`instance` no `auth`; o
+  segundo recebe `busy`, espera 30 s entre tentativas e oferece "Usar este
+  navegador"); conexão presa em "conectando" é largada em 5 s; mensagens
+  escritas com o app fora ficam numa fila salva e saem quando ele volta.
+- **Ditado:** grava no painel (`MediaRecorder`) e o app transcreve pelo
+  NanoGPT (`whisper-large-v3`), com a Roteia de reserva (`transcribe.ts`). Na
+  primeira vez, `mic.html` pede o microfone numa aba. Fio na versão 4.
+
 O estado da Lynx vem do app (`browser/extension-status.ts`, mensagens `status`).
 Os pedidos (`ask`, `stop`, `answer`) viram eventos globais que o app atende em
 `app/src/components/extension-asks.tsx`, porque é o app que sabe o projeto, o

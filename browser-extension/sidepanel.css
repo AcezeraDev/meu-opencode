@@ -1,0 +1,1073 @@
+/* The side panel, laid out like Claude's: a bar on top, the conversation, and
+ * the composer pinned to the bottom. Colors come from lynx.css. */
+html,
+body {
+  height: 100%;
+}
+body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+button.icon {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 8px;
+}
+button.icon:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+[hidden] {
+  display: none !important;
+}
+
+/* ── Bar ─────────────────────────────────────────────────────────────────── */
+.bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(var(--bg), color-mix(in oklab, var(--bg) 92%, var(--coral)));
+}
+.title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 70%;
+  border: 0;
+  background: transparent;
+  padding: 6px 8px;
+  font-weight: 600;
+}
+.title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.title svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.title:hover {
+  background: var(--panel-2);
+}
+.tools {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+}
+
+/* ── Menus ───────────────────────────────────────────────────────────────── */
+.menu {
+  position: absolute;
+  z-index: 20;
+  top: 46px;
+  left: 10px;
+  min-width: 220px;
+  max-width: calc(100vw - 20px);
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.menu.right {
+  left: auto;
+  right: 10px;
+}
+.menu.up {
+  top: auto;
+  bottom: calc(100% + 6px);
+  left: 0;
+}
+.menu.up.right {
+  left: auto;
+  right: 0;
+}
+.menu > button,
+.session-list button,
+.model-list button,
+.variant-list button {
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 7px 9px;
+  border-radius: 8px;
+  color: var(--text);
+}
+.menu > button:hover,
+.session-list button:hover,
+.model-list button:hover,
+.variant-list button:hover,
+.menu button[aria-current="true"] {
+  background: var(--panel-2);
+}
+.menu-label {
+  padding: 6px 9px 2px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.menu-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.menu-check input {
+  accent-color: var(--coral);
+}
+.menu select {
+  margin: 2px 6px 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px;
+  font: inherit;
+}
+.session-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 50vh;
+  overflow: auto;
+}
+.session-list button {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.session-list button span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-list .when {
+  flex: none;
+  color: var(--faint);
+  font-size: 12px;
+}
+.model-menu {
+  width: min(320px, calc(100vw - 24px));
+}
+.model-menu input {
+  margin: 2px 2px 6px;
+  width: auto;
+}
+.model-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 260px;
+  overflow: auto;
+}
+.model-list button small {
+  display: block;
+  color: var(--faint);
+  font-size: 11px;
+}
+.model-list .group {
+  padding: 8px 9px 2px;
+  font-size: 11px;
+  color: var(--faint);
+}
+.variant-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px 6px 4px;
+}
+.variant-list button {
+  border: 1px solid var(--line);
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+.variant-list button[aria-current="true"] {
+  border-color: var(--coral);
+  color: var(--coral);
+}
+
+/* ── Conversation ────────────────────────────────────────────────────────── */
+main {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 14px 8px;
+}
+.transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.user {
+  align-self: flex-end;
+  max-width: 85%;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 8px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.user .thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.user .thumbs img {
+  max-width: 120px;
+  max-height: 90px;
+  border-radius: 8px;
+  display: block;
+}
+.user .file {
+  font-size: 12px;
+  color: var(--muted);
+}
+.assistant {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.prose {
+  font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, Cambria, serif;
+  font-size: 15px;
+  line-height: 1.55;
+  word-break: break-word;
+}
+.prose p {
+  margin: 0 0 0.6em;
+}
+.prose p:last-child {
+  margin-bottom: 0;
+}
+.prose ul,
+.prose ol {
+  margin: 0 0 0.6em;
+  padding-left: 1.3em;
+}
+.prose h1,
+.prose h2,
+.prose h3 {
+  font-size: 1em;
+  margin: 0.8em 0 0.3em;
+}
+.prose code {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.85em;
+  background: var(--panel-2);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+.prose pre {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  overflow: auto;
+}
+.prose pre code {
+  background: none;
+  padding: 0;
+}
+.prose a {
+  color: var(--coral);
+}
+.step {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.step .dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--faint);
+  transform: translateY(-1px);
+}
+.step[data-state="running"] .dot {
+  background: var(--coral);
+  animation: blink 1s ease-in-out infinite;
+}
+.step[data-state="error"] .dot {
+  background: var(--deep);
+}
+.step[data-state="completed"] .dot {
+  background: color-mix(in oklab, var(--coral) 45%, var(--faint));
+}
+.step span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.actions {
+  display: flex;
+  gap: 2px;
+}
+.actions button.icon {
+  width: 26px;
+  height: 26px;
+}
+.actions svg {
+  width: 15px;
+  height: 15px;
+}
+.working {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+}
+.spark {
+  position: relative;
+  width: 14px;
+  height: 14px;
+}
+.spark i {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--coral);
+  animation: orbit 1.2s ease-in-out infinite;
+}
+.spark i:nth-child(2) {
+  animation-delay: -0.4s;
+  background: var(--deep);
+}
+.spark i:nth-child(3) {
+  animation-delay: -0.8s;
+}
+@keyframes orbit {
+  0% {
+    transform: translate(5px, 0);
+  }
+  33% {
+    transform: translate(0, 9px);
+  }
+  66% {
+    transform: translate(10px, 9px);
+  }
+  100% {
+    transform: translate(5px, 0);
+  }
+}
+@keyframes blink {
+  50% {
+    opacity: 0.3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spark i,
+  .step[data-state="running"] .dot {
+    animation: none;
+  }
+}
+.ask {
+  border: 1px solid color-mix(in oklab, var(--coral) 45%, var(--line));
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ask .what {
+  word-break: break-word;
+}
+.ask .row {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.error-line {
+  color: var(--coral);
+  font-size: 13px;
+}
+
+/* ── Empty and offline ───────────────────────────────────────────────────── */
+.empty,
+.offline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 28px 8px;
+}
+.empty h2,
+.offline h2 {
+  margin: 0;
+  font-family: ui-serif, Georgia, serif;
+  font-size: 19px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text);
+}
+.offline p {
+  margin: 0;
+  color: var(--muted);
+  max-width: 300px;
+}
+.suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 320px;
+}
+.suggestions button {
+  text-align: left;
+  border-radius: 10px;
+  color: var(--muted);
+}
+.row.center {
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ── Composer ────────────────────────────────────────────────────────────── */
+.composer-wrap {
+  padding: 8px 10px 6px;
+}
+.composer {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 10px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.composer:focus-within {
+  border-color: color-mix(in oklab, var(--coral) 55%, var(--line));
+}
+.composer textarea {
+  border: 0;
+  background: transparent;
+  padding: 2px 4px;
+  resize: none;
+  max-height: 200px;
+  line-height: 1.45;
+  outline: none;
+}
+.composer textarea:focus-visible {
+  outline: none;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chips:empty {
+  display: none;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 4px 3px 3px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  border-radius: 9px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.chip img {
+  width: 34px;
+  height: 34px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+.chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+.chip button {
+  border: 0;
+  background: transparent;
+  color: var(--faint);
+  padding: 2px 5px;
+}
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.pop {
+  position: relative;
+}
+.mode[data-mode]:not([data-mode="default"]) {
+  color: var(--coral);
+  background: color-mix(in oklab, var(--coral) 12%, transparent);
+}
+.model {
+  border: 0;
+  background: transparent;
+  padding: 5px 8px;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 13px;
+}
+.model .faint {
+  font-weight: 400;
+}
+.model:hover {
+  background: var(--panel-2);
+}
+#micButton[data-on] {
+  color: var(--coral);
+}
+.send {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 9px;
+  border: 0;
+  background: var(--fill);
+  color: #fff;
+}
+.send:disabled {
+  background: var(--panel-2);
+  color: var(--faint);
+}
+.send .square {
+  display: none;
+}
+.send[data-stop] {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+.send[data-stop] .square {
+  display: block;
+  fill: currentColor;
+}
+.send[data-stop] .arrow {
+  display: none;
+}
+.disclaimer {
+  margin: 6px 0 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--faint);
+}
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 120px;
+  transform: translateX(-50%);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  max-width: calc(100vw - 32px);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+}
+
+/* The model menu is wider than the space left of its button: it spans the composer instead. */
+.composer {
+  position: relative;
+}
+.pop.wide {
+  position: static;
+}
+.model-menu.up.right {
+  left: 0;
+  right: 0;
+  width: auto;
+}
+
+/* Skills: picked from the + menu or by typing "/" in an empty box. */
+.skill-menu.up {
+  left: 0;
+  right: 0;
+  width: auto;
+}
+.skill-menu input {
+  margin: 2px 2px 6px;
+  width: auto;
+}
+.skill-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 300px;
+  overflow: auto;
+}
+.skill-list button {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 2px 8px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 7px 9px;
+  border-radius: 8px;
+  color: var(--text);
+}
+.skill-list button:hover,
+.skill-list button[data-active] {
+  background: var(--panel-2);
+}
+.skill-list .check {
+  grid-row: span 2;
+  color: var(--coral);
+}
+.skill-list small {
+  grid-column: 2;
+  color: var(--faint);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.skill-list .none {
+  padding: 10px;
+  color: var(--faint);
+}
+.chip.skill {
+  padding-left: 8px;
+  color: var(--coral);
+  border-color: color-mix(in oklab, var(--coral) 40%, var(--line));
+}
+.user .skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.user .skills span {
+  font-size: 11.5px;
+  color: var(--coral);
+  border: 1px solid color-mix(in oklab, var(--coral) 40%, var(--line));
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+/* ── Bigger and easier to read (the panel is read at arm's length, beside a page) ── */
+body {
+  font-size: 15px;
+  line-height: 1.5;
+}
+svg {
+  width: 20px;
+  height: 20px;
+}
+button {
+  font-size: 14px;
+}
+button.icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+.bar {
+  padding: 10px 12px;
+}
+.title {
+  font-size: 15.5px;
+}
+.menu {
+  border-radius: 14px;
+  padding: 8px;
+}
+.menu > button,
+.session-list button,
+.model-list button,
+.variant-list button,
+.skill-list button {
+  font-size: 14.5px;
+  padding: 9px 11px;
+}
+.menu-label,
+.model-list .group {
+  font-size: 12px;
+}
+.model-list button small,
+.skill-list small,
+.session-list .when {
+  font-size: 12.5px;
+}
+.variant-list button {
+  font-size: 13.5px;
+  padding: 5px 12px;
+}
+main {
+  padding: 20px 16px 10px;
+}
+.transcript {
+  gap: 18px;
+}
+.user {
+  font-size: 15.5px;
+  padding: 10px 14px;
+  border-radius: 18px;
+}
+.prose {
+  font-size: 17px;
+  line-height: 1.6;
+}
+.step {
+  font-size: 14px;
+}
+.working {
+  font-size: 15px;
+}
+.actions button.icon {
+  width: 30px;
+  height: 30px;
+}
+.actions svg {
+  width: 17px;
+  height: 17px;
+}
+.ask {
+  font-size: 15px;
+  padding: 14px;
+  border-radius: 14px;
+}
+.empty h2,
+.offline h2 {
+  font-size: 23px;
+}
+.offline p {
+  font-size: 15px;
+}
+.suggestions {
+  max-width: 360px;
+  gap: 8px;
+}
+.suggestions button {
+  font-size: 15px;
+  padding: 11px 14px;
+  border-radius: 12px;
+}
+.composer-wrap {
+  padding: 10px 12px 8px;
+}
+.composer {
+  border-radius: 18px;
+  padding: 12px 12px 8px;
+  gap: 8px;
+}
+.composer textarea {
+  font-size: 16px;
+  padding: 4px 6px;
+}
+.chip {
+  font-size: 13.5px;
+}
+.chip span {
+  max-width: 190px;
+}
+.model {
+  font-size: 15px;
+  max-width: 210px;
+  padding: 6px 10px;
+}
+.send {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+}
+.disclaimer {
+  font-size: 12.5px;
+  margin-top: 8px;
+}
+.toast {
+  font-size: 14px;
+  bottom: 140px;
+}
+.menu-check {
+  font-size: 14.5px;
+}
+.menu select,
+.model-menu input,
+.skill-menu input {
+  font-size: 15px;
+}
+
+/* ── Cost, history rows, reseller badge ─────────────────────────────────── */
+.cost {
+  flex: none;
+  font-size: 12.5px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-variant-numeric: tabular-nums;
+}
+#sessionSearch {
+  margin: 2px 6px 6px;
+  width: auto;
+  font-size: 14.5px;
+}
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.session-row > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.session-row button.icon {
+  width: 30px;
+  height: 30px;
+  opacity: 0;
+}
+.session-row:hover button.icon,
+.session-row:focus-within button.icon,
+.session-row[data-confirm] button.icon {
+  opacity: 1;
+}
+.session-row button.icon svg {
+  width: 16px;
+  height: 16px;
+}
+.session-row[data-confirm] .danger {
+  color: #fff;
+  background: var(--deep);
+}
+.session-row input.rename {
+  flex: 1;
+  margin: 2px 4px;
+}
+.session-list .none {
+  padding: 10px;
+  color: var(--faint);
+}
+.via {
+  margin-left: 8px;
+  font-size: 11.5px;
+  color: var(--amber);
+  border: 1px solid color-mix(in oklab, var(--amber) 45%, transparent);
+  border-radius: 999px;
+  padding: 0 7px;
+  white-space: nowrap;
+}
+
+/* ── Thinking and steps that open ───────────────────────────────────────── */
+details.thinking,
+details.step {
+  font-size: 14px;
+  color: var(--muted);
+}
+details.thinking > summary,
+details.step > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+}
+details.thinking > summary::-webkit-details-marker,
+details.step > summary::-webkit-details-marker {
+  display: none;
+}
+details.thinking > summary::before {
+  content: "✻";
+  color: var(--coral);
+}
+details.thinking > summary::after,
+details.step > summary::after {
+  content: "›";
+  color: var(--faint);
+  transition: transform 0.15s;
+}
+details[open].thinking > summary::after,
+details[open].step > summary::after {
+  transform: rotate(90deg);
+}
+details.step > summary span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+details.step .dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+details.step[data-state="running"] .dot {
+  background: var(--coral);
+  animation: blink 1s ease-in-out infinite;
+}
+details.step[data-state="error"] .dot {
+  background: var(--deep);
+}
+details.step[data-state="completed"] .dot {
+  background: color-mix(in oklab, var(--coral) 45%, var(--faint));
+}
+.thinking-text {
+  margin: 6px 0 4px 18px;
+  padding-left: 10px;
+  border-left: 2px solid var(--line);
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.io {
+  margin: 6px 0 4px 15px;
+}
+.io-label {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--faint);
+  margin-bottom: 2px;
+}
+.io pre {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  font: 12.5px/1.45 ui-monospace, "Cascadia Code", Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Edit, retry, mentions, site chips, outbox ──────────────────────────── */
+.user-wrap {
+  align-self: flex-end;
+  max-width: 85%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.user-wrap .user {
+  max-width: 100%;
+}
+.user-wrap .actions {
+  opacity: 0;
+}
+.user-wrap:hover .actions,
+.user-wrap:focus-within .actions {
+  opacity: 1;
+}
+.editing {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--coral);
+}
+.editing button {
+  padding: 3px 10px;
+  font-size: 13px;
+}
+.chip.mention {
+  padding-left: 8px;
+  color: var(--text);
+}
+.site {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.site:empty {
+  display: none;
+}
+.site .faint {
+  font-size: 12px;
+  margin-right: 2px;
+}
+.site button {
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 13.5px;
+  border-color: color-mix(in oklab, var(--coral) 40%, var(--line));
+}
+.outbox {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.queued {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 6px 10px;
+}
+.queued span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.queued button {
+  border: 0;
+  background: transparent;
+  color: var(--faint);
+  padding: 2px 6px;
+}
+#micButton[data-on] {
+  color: #fff;
+  background: var(--deep);
+  animation: blink 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  #micButton[data-on] {
+    animation: none;
+  }
+}
+
+/* The old one-line step was a flex row; as a disclosure it stacks. */
+details.step {
+  display: block;
+}

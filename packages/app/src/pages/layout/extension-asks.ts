@@ -18,6 +18,8 @@ export function listenExtension(input: {
   follow: (text: string) => boolean
   abort: (session: Session) => Promise<unknown>
   reply: (input: Session & { requestID: string; reply: "once" | "always" | "reject" }) => Promise<unknown>
+  /** Shows one conversation, from the side panel's "Abrir no app". */
+  open: (session: Session) => void
 }) {
   return input.listen((event) => {
     const type = event.details?.type
@@ -26,6 +28,9 @@ export function listenExtension(input: {
       const text = prompt(props.text, props.tab as Tab | undefined, props.selection as string | undefined)
       if (props.follow === true && input.follow(text)) return
       return input.start(text)
+    }
+    if (type === "lynx.extension.open" && typeof props.sessionID === "string") {
+      return input.open({ sessionID: props.sessionID, directory: String(props.directory ?? "") })
     }
     if (type === "lynx.extension.stop" && Array.isArray(props.sessions)) {
       for (const session of props.sessions as Session[]) void input.abort(session).catch(() => undefined)

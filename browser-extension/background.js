@@ -18,7 +18,8 @@
  * browsing, with the agent issuing the clicks.
  *
  * Protocol (JSON per WebSocket message):
- *   ext  → server  { type: "auth", token }
+ *   ext  → server  { type: "auth", token, instance, take? }  instance names this browser
+ *   server → ext   { type: "busy" }                       another browser is using the Lynx
  *   ext  → server  { id, type: "result", result }        reply to a request
  *   ext  → server  { id, type: "error", error }          reply to a request
  *   ext  → server  { type: "event", targetId, method, params }   forwarded CDP event
@@ -39,6 +40,10 @@
  *   ext  → server  { type: "stop" } / { type: "answer", requestID, reply } / { type: "seen" }
  *   server → ext   { type: "welcome", protocol }          after a good auth
  *   server → ext   { type: "status", phase, session?, step?, text?, ask? }  what the Lynx is doing
+ *   ext  → server  { type: "api", rid, method, path, body? }  the side panel's call (PANEL_API in bridge.ts)
+ *   server → ext   { type: "api", rid, status, body }        its answer
+ *   ext  → server  { type: "watch", directory? }             follow a project's events for the panel
+ *   server → ext   { type: "bus", directory, payload }        one of those events
  *
  * A `targetId` is the Chrome tab id as a string. The engine treats it as opaque.
  *
@@ -55,6 +60,8 @@ const PROTOCOL = "1.3"
  */
 const RETRY_MIN = 500
 const RETRY_MAX = 3000
+/** How long a socket may stay "connecting" before it is dropped and tried again. */
+const CONNECT_TIMEOUT = 5000
 /** MV3 kills an idle service worker; a ping while connected keeps it and the socket alive. */
 const PING_MS = 20000
 /**
@@ -129,8 +136,12 @@ function prune(params, paths) {
 }
 
 async function config() {
-  const stored = await chrome.storage.local.get(["port", "token"])
-  return { port: stored.port || DEFAULT_PORT, token: stored.token || "" }
+  const stored = await chrome.storage.local.get(["port", "token", "instance"])
+  // Names this browser to the app, so it can tell a restarted worker of the
+  // same browser (which takes over) from another browser (which waits).
+  const instance = stored.instance || crypto.randomUUID()
+  if (!stored.instance) await chrome.storage.local.set({ instance })
+  return { port: stored.port || DEFAULT_PORT, token: stored.token || "", instance }
 }
 
 function send(message) {
@@ -297,7 +308,7 @@ function connect() {
   // both call this, and a second socket made the server drop the first and,
   // when that one closed, the pairing with it.
   if (socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) return
-  void config().then(async ({ port: saved, token }) => {
+  void config().then(async ({ port: saved, token, instance }) => {
     // Not paired yet, or the app refused the saved token: find the app and pair.
     if (!token || lynx.stale) {
       if (!(await pair())) return scheduleReconnect()
@@ -322,13 +333,28 @@ function connect() {
     let opened = 0
     let closing
     let welcomed = false
+    // An app that is starting can take the connection and not answer it; a
+    // socket left "connecting" blocked every new attempt until the browser
+    // restarted (seen after app updates). It is given up and tried again.
+    const stuck = setTimeout(() => {
+      if (ws.readyState !== WebSocket.CONNECTING) return
+      closing = "connect-timeout"
+      try {
+        ws.close()
+      } catch {}
+      if (socket !== ws) return
+      socket = undefined
+      socketPort = undefined
+      scheduleReconnect()
+    }, CONNECT_TIMEOUT)
 
     ws.addEventListener("open", () => {
+      clearTimeout(stuck)
       retry = RETRY_MIN
       attempt = 0
       opened = Date.now()
       if (port !== saved) void chrome.storage.local.set({ port })
-      ws.send(JSON.stringify({ type: "auth", token, previous, protocol: PROTOCOL_VERSION }))
+      ws.send(JSON.stringify({ type: "auth", token, previous, protocol: PROTOCOL_VERSION, instance, take: lynx.takeOver }))
       clearInterval(pingTimer)
       pingTimer = setInterval(() => {
         if (socket !== ws) return
@@ -353,6 +379,8 @@ function connect() {
         answers = true
         return
       }
+      if (message.type === "busy") return onBusy()
+      if (message.type === "transcribed") return onTranscribed(message)
       if (message.type === "welcome") {
         welcomed = true
         onWelcome(message)
@@ -360,6 +388,8 @@ function connect() {
         return
       }
       if (message.type === "status") return onStatus(message)
+      if (message.type === "api") return onApi(message)
+      if (message.type === "bus") return onBus(message)
       void handle(message)
     })
     ws.addEventListener("close", (event) => {
@@ -390,6 +420,11 @@ function connect() {
 
 function scheduleReconnect() {
   if (retryTimer) return
+  // Another browser has the Lynx: knock again now and then, never every half second.
+  if (lynx.busyElsewhere) {
+    retryTimer = setTimeout(connect, BUSY_RETRY)
+    return
+  }
   retryTimer = setTimeout(connect, retry)
   retry = Math.min(retry * 2, RETRY_MAX)
 }

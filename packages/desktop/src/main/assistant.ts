@@ -4,7 +4,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { AgentTrayState } from "../preload/types"
 import { write as writeLog } from "./logging"
-import { appIconPath, getMainWindow } from "./windows"
+import { appIconPath, getMainWindow, keepInTray } from "./windows"
 
 /**
  * Ways to reach the agent without bringing the app forward first: a global
@@ -230,6 +230,18 @@ function createTray() {
       { label: "Sair", role: "quit" },
     ]),
   )
+  // The browser extension needs the app's server, so closing the window leaves
+  // the app here; the first time, a balloon says where it went.
+  let told = false
+  keepInTray(() => {
+    if (told || !tray || tray.isDestroyed()) return
+    told = true
+    tray.displayBalloon({
+      iconType: "info",
+      title: "O Lynx Code continua aqui",
+      content: "A extensão do navegador segue funcionando. Para sair de vez: botão direito no ícone → Sair.",
+    })
+  })
 }
 
 function updateTray(state: AgentTrayState) {

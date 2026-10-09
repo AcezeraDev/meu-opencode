@@ -360,7 +360,7 @@ function loadRelay(stored: { token?: string; port?: number } = {}) {
     close() {
       if (this.readyState === 3) return
       this.readyState = 3
-      this.emit("close")
+      this.emit("close", { code: 1000 })
     }
     /** A message from the app arriving on this socket. */
     deliver(message: unknown) {
@@ -705,4 +705,26 @@ describe("the extension's safety for the person", () => {
     relay.message({ type: "esc" }, { tab: { id: 3 } })
     expect(stops()).toBe(1)
   })
+})
+
+describe("the extension relay while the app restarts", () => {
+  test("a socket the app takes but never answers is dropped and tried again", async () => {
+    const relay = loadRelay({ token: "t", port: 4919 })
+    await pause()
+    expect(relay.sockets).toHaveLength(1)
+    // Never opened: an app still starting up took the connection and went quiet.
+    await pause(5800)
+    expect(relay.sockets.length).toBeGreaterThan(1)
+  }, 20000)
+
+  test("told another browser is using the Lynx, it waits instead of knocking again at once", async () => {
+    const relay = loadRelay({ token: "t", port: 4919 })
+    await pause()
+    const socket = relay.sockets[0]!
+    socket.open()
+    socket.deliver({ type: "busy" })
+    socket.close()
+    await pause(3500)
+    expect(relay.sockets).toHaveLength(1)
+  }, 20000)
 })

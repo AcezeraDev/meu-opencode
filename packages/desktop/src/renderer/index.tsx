@@ -250,6 +250,7 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
     dictate: () => window.api.lynxDictate().catch(() => false),
 
     onLynxReply: (cb) => window.api.onLynxReply(cb),
+    showWindow: () => void window.api.lynxOpenMain().catch(() => undefined),
 
     setForceFocus: (enabled) => window.api.setForceFocus(enabled),
 

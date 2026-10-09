@@ -49,7 +49,12 @@ export const IGNORED =
  * it embeds (built from packages/opencode, not a package dependency) and every
  * workspace package those depend on, directly or not (app, ui, sdk, llm...).
  */
-export const WATCHED = workspaceDependencies([DESKTOP, path.join(ROOT, "packages", "opencode")])
+// The browser extension ships inside the installer (extraResources), so a change
+// there needs a build too, or the other PCs get an older extension than the app.
+export const WATCHED = [
+  ...workspaceDependencies([DESKTOP, path.join(ROOT, "packages", "opencode")]),
+  path.join(ROOT, "browser-extension"),
+]
 
 function workspaceDependencies(roots: string[]) {
   const packages = workspacePackages()

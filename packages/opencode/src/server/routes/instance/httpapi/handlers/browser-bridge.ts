@@ -39,9 +39,13 @@ export const browserBridgeHandlers = HttpApiBuilder.group(BrowserBridgeApi, "bro
         const write = yield* socket.writer
         const outbox = yield* Queue.unbounded<string | Socket.CloseEvent>()
 
+        // The side panel's API calls go back to this same server, at the
+        // address the extension reached it on.
+        const host = ctx.request.headers["host"]
         const link = bridge.accept(
           (message) => Queue.offerUnsafe(outbox, JSON.stringify(message)),
           () => Queue.offerUnsafe(outbox, new Socket.CloseEvent(1000)),
+          host ? `http://${host}` : undefined,
         )
 
         const drain = Effect.gen(function* () {

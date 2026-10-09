@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>Microfone da Lynx</title>
+    <link rel="stylesheet" href="lynx.css" />
+    <style>
+      body {
+        display: grid;
+        place-items: center;
+        min-height: 100vh;
+        text-align: center;
+        font-size: 16px;
+      }
+      main {
+        max-width: 420px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        align-items: center;
+      }
+      h1 {
+        font-size: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="icons/icon-128.png" alt="" width="64" height="64" />
+      <h1 id="title">Permita o microfone para ditar</h1>
+      <p class="muted" id="text">O navegador vai perguntar se a Lynx pode usar o microfone. Diga que sim: é só para o ditado do painel.</p>
+      <button class="primary" id="again">Pedir de novo</button>
+    </main>
+    <script src="mic.js"></script>
+  </body>
+</html>
