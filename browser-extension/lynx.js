@@ -91,6 +91,9 @@ function pair() {
   lynx.pairing = (async () => {
     const saved = (await chrome.storage.local.get("port")).port
     const ports = [...new Set([saved, ...CANDIDATE_PORTS].filter((port) => Number.isInteger(port)))]
+    let outdated = false
+    // Each search says what it found this time, not what an earlier one did.
+    lynx.lastError = ""
     for (const port of ports) {
       // POST: the browser only names this extension as the Origin on a POST, and
       // the app hands the token to that origin alone.
@@ -104,14 +107,20 @@ function pair() {
         lynx.lastError = "O modo extensão está desligado no Lynx Code (Configurações → Navegador)."
         continue
       }
-      if (!answer.ok) continue
-      const body = await answer.json().catch(() => undefined)
-      if (!body || typeof body.token !== "string" || !body.token) continue
+      const body = answer.ok ? await answer.json().catch(() => undefined) : undefined
+      if (!body || typeof body.token !== "string" || !body.token) {
+        // Something answers on the app's port but knows no pairing: an app from
+        // before 0.9, which the panel cannot talk to until it is updated.
+        if ([401, 404, 405].includes(answer.status) || answer.ok) outdated = true
+        continue
+      }
       lynx.stale = false
       lynx.lastError = ""
       await chrome.storage.local.set({ port, token: body.token })
       return true
     }
+    if (outdated && !lynx.lastError)
+      lynx.lastError = "O Lynx Code aberto neste computador está desatualizado para esta extensão. Atualize o app (botão Atualizar ou Reiniciar)."
     if (!lynx.lastError) lynx.lastError = "Não achei o Lynx Code aberto neste computador."
     return false
   })().finally(() => {

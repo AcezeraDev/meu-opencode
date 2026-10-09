@@ -143,6 +143,7 @@ function setConnected(status) {
 function showConnection(status) {
   state.connected = !!status?.connected
   state.busyElsewhere = !state.connected && !!status?.busyElsewhere
+  state.offlineReason = state.connected ? "" : status?.lastError || ""
   $("offline").hidden = state.connected
   $("takeOver").hidden = !state.busyElsewhere
   $("openApp").hidden = state.busyElsewhere
@@ -155,7 +156,27 @@ function showConnection(status) {
 
 async function loadProjects(preferred) {
   const projects = await api("GET", "/project").catch(() => [])
-  state.projects = projects.filter((project) => project.worktree && project.worktree !== "/").sort((a, b) => b.time.updated - a.time.updated)
+  const found = projects
+    .filter((project) => project.worktree && project.worktree !== "/")
+    .map((project) => ({ worktree: project.worktree, name: project.name, updated: project.time.updated }))
+  // Folders that are not git repositories all belong to the default ("global")
+  // project, which the server lists as "/". Their conversations say where they
+  // were opened, so each such folder is offered on its own, as the app does.
+  if (projects.some((project) => project.id === "global")) {
+    const sessions = await api("GET", "/session?roots=true&limit=60").catch(() => [])
+    for (const session of sessions) {
+      // The app's own agents (social posts and the like) keep their folders under its data.
+      if (!session.directory || /[\\/]\.local[\\/]share[\\/]opencode/i.test(session.directory)) continue
+      const known = found.find((item) => item.worktree.toLowerCase() === session.directory.toLowerCase())
+      if (known) known.updated = Math.max(known.updated, session.time.updated)
+      else found.push({ worktree: session.directory, updated: session.time.updated, global: true })
+    }
+    if (!found.length) {
+      const home = (await api("GET", "/path").catch(() => undefined))?.home
+      if (home) found.push({ worktree: home, updated: 0, global: true })
+    }
+  }
+  state.projects = found.sort((a, b) => b.updated - a.updated)
   state.directory = state.projects.some((project) => project.worktree === preferred) ? preferred : state.projects[0]?.worktree
   chrome.runtime.sendMessage({ type: "lynx-watch", directory: state.directory }).catch(() => {})
   const select = $("projectSelect")
@@ -163,7 +184,11 @@ async function loadProjects(preferred) {
     ...state.projects.map((project) => {
       const option = document.createElement("option")
       option.value = project.worktree
-      option.textContent = project.name || project.worktree.split(/[\\/]/).pop()
+      // Folders with the same name (two clones called "opencode") show their parent too.
+      const parts = project.worktree.split(/[\\/]/).filter(Boolean)
+      const twin = state.projects.some((other) => other !== project && other.worktree.split(/[\\/]/).filter(Boolean).pop() === parts.at(-1))
+      option.textContent = project.name || (twin || project.global ? parts.slice(-2).join("\\") : parts.at(-1)) || project.worktree
+      option.title = project.worktree
       option.selected = project.worktree === state.directory
       return option
     }),
@@ -173,7 +198,10 @@ async function loadProjects(preferred) {
 async function loadSessions() {
   if (!state.directory) return
   const search = $("sessionSearch").value.trim()
-  const found = await api("GET", q("/session", { roots: "true", limit: search ? "40" : "30", ...(search ? { search } : {}) })).catch(() => [])
+  const listed = await api("GET", q("/session", { roots: "true", limit: "60", ...(search ? { search } : {}) })).catch(() => [])
+  // The default project lists every folder's conversations; keep this folder's.
+  const global = state.projects.find((project) => project.worktree === state.directory)?.global
+  const found = (global ? listed.filter((session) => session.directory?.toLowerCase() === state.directory.toLowerCase()) : listed).slice(0, search ? 40 : 30)
   found.sort((a, b) => b.time.updated - a.time.updated)
   // A search narrows the list shown, not the conversations the panel knows.
   if (!search) state.sessions = found
@@ -342,7 +370,7 @@ function partsOf(out, sessionID) {
 function queue(out) {
   state.outbox.push(out)
   void chrome.storage.local.set({ panelOutbox: state.outbox }).catch(() => undefined)
-  toast("O Lynx Code está fora do ar. A mensagem sai sozinha quando ele voltar.")
+  toast(`${state.offlineReason || "O Lynx Code está fora do ar."} A mensagem sai sozinha quando ele voltar.`)
   render()
 }
 

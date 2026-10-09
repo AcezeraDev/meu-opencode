@@ -86,7 +86,7 @@ export const EXTENSION_PROTOCOL = 4
  * the list is kept this short.
  */
 const PANEL_API: [method: string, path: RegExp][] = [
-  ["GET", /^\/(config|config\/providers|agent|project|session|session\/status|permission|question|skill)$/],
+  ["GET", /^\/(config|config\/providers|agent|project|session|session\/status|permission|question|skill|path)$/],
   ["GET", /^\/session\/[\w-]+(\/message)?$/],
   ["POST", /^\/session$/],
   ["POST", /^\/session\/[\w-]+\/(prompt_async|abort|revert|unrevert)$/],
